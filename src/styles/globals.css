@@ -1,0 +1,2275 @@
+@import "tailwindcss";
+
+/* ============================================================
+   设计 token（统一栅格 / 圆角 / 阴影 / 模糊 / 动效）
+   所有组件只消费这些变量，不写裸值，保证明暗两套主题一致
+   ============================================================ */
+
+:root {
+  /* —— 品牌色 —— */
+  --accent: #2f6fed;
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 34%, transparent);
+
+  /* —— 前景 / 背景 —— */
+  --bg-base: #05070c;
+  --fg: #f4f7fc;
+  --fg-muted: rgba(244, 247, 252, 0.72);
+  --fg-subtle: rgba(244, 247, 252, 0.52);
+
+  /* —— 玻璃层 —— */
+  --glass-bg: rgba(20, 22, 28, 0.5);
+  --glass-bg-strong: rgba(16, 18, 24, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.32);
+
+  --scrim: rgba(4, 6, 12, 0.45);
+  --scrim-2: rgba(4, 6, 12, 0.7);
+  --input-bg: rgba(255, 255, 255, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.1);
+
+  /* 小元件用的实心底（悬停小工具条等），避免背景格纹穿透 */
+  --board-bg: rgba(8, 11, 17, 0.97);
+  --board-ring: color-mix(in srgb, var(--fg) 10%, transparent);
+
+  /*
+   * 毛玻璃面板材质（便当板 / 底部 Dock / 一言卡共用同一套配方）
+   * 关键不是「加模糊」，而是三层叠加：
+   *   1) 半透明底 —— 让背景的光与颜色透上来
+   *   2) backdrop-filter blur + saturate —— 把透上来的东西揉成柔光，而不是噪点
+   *   3) 顶部 1px 内高光 + 一圈极淡描边 —— 玻璃的「厚度」
+   * 之前板子用 0.97 的近实色，是因为背景格纹会从板子里透出来变成噪点；
+   * 那其实是 saturate 不足 + 缺高光导致的，靠拉满不透明度掩盖是错的解法。
+   */
+  --panel-bg: rgba(30, 37, 52, 0.44);
+  --panel-bg-strong: rgba(26, 33, 47, 0.6);
+  --panel-ring: rgba(255, 255, 255, 0.22);
+  --panel-highlight: rgba(255, 255, 255, 0.38);
+  /* 底边的「折射」：玻璃下沿会反射一点环境光，只有上高光会显得像塑料片 */
+  --panel-refract: rgba(255, 255, 255, 0.06);
+  --panel-blur: 32px;
+  /* 毛玻璃的投影比普通卡片更「散」：玻璃是浮在背景上的，边缘不该有硬阴影 */
+  --panel-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.8), 0 2px 10px -4px rgba(0, 0, 0, 0.35);
+  /*
+   * 搜索胶囊：两个主题都用同一颗白色胶囊 —— 这是青柠起始页最标志性的一块。
+   * 它靠「亮」从壁纸上跳出来，而不是靠描边。
+   * 因为底色恒为白，胶囊内部的文字色必须在 .search-panel 里就地改写成深色，
+   * 否则深色主题下会变成白字压白底。
+   */
+  --search-bg: rgba(255, 255, 255, 0.88);
+  --search-highlight: rgba(255, 255, 255, 0.95);
+  --search-bg-focus: rgba(255, 255, 255, 0.96);
+
+  /* —— 间距栅格（4px 基准）—— */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* —— 圆角阶梯 —— */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+
+  /* 兼容旧命名（组件里已大量使用） */
+  --radius-icon: var(--radius-md);
+  --radius-search: var(--radius-lg);
+  --radius-card: var(--radius-xl);
+
+  /* —— 阴影层级 —— */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.24), 0 4px 12px -6px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 18px 48px -18px rgba(0, 0, 0, 0.75);
+  --shadow-3: 0 32px 80px -28px rgba(0, 0, 0, 0.85);
+  --glass-shadow: var(--shadow-2);
+
+  /* —— 模糊层级 —— */
+  --blur-1: 12px;
+  --blur-2: 20px;
+  --blur-3: 24px;
+
+  /* —— 版式与布局 —— */
+  --content-width: 720px;
+  --gutter: 16px;
+  --stack-gap: 18px;
+
+  /* —— 动效 —— */
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 260ms;
+  --dur-theme: 320ms;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-base: #eef2f8;
+  --fg: #101828;
+  --fg-muted: rgba(16, 24, 40, 0.78);
+  --fg-subtle: rgba(16, 24, 40, 0.62);
+
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(16, 24, 40, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+
+  --scrim: rgba(250, 251, 253, 0.5);
+  --scrim-2: rgba(250, 251, 253, 0.74);
+  --input-bg: rgba(255, 255, 255, 0.62);
+  --hover-bg: rgba(16, 24, 40, 0.06);
+
+  --board-bg: rgba(255, 255, 255, 0.94);
+  --board-ring: color-mix(in srgb, var(--fg) 9%, transparent);
+
+  /* 亮色玻璃：底色偏白但保留透光，描边用深色而非白色，否则在浅背景上看不见 */
+  --panel-bg: rgba(255, 255, 255, 0.55);
+  --panel-bg-strong: rgba(255, 255, 255, 0.72);
+  --panel-ring: rgba(16, 24, 40, 0.13);
+  --panel-highlight: rgba(255, 255, 255, 0.98);
+  --panel-refract: rgba(16, 24, 40, 0.05);
+  --panel-shadow: 0 20px 48px -26px rgba(16, 24, 40, 0.42), 0 2px 8px -4px rgba(16, 24, 40, 0.16);
+
+  /* 亮色下搜索胶囊略降一点白度，避免和浅色壁纸贴成一片 */
+  --search-bg: rgba(255, 255, 255, 0.82);
+  --search-highlight: rgba(255, 255, 255, 0.99);
+  --search-bg-focus: rgba(255, 255, 255, 0.9);
+
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px -6px rgba(16, 24, 40, 0.18);
+  --shadow-2: 0 18px 44px -22px rgba(16, 24, 40, 0.45);
+  --shadow-3: 0 32px 72px -30px rgba(16, 24, 40, 0.5);
+  --glass-shadow: var(--shadow-2);
+
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-glass: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+  --font-sans:
+    "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei",
+    "Inter", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ============================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * 视口锁定：整页永不滚动。
+ * overscroll-behavior 关掉橡皮筋/滚动链，避免触摸或滚轮把页面拖着走；
+ * 真正需要滚动的只有面板内容区（.thin-scroll）。
+ */
+body {
+  font-family: var(--font-sans);
+  color: var(--fg);
+  background-color: var(--bg-base);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    color var(--dur-theme) var(--ease-out-cubic),
+    background-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+/* 一屏原则：所有内容在单视口内，禁止滚动（PRD 3.2） */
+.app-shell {
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * 主体内容列。
+ * 间距走变量而非固定 gap：矮视口（笔记本 768 / 600 高）自动收紧，
+ * 配合 page.tsx 的等比缩放，保证一屏放得下、页面不必滚动。
+ */
+.content-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
+
+@media (max-height: 820px) {
+  :root {
+    --stack-gap: 14px;
+  }
+}
+
+@media (max-height: 680px) {
+  :root {
+    --stack-gap: 10px;
+  }
+}
+
+/* ============================================================
+   毛玻璃面板（统一材质）
+   ============================================================ */
+
+/*
+ * 全站所有「承载内容的容器」共用这一套配方：便当板、搜索框、一言卡、底部 Dock。
+ * 视觉层级靠三层叠加，而不是靠不透明度堆到接近实心：
+ *   1) 半透明底色 —— 背景的光斑与色相透上来
+ *   2) blur + saturate —— 把透上来的细节揉成柔光，避免格纹变成噪点
+ *   3) 顶部内高光 + 一圈极淡描边 —— 玻璃的「厚度」与边缘折射
+ * 亮色主题把描边换成深色（浅背景上白色描边看不见），底色偏白但保留透光。
+ */
+.glass-panel {
+  position: relative;
+  /*
+   * 顶部的极淡反光是画在「面板自身背景」上的第二层渐变，而不是用 ::before。
+   * 用伪元素会被定位层抬到内容之上，把板子里的字盖住 —— 背景层永远在内容之下。
+   */
+  background-color: var(--panel-bg);
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, #fff 9%, transparent),
+    transparent 46%
+  );
+  border-radius: var(--radius-2xl);
+  /*
+   * 便当板刻意不画「一圈描边」：用户反复提到板子外面围着一圈白边很像贴纸。
+   * 玻璃的边缘靠「顶部内高光 + 底部折射 + 外投影」自然收住就够，
+   * 所以这里连 1px 内描边都不画了：只有顶部内高光 + 下沿折射 + 外投影。
+   */
+  box-shadow:
+    var(--panel-shadow),
+    inset 0 1px 0 var(--panel-highlight),
+    inset 0 -1px 0 var(--panel-refract);
+  -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-theme) var(--ease-out-cubic);
+}
+
+[data-theme="light"] .glass-panel {
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.55), transparent 42%);
+}
+
+/* ============================================================
+   独立卡片（取代原来的 Bento 玻璃板）
+   天气、便签各自是一张自己的玻璃卡，谁被关掉都不影响另一个。
+   同一套玻璃配方，只是每张卡自己持有圆角与投影。
+   ============================================================ */
+
+.card-panel {
+  position: relative;
+  /* 与搜索胶囊同宽（560）—— 一列里两种宽度会读成「台阶」，
+     统一之后时钟、搜索框、卡片、一言共用同一条中轴。 */
+  max-width: 560px;
+  margin-inline: auto;
+  padding: 10px 14px;
+  border-radius: var(--radius-xl);
+  background-color: var(--panel-bg);
+  background-image: linear-gradient(to bottom, color-mix(in srgb, #fff 7%, transparent), transparent 52%);
+  /* 与便当板同一原则：不画描边，只靠顶部内高光 + 下沿折射 + 外投影收边 */
+  box-shadow:
+    var(--panel-shadow),
+    inset 0 1px 0 var(--panel-highlight),
+    inset 0 -1px 0 var(--panel-refract);
+  -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-theme) var(--ease-out-cubic);
+}
+
+.card-panel {
+  /* 抬起来时投影跟着加深一点点：静止与悬停的投影都不变的话，
+     卡片位移看起来就像整块画面在抖，而不是这张卡浮起来。 */
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic);
+}
+
+.card-panel:hover {
+  box-shadow:
+    0 28px 64px -30px rgba(0, 0, 0, 0.84),
+    inset 0 1px 0 var(--panel-highlight),
+    inset 0 -1px 0 var(--panel-refract);
+}
+
+/* 卡片里装的是要读的文字，比便当板更需要「底」的存在感：
+   暗色主题下把玻璃压得更深一层（浅色壁纸上 0.44 的透明度会让白字发灰），
+   亮色主题下反而要更白，否则深灰字压在有纹理的照片上会发花。 */
+.card-panel {
+  background-color: rgba(9, 12, 19, 0.54);
+  -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(1.25);
+  backdrop-filter: blur(var(--panel-blur)) saturate(1.25);
+}
+
+[data-theme="light"] .card-panel {
+  background-color: rgba(255, 255, 255, 0.62);
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), transparent 46%);
+}
+
+/* ------------------------------------------------------------
+   待办便签
+   标签与输入框不再各自为政：标题栏 + 无边框输入区 + 可收起的操作栏。
+   ------------------------------------------------------------ */
+
+.note-card {
+  position: relative;
+}
+
+/* 卡片左侧那道 accent 竖线：平时很淡，聚焦时点亮 —— 一眼能看出这块可以写 */
+.note-rail {
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  /* 便签卡在 .card-panel 的 14px 内边距里，left:0 会落在输入框背后被盖住；
+     往左让出 11px，正好贴住卡片内沿，让这道线成为卡片自己的装饰。 */
+  left: -11px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, var(--accent), color-mix(in srgb, var(--accent) 34%, transparent));
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--accent) 70%, transparent);
+  opacity: 0.26;
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+}
+
+.note-card[data-focused="true"] .note-rail {
+  opacity: 0.85;
+}
+
+.note-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+/* 徽标用渐变底 + 内高光，和 Dock 图标是同一套材质语言 */
+.note-badge {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--accent) 86%, #ffffff 14%),
+    var(--accent) 62%,
+    color-mix(in srgb, var(--accent) 82%, #000000 18%)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 2px 6px -2px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.note-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.note-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: color-mix(in srgb, var(--accent) 82%, var(--fg));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* 字数胶囊：空内容时不占位（保持标题栏高度不跳） */
+.note-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-subtle);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  transition:
+    color var(--dur-base) var(--ease-out-cubic),
+    background-color var(--dur-base) var(--ease-out-cubic);
+}
+
+.note-count[data-visible="false"] {
+  color: transparent;
+  background: transparent;
+}
+
+.note-count--warn {
+  color: #fbbf24;
+  background: color-mix(in srgb, #fbbf24 14%, transparent);
+  animation: note-warn 1.6s var(--ease-out-cubic) infinite;
+}
+
+@keyframes note-warn {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}
+
+[data-motion="reduce"] .note-count--warn {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-count--warn {
+    animation: none;
+  }
+}
+
+/* 输入区没有自己的边框 —— 卡片就是它的容器；聚焦时才浮一圈内发光 */
+.note-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 7px 10px 4px;
+  resize: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.75;
+  outline: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-out-cubic),
+    box-shadow var(--dur-fast) var(--ease-out-cubic);
+}
+
+.note-input::placeholder {
+  color: var(--fg-subtle);
+}
+
+.note-input:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.note-input:focus {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* 聚焦已经有那圈内发光了，再叠一条 2px 的全局 outline 会变成双重描边 */
+.note-input:focus-visible {
+  outline: none;
+}
+
+/* 输入框下沿的字数进度：写两行就能看见它长一点 */
+.note-meter {
+  display: block;
+  height: 2px;
+  margin: 3px 9px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+
+.note-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transform-origin: left center;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--accent) 70%, transparent),
+    var(--accent)
+  );
+}
+
+.note-card[data-empty="true"] .note-meter {
+  opacity: 0;
+}
+
+.note-meter {
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+}
+
+.note-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  max-height: 22px;
+  opacity: 1;
+  overflow: hidden;
+  transition:
+    max-height var(--dur-base) var(--ease-out-cubic),
+    opacity var(--dur-base) var(--ease-out-cubic),
+    margin-top var(--dur-base) var(--ease-out-cubic);
+}
+
+/* 空便签且没聚焦：整条操作栏收起，卡片上不留多余按钮 */
+.note-foot[data-empty="true"] {
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+}
+
+.note-card[data-focused="true"] .note-foot[data-empty="true"] {
+  max-height: 22px;
+  margin-top: 4px;
+  opacity: 1;
+}
+
+.note-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--fg-subtle);
+  opacity: 0.7;
+}
+
+.note-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--fg-subtle);
+  transition:
+    color var(--dur-fast) var(--ease-out-cubic),
+    background-color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.note-clear:hover:not(:disabled) {
+  color: #fda4af;
+  background: color-mix(in srgb, #f43f5e 18%, transparent);
+}
+
+.note-clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+/* ------------------------------------------------------------
+   天气胶囊（钉在左上角）
+
+   它不是「页面内容」，是环境读数：压在主列里会打断
+   「时钟 → 搜索 → 卡片」这条主轴，放到左上角后既不抢视线，
+   又始终在余光里。所以它比卡片小一号、圆角更满、投影更浅。
+   ------------------------------------------------------------ */
+
+.weather-slot {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.weather-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.weather-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 5px;
+  border-radius: var(--radius-pill);
+  background-color: var(--panel-bg);
+  background-image: linear-gradient(to bottom, color-mix(in srgb, #fff 7%, transparent), transparent 60%);
+  box-shadow:
+    0 10px 26px -16px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 var(--panel-highlight);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.5);
+  backdrop-filter: blur(var(--blur-2)) saturate(1.5);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out-cubic),
+    background-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+.weather-row:hover {
+  box-shadow:
+    0 14px 32px -16px rgba(0, 0, 0, 0.78),
+    inset 0 1px 0 var(--panel-highlight);
+}
+
+[data-theme="light"] .weather-row {
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.55), transparent 58%);
+}
+
+.weather-glyph {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--accent);
+  background: radial-gradient(
+    circle at 50% 34%,
+    color-mix(in srgb, var(--accent) 26%, transparent),
+    color-mix(in srgb, var(--accent) 10%, transparent)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.weather-main {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--fg-muted);
+  border-radius: var(--radius-xs);
+  transition: color var(--dur-fast) var(--ease-out-cubic);
+}
+
+button.weather-main:hover {
+  color: var(--fg);
+}
+
+.weather-temp {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+
+/* 单位缩小一档并压低对比，避免「23°C 晴」里的 C 抢走温度的主体 */
+.weather-unit {
+  margin-left: -2px;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--fg-subtle);
+}
+
+.weather-desc {
+  color: var(--fg-muted);
+}
+
+.weather-city {
+  overflow: hidden;
+  max-width: 96px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-subtle);
+  font-size: 10.5px;
+}
+
+.weather-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 1px;
+  margin-left: 2px;
+}
+
+.weather-action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: var(--fg-subtle);
+  opacity: 0;
+  transition:
+    color var(--dur-fast) var(--ease-out-cubic),
+    background-color var(--dur-fast) var(--ease-out-cubic),
+    opacity var(--dur-fast) var(--ease-out-cubic);
+}
+
+/* 常态隐藏、悬停 / 键盘聚焦才浮现：胶囊里不该常驻两颗按钮 */
+.weather-card:hover .weather-action,
+.weather-card:focus-within .weather-action,
+.weather-action[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.weather-action:hover {
+  color: var(--fg);
+  background: var(--hover-bg);
+}
+
+.weather-action[aria-expanded="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* 城市选择：浮层，不撑高卡片（否则顶栏会被推下去，整页跳一下） */
+.weather-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 232px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--board-bg);
+  box-shadow:
+    0 22px 48px -24px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 1px var(--board-ring);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(1.5);
+  backdrop-filter: blur(var(--blur-3)) saturate(1.5);
+}
+
+.weather-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+}
+
+.weather-picker-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: var(--fg-subtle);
+  transition:
+    color var(--dur-fast) var(--ease-out-cubic),
+    background-color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.weather-picker-close:hover {
+  color: var(--fg);
+  background: var(--hover-bg);
+}
+
+.weather-picker-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.weather-field {
+  display: block;
+  min-width: 0;
+}
+
+.weather-field-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+  color: var(--fg-subtle);
+}
+
+/* 原生 select 的外观由系统决定，很丑；这里套一层容器画自己的箭头与底色 */
+.weather-select-wrap {
+  position: relative;
+  display: block;
+}
+
+/* 下拉框做成和搜索胶囊同语言的圆角药丸：
+   原来的 8px 圆角 + 一圈灰边读起来像没写完的表单控件。
+   默认无描边、靠一层浅底与内高光立起来，聚焦时才浮出 accent 环。 */
+.weather-select {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 26px 0 11px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent);
+  color: var(--fg);
+  font-size: 11.5px;
+  line-height: 1.3;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic);
+}
+
+.weather-select:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 11%, transparent);
+}
+
+.weather-select:focus-visible {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+}
+
+.weather-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* 设置里的天气状态小药丸：一个点 + 三个字，比一整行「当前：省 · 市」省地方 */
+.weather-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.weather-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--fg-subtle);
+}
+
+.weather-status[data-source="geo"] {
+  color: color-mix(in srgb, var(--accent) 82%, var(--fg));
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.weather-status[data-source="geo"] .weather-status-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.weather-status[data-source="manual"] .weather-status-dot {
+  background: color-mix(in srgb, var(--accent) 70%, var(--fg));
+}
+
+.weather-select-chevron {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  translate: 0 -50%;
+  color: var(--fg-subtle);
+  pointer-events: none;
+}
+
+/* 下拉选项由系统渲染，深色主题给选项补一句以贴合底色 */
+.weather-select option {
+  background: var(--board-bg);
+  color: var(--fg);
+}
+
+.weather-picker-hint {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--fg) 7%, transparent);
+  font-size: 10px;
+  color: var(--fg-subtle);
+}
+
+/* ------------------------------------------------------------
+   每日一言所在的一条（主体与 Dock 之间，右侧留白给时间轴观感）
+   ------------------------------------------------------------ */
+
+/* ------------------------------------------------------------
+   快捷项编辑器（设置 → 快捷跳转 → 添加/编辑）
+   ------------------------------------------------------------ */
+
+.shortcut-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.shortcut-editor-url {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+}
+
+.shortcut-editor-tag {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--accent) 85%, var(--fg));
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.shortcut-editor-tag--custom {
+  color: var(--fg-muted);
+  background: color-mix(in srgb, var(--fg) 9%, transparent);
+}
+
+/* 一言正文本身就是按钮：去掉默认外观，指针移上去才给一点点暗示 */
+.quote-body {
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    opacity var(--dur-base) var(--ease-out-cubic),
+    filter var(--dur-base) var(--ease-out-cubic);
+}
+
+.quote-body:hover .text-quote {
+  opacity: 0.86;
+}
+
+.quote-body:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  outline-offset: 4px;
+}
+
+.quote-body:disabled {
+  cursor: progress;
+}
+
+.quote-shell {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 0 var(--gutter);
+}
+
+/* ------------------------------------------------------------
+   每日一言：没有容器，只有一行字（对齐青柠起始页）
+   ------------------------------------------------------------ */
+
+.quote-section {
+  opacity: 1;
+  transition:
+    opacity var(--dur-slow) var(--ease-out-cubic),
+    transform var(--dur-slow) var(--ease-out-cubic);
+  /*
+   * 入场：延后 600ms 落位，和时钟 / 搜索 / 便当板的错峰节奏对齐。
+   * 填充模式用 backwards 而不是 both —— both 会让动画结束后仍霸占 opacity，
+   * 聚焦渐隐的 transition 就永远被压住了。
+   */
+  animation: quote-in 480ms var(--ease-out-cubic) 600ms backwards;
+}
+
+@keyframes quote-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
+ * 聚焦到任何输入框时整块渐隐并轻微下沉。
+ * 这里用 CSS 而不是 motion 的 variants：motion 会把 opacity 写成内联 style，
+ * 两者相互覆盖，渐隐就永远不生效（曾经的 bug）。
+ */
+.quote-section[data-dimmed="true"] {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+
+/* 减少动效：只淡出，不做位移 */
+[data-motion="reduce"] .quote-section {
+  animation: none;
+}
+
+[data-motion="reduce"] .quote-section[data-dimmed="true"] {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quote-section {
+    transition: none;
+    animation: none;
+  }
+
+  .quote-section[data-dimmed="true"] {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------
+   搜索框：对齐青柠起始页的白色胶囊
+   参考站那颗搜索框没有描边、没有「卡片感」——它就是一粒
+   悬浮在壁纸上的白色圆角条，左端一枚引擎图标、右端一枚搜索键。
+   这里保留毛玻璃（透出一点壁纸的颜色），但把圆角做成全胶囊、
+   去掉内描边，让它读起来是「一条」而不是「一块」。
+   ------------------------------------------------------------ */
+
+.search-panel {
+  /* 青柠起始页那颗搜索框比内容列窄一档（约 530/1440）：
+     收窄之后左右两侧留白，时钟与搜索框才不会读成「一整块版面」 */
+  max-width: 560px;
+  margin-inline: auto;
+  border-radius: var(--radius-pill);
+  background-color: var(--search-bg);
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, #fff 14%, transparent),
+    transparent 62%
+  );
+  /* 只有下沉的投影 + 一道顶部内高光，没有 1px 描边 */
+  box-shadow:
+    0 18px 44px -20px rgba(0, 0, 0, 0.7),
+    0 2px 8px -4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 var(--search-highlight);
+  -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(1.7);
+  backdrop-filter: blur(var(--panel-blur)) saturate(1.7);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic);
+}
+
+[data-theme="light"] .search-panel {
+  box-shadow:
+    0 16px 40px -22px rgba(16, 24, 40, 0.4),
+    0 2px 6px -3px rgba(16, 24, 40, 0.14),
+    inset 0 1px 0 var(--search-highlight);
+}
+
+/*
+ * 聚焦态只加一圈很淡的强调色光环，不加描边。
+ * 之前用 framer 内联 boxShadow 覆盖了整个 box-shadow，把玻璃的高光与投影一起冲掉，
+ * 聚焦时胶囊会突然变平 —— 现在改成叠在原本阴影之外的额外 ring。
+ */
+/*
+ * 白色胶囊内部一律用深色文字（两种主题都是）。
+ * 这里就地改写 --fg 系列变量，输入框、占位符、清空按钮都是按这些变量取色的，
+ * 一个地方改完就够，不需要在 JSX 里散落一堆 dark: 判断。
+ */
+.search-panel {
+  --fg: #0f172a;
+  --fg-muted: rgba(15, 23, 42, 0.74);
+  --fg-subtle: rgba(15, 23, 42, 0.5);
+  --hover-bg: rgba(15, 23, 42, 0.07);
+}
+
+.search-panel[data-focused="true"] {
+  background-color: var(--search-bg-focus);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    0 20px 52px -20px rgba(0, 0, 0, 0.75),
+    0 2px 8px -4px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 var(--search-highlight);
+}
+
+/* 获得焦点的一瞬，一道柔光从左扫到右。
+   只跑一次的动效比常驻呼吸更克制 —— 视线正在往输入框里落，
+   这里只需要一个「已就位」的提示。 */
+.search-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, #fff 62%, transparent) 50%,
+    transparent 70%
+  );
+  transform: translateX(-70%);
+}
+.search-panel[data-focused="true"]::after {
+  animation: search-sheen 720ms var(--ease-out-cubic) 1 both;
+}
+@keyframes search-sheen {
+  0% {
+    opacity: 0;
+    transform: translateX(-70%);
+  }
+  38% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(70%);
+  }
+}
+[data-motion="reduce"] .search-panel::after {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-panel::after {
+    display: none;
+  }
+}
+
+[data-theme="light"] .search-panel[data-focused="true"] {
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    0 18px 44px -22px rgba(16, 24, 40, 0.44),
+    0 2px 6px -3px rgba(16, 24, 40, 0.16),
+    inset 0 1px 0 var(--search-highlight);
+}
+
+/* ------------------------------------------------------------
+   设置面板：分类导航 + 内容分组
+   ------------------------------------------------------------ */
+
+.settings-nav {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.settings-nav::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .settings-nav {
+    width: 132px;
+    flex-direction: column;
+    gap: 1px;
+    overflow-x: visible;
+    padding: 0 8px 0 0;
+    border-bottom: 0;
+    border-right: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+}
+
+.settings-tab {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  /* 左右内边距对称，胶囊底与文字始终居中对齐 —— 不会再出现「边线漂在左边」 */
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  line-height: 1.3;
+  text-align: left;
+  color: var(--fg-muted);
+  transition: color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.settings-tab:hover {
+  color: var(--fg);
+}
+
+.settings-tab--active {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.settings-tab-icon {
+  display: grid;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  opacity: 0.8;
+  transition: opacity var(--dur-fast) var(--ease-out-cubic);
+}
+
+.settings-tab--active .settings-tab-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* 会滑动的胶囊底：layoutId 让这颗底在页签之间平移，而不是各画各的 */
+.settings-tab-pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  background: var(--hover-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.settings-section {
+  padding: 11px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--fg) 3.5%, transparent);
+}
+
+.settings-h3 {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------
+   引擎徽标与搜索按钮：一左一右两颗同尺寸的圆
+   ------------------------------------------------------------ */
+
+/*
+ * 引擎徽标用白圆片 + 真标识，而不是「品牌色实心圆 + 首字母」。
+ * 原因：G / b / 百 这些自造符号看不出是哪家；而且深色品牌色（百度蓝）
+ * 在白胶囊里会变成一枚突兀的色块。白圆片与右侧的搜索圆钮正好成一套。
+ */
+.engine-btn {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  transition: transform var(--dur-fast) var(--ease-out-cubic);
+}
+
+.engine-btn:hover {
+  transform: scale(1.06);
+}
+
+.engine-btn:active {
+  transform: scale(0.95);
+  transition-duration: 80ms;
+}
+
+.engine-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.engine-badge {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 1px 3px -1px rgba(15, 23, 42, 0.28),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.09);
+}
+
+/* 搜索按钮：纯圆 + 强调色实心 + 同色柔光晕（原 ShimmerButton 是圆角方块，与左侧圆徽标不成套） */
+.search-submit {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 88%, #ffffff 12%),
+    var(--accent)
+  );
+  box-shadow:
+    0 4px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out-cubic),
+    filter var(--dur-base) var(--ease-out-cubic);
+}
+
+.search-submit:hover {
+  box-shadow:
+    0 6px 18px -4px color-mix(in srgb, var(--accent) 80%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  filter: brightness(1.06);
+}
+
+.search-submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ------------------------------------------------------------
+   底部 Dock：悬浮在页面底部的玻璃胶囊，装着一排快捷图标
+   ------------------------------------------------------------ */
+
+.dock-shell {
+  display: flex;
+  justify-content: center;
+  /*
+   * 顶部留一指宽的空档：图标名称气泡是浮在 Dock 上方的，
+   * 没有这段空隙它会直接压到一言的出处行上（两层文字叠成一团）。
+   * 32px = 气泡高 22px + 8px 间距 + 2px 余量。
+   */
+  padding: 32px var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+}
+
+.dock-pill {
+  /* 图标名称气泡要浮到一言那一层之上，否则会和一言的出处行叠在一起 */
+  position: relative;
+  z-index: 20;
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 9px;
+  border-radius: var(--radius-pill);
+  background-color: var(--panel-bg);
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, #fff 9%, transparent),
+    transparent 48%
+  );
+  box-shadow:
+    var(--panel-shadow),
+    inset 0 0 0 1px var(--panel-ring),
+    inset 0 1px 0 var(--panel-highlight),
+    inset 0 -1px 0 var(--panel-refract);
+  -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-theme) var(--ease-out-cubic);
+}
+
+/* 悬停时胶囊自身轻轻上浮一点，像 Dock 被指针「吸」起来 */
+.dock-pill {
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic),
+    transform var(--dur-base) var(--ease-spring);
+}
+
+.dock-pill:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 30px 68px -26px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 1px var(--panel-ring),
+    inset 0 1px 0 var(--panel-highlight);
+}
+
+[data-theme="light"] .dock-pill:hover {
+  box-shadow:
+    0 26px 56px -26px rgba(16, 24, 40, 0.45),
+    inset 0 0 0 1px var(--panel-ring),
+    inset 0 1px 0 var(--panel-highlight);
+}
+
+/* ------------------------------------------------------------
+   竖向排布：时钟 → 搜索框 → 便当板 → 一言 → Dock
+   间距走变量，矮视口自动收紧
+   ------------------------------------------------------------ */
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--stack-gap);
+  width: 100%;
+}
+
+/* ------------------------------------------------------------
+   交互表面：搜索框 / 输入框这类「需要看起来可输入」的区域，
+   在板内只用一个极淡的内描边，不再套整块玻璃
+   ------------------------------------------------------------ */
+
+.field-surface {
+  background: var(--input-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 7%, transparent);
+}
+
+/* ------------------------------------------------------------
+   快捷项 Dock：一排图标，无分组、无卡片、无方框。
+   参考青柠起始页底部的思路 —— 悬停只作用于图标本身：
+   图标上浮放大、背后浮出一团柔光，指针所在的位置不会出现
+   「一大片卡片底色」，因为这里根本没有卡片。
+   ------------------------------------------------------------ */
+
+.shortcut-dock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.shortcut-item {
+  position: relative;
+  display: flex;
+  width: 46px;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 2px 0;
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+/* 只有图标自身参与悬停视觉，item 容器完全透明 —— 没有卡片底色 */
+.shortcut-icon-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* 位移与缩放由 motion 的 spring 驱动（相邻图标一起轻轻抬起来），
+     这里不能再挂 transition，否则 CSS 过渡会和 spring 互相拉扯、出现二次回弹。 */
+  will-change: transform;
+}
+
+/*
+ * 图标背后的柔光：只包住图标，不是整个格子。
+ * 青柠起始页的 Dock 悬停时不铺底色，只在图标下面垫一小团光 —— 照做。
+ */
+.shortcut-icon-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 58%,
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  transform: scale(0.7);
+  transition:
+    opacity var(--dur-base) var(--ease-out-cubic),
+    transform var(--dur-base) var(--ease-spring);
+  pointer-events: none;
+}
+
+/* 悬停与聚焦的位移/缩放统一交给 motion 内联样式（见 shortcut-dock.tsx 的
+   hovered state：指针悬停和键盘聚焦都会置同一个值），CSS 这边不再写
+   transform —— 内联样式优先级更高，两边都写只会互相打架。 */
+
+.shortcut-item:hover .shortcut-icon-wrap::before,
+.shortcut-item:focus-within .shortcut-icon-wrap::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 按下的回弹交给 motion 的 whileTap（见 shortcut-dock.tsx）——
+   这里如果也写 transform，会和 layout 动画抢同一个属性。 */
+
+.shortcut-item-label {
+  max-width: 100%;
+  /*
+   * 图标下方不常驻文字 —— 青柠起始页底部那排就是纯图标。
+   * 名称做成 macOS Dock 式的小气泡，指针划上去才浮出来（同时在 DOM 里保留文本，
+   * 屏幕阅读器与自动化测试仍拿得到可访问名）。
+   */
+  position: absolute;
+  z-index: 6;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  /* 气泡会盖在一言上方，必须把底下的字彻底糊掉 —— 否则两层文字会读成一团 */
+  background: var(--board-bg);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    var(--shadow-1),
+    inset 0 0 0 1px var(--board-ring);
+  color: var(--fg);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-cubic),
+    transform var(--dur-base) var(--ease-spring);
+  pointer-events: none;
+}
+
+.shortcut-item:hover .shortcut-item-label,
+.shortcut-item:focus-within .shortcut-item-label {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* 空态：整条 dock 没有快捷项时的引导 */
+.shortcut-dock-empty {
+  width: 100%;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+}
+
+/* ------------------------------------------------------------
+   顶栏动作组：一个整体的胶囊，而不是三个各自为政的方块。
+   悬停时高光从左到右扫过（见 bar-action::after）。
+   ------------------------------------------------------------ */
+
+.bar-dock {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--board-bg);
+  box-shadow:
+    var(--shadow-1),
+    inset 0 0 0 1px var(--board-ring);
+  backdrop-filter: blur(var(--blur-2)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.3);
+}
+
+.bar-action {
+  position: relative;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  transition:
+    color var(--dur-fast) var(--ease-out-cubic),
+    background-color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.bar-action::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 50% 120%,
+    color-mix(in srgb, var(--accent) 40%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+}
+
+/* 悬停时一道斜向高光扫过按钮，Magic UI Shimmer 的极简版 */
+.bar-action::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -140%;
+  width: 90%;
+  height: 200%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    color-mix(in srgb, var(--fg) 18%, transparent),
+    transparent
+  );
+  transform: skewX(-18deg);
+  transition: left 520ms var(--ease-out-cubic);
+  pointer-events: none;
+}
+
+.bar-action:hover::before,
+.bar-action:focus-visible::before {
+  opacity: 1;
+}
+
+.bar-action:hover::after,
+.bar-action:focus-visible::after {
+  left: 140%;
+}
+
+.bar-action:hover,
+.bar-action:focus-visible {
+  color: var(--fg);
+}
+
+.bar-action svg {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   主题切换：全局颜色过渡
+   首选 View Transitions（圆形揭示，见 animated-theme-toggler.tsx）；
+   不支持时由 .theme-animating 给所有元素补一段颜色过渡，避免跳变
+   ============================================================ */
+
+html.theme-animating,
+html.theme-animating *,
+html.theme-animating *::before,
+html.theme-animating *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow, opacity !important;
+  transition-duration: var(--dur-theme) !important;
+  transition-timing-function: var(--ease-out-cubic) !important;
+  transition-delay: 0ms !important;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* ============================================================
+   背景层（Magic UI Backgrounds）
+   ============================================================ */
+
+.wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0b1220, #05070c 60%, #0a0f1c);
+}
+
+[data-theme="light"] .wallpaper-layer {
+  background: linear-gradient(135deg, #e8eefb, #f5f8ff 55%, #e6edf9);
+}
+
+.wallpaper-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  will-change: transform, filter;
+}
+
+.wallpaper-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  pointer-events: none;
+  transition: background-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+.wallpaper-scrim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* 只在上下边缘轻微压暗，给顶栏/页脚文字兜底；中间完全放开，
+     否则背景图案会被整层灰色蒙住（用户反馈「太淡看不出」的元凶之一） */
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0%, transparent 18%, transparent 74%, rgba(0, 0, 0, 0.3) 100%);
+  opacity: 0.75;
+}
+
+[data-theme="light"] .wallpaper-scrim::after {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.4) 0%,
+    transparent 30%,
+    transparent 60%,
+    rgba(255, 255, 255, 0.5) 100%
+  );
+}
+
+/* ============================================================
+   Magic UI Backgrounds（仅四种：Flickering Grid / Ripple /
+   Dot Pattern / Floating 3D Particles）
+   颜色统一取 --accent，基准不透明度 0.5 以上，保证在明暗两套
+   主题下都能明确辨认出图形，而不是一片灰雾。
+   ============================================================ */
+
+/* ---------------------------- Flickering Grid ---------------------------- */
+
+.flickering-grid-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    70% 62% at 50% 42%,
+    color-mix(in srgb, var(--accent) 42%, transparent) 0%,
+    transparent 78%
+  );
+  pointer-events: none;
+}
+
+/* ---------------------------- Ripple ---------------------------- */
+
+.ripple-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    58% 52% at 50% 44%,
+    color-mix(in srgb, var(--accent) 48%, transparent) 0%,
+    transparent 76%
+  );
+}
+
+.ripple-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.ripple-ring {
+  position: absolute;
+  /* 尺寸取到视口对角线的量级：涟漪要从中心一路扩散到屏幕四角，
+     否则只在中部形成一个小圈，看起来像一块污渍 */
+  width: 150vmax;
+  height: 150vmax;
+  border-radius: 50%;
+  border: 2.5px solid color-mix(in srgb, var(--accent) 95%, var(--fg));
+  box-shadow:
+    0 0 40px -2px color-mix(in srgb, var(--accent) 85%, transparent),
+    inset 0 0 40px -4px color-mix(in srgb, var(--accent) 75%, transparent);
+  animation-name: ripple-spread;
+  animation-timing-function: cubic-bezier(0.2, 0.6, 0.3, 1);
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes ripple-spread {
+  0% {
+    transform: scale(0.06);
+    opacity: 0;
+  }
+  14% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------- Dot Pattern ---------------------------- */
+
+.dot-pattern-dot {
+  fill: color-mix(in srgb, var(--accent) 72%, var(--fg));
+  opacity: 0.85;
+}
+
+.dot-pattern-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    70% 62% at 50% 40%,
+    color-mix(in srgb, var(--accent) 46%, transparent) 0%,
+    transparent 78%
+  );
+  pointer-events: none;
+}
+
+/* ---------------------------- Floating 3D Particles ---------------------------- */
+
+.particle-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    62% 56% at 50% 46%,
+    color-mix(in srgb, var(--accent) 40%, transparent) 0%,
+    transparent 80%
+  );
+}
+
+.particle-stage {
+  position: absolute;
+  inset: -6%;
+  will-change: transform;
+  transition: transform 120ms linear;
+}
+
+.particle-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fg) 55%, var(--accent));
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--accent) 95%, transparent),
+    0 0 26px -2px color-mix(in srgb, var(--accent) 75%, transparent);
+  animation-name: particle-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+/* 3D 漂浮：纵向缓慢起伏 + 横向漂移 + 按景深缩放的呼吸感 */
+@keyframes particle-float {
+  0% {
+    transform: translate3d(0, 12px, 0) scale(calc(0.85 * var(--depth, 1)));
+    opacity: 0.15;
+  }
+  25% {
+    opacity: 0.85;
+  }
+  75% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate3d(var(--drift, 12px), -140px, 0) scale(calc(1.1 * var(--depth, 1)));
+    opacity: 0.1;
+  }
+}
+
+
+/* ============================================================
+   玻璃层
+   ============================================================ */
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(140%);
+  backdrop-filter: blur(var(--blur-2)) saturate(140%);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    border-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-3), inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(150%);
+  backdrop-filter: blur(var(--blur-3)) saturate(150%);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    border-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+/* ============================================================
+   Magic UI 交互组件
+   ============================================================ */
+
+/* —— Shimmer Button —— */
+.shimmer-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1;
+  padding: 9px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-base) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic),
+    background-color var(--dur-base) var(--ease-out-cubic);
+}
+
+.shimmer-button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent),
+    0 10px 26px -14px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+/* 方形变体：图标按钮用，保持与输入框同一圆角阶梯 */
+.shimmer-button--icon {
+  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.shimmer-button--icon.shimmer-button--accent {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.shimmer-button--icon.shimmer-button--accent:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 12px 28px -12px color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+.shimmer-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shimmer-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    110deg,
+    transparent 28%,
+    color-mix(in srgb, #ffffff 38%, transparent) 48%,
+    transparent 68%
+  );
+  transform: translateX(-130%);
+  animation: shimmer-sweep 3.8s var(--ease-out-cubic) infinite;
+  pointer-events: none;
+}
+
+@keyframes shimmer-sweep {
+  0%,
+  55% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+/* —— Moving Border —— */
+/*
+ * Moving Border（Magic UI）：1px 描边光沿边框巡游。
+ * 用 conic-gradient + mask 抠出「只有 1px 边」的环，再靠 @property 动画角度 ——
+ * 这样不旋转元素本身，圆角与边框始终贴合；内层不做背景，让卡片自己的玻璃层透出来。
+ */
+@property --mb-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.moving-border {
+  position: relative;
+  border-radius: inherit;
+}
+
+.moving-border-ring {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--mb-angle, 0deg),
+    transparent 0deg 230deg,
+    color-mix(in srgb, var(--accent) 55%, transparent) 290deg,
+    var(--accent) 335deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: moving-border-angle linear infinite;
+}
+
+.moving-border-inner {
+  position: relative;
+  border-radius: inherit;
+}
+
+@keyframes moving-border-angle {
+  to {
+    --mb-angle: 360deg;
+  }
+}
+
+/* —— Border Beam —— */
+.border-beam {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.border-beam-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--beam-from, var(--accent)), var(--beam-to, transparent));
+  offset-path: border-box;
+  offset-distance: 0%;
+  animation-name: beam-travel;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes beam-travel {
+  to {
+    offset-distance: 100%;
+  }
+}
+
+/* —— Spotlight Card —— */
+.spotlight-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.spotlight-card-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    200px circle at var(--sx, 50%) var(--sy, 50%),
+    color-mix(in srgb, var(--accent) 30%, transparent) 0%,
+    transparent 68%
+  );
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out-cubic);
+  pointer-events: none;
+}
+
+.spotlight-card:hover .spotlight-card-glow,
+.spotlight-card:focus-within .spotlight-card-glow {
+  opacity: 1;
+}
+
+/* —— Sparkles —— */
+.sparkle-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--sparkle-color, var(--accent));
+  box-shadow: 0 0 8px var(--sparkle-color, var(--accent));
+  animation: sparkle-twinkle var(--sparkle-dur, 3s) ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sparkle-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.15);
+  }
+}
+
+/* ============================================================
+   焦点可见
+   ============================================================ */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* 搜索框自身用光晕替代 outline，避免双重描边 */
+.search-input:focus-visible {
+  outline: none;
+}
+
+/* ============================================================
+   滚动条（仅面板内容区）
+   ============================================================ */
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg) 24%, transparent) transparent;
+  overscroll-behavior: contain;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--fg) 22%, transparent);
+  border-radius: 999px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 页面主体不需要滚动条痕迹 */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================
+   时钟数字
+   ============================================================ */
+
+/*
+ * 时钟只用实心色，不用 background-clip 渐变文字。
+ *
+ * 曾经的写法是 `background-clip: text` + `color/-webkit-text-fill-color: transparent`，
+ * 靠一层横向渐变给字形上色。这在部分渲染环境（Safari、某些 Chromium 变体、
+ * 关掉 GPU 合成的环境）里 background-clip:text 不生效，而填充色已经是 transparent，
+ * 结果就是「DOM 在、布局正常、字号 96px，但一个字也看不见」。
+ * 这里改为实色 text-[var(--fg)]，字体层级交给字号与明暗对比。
+ */
+.clock-digits {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* ============================================================
+   输入框 focus 渐变描边（Border Beam / Glow Effect）
+   ============================================================ */
+
+.glow-field {
+  position: relative;
+  border-radius: var(--radius-sm);
+  transition: box-shadow var(--dur-base) var(--ease-out-cubic);
+}
+
+.glow-field::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 30%, #ffffff), var(--accent));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+  pointer-events: none;
+}
+
+.glow-field:focus-within::after {
+  opacity: 1;
+}
+
+.glow-field:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* ============================================================
+   动效降级
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .ripple-ring,
+  .particle-dot,
+  .sparkle-dot,
+  .shimmer-sweep,
+  .moving-border-ring,
+  .border-beam-dot {
+    animation: none !important;
+  }
+}
+
+[data-motion="reduce"] .ripple-ring,
+[data-motion="reduce"] .particle-dot,
+[data-motion="reduce"] .sparkle-dot,
+[data-motion="reduce"] .shimmer-sweep,
+[data-motion="reduce"] .moving-border-ring,
+[data-motion="reduce"] .border-beam-dot {
+  animation: none !important;
+}
+
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ============================================================
+   工具类
+   ============================================================ */
+
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  background: var(--input-bg);
+  color: var(--fg-subtle);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    border-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  transform: translateY(-200%);
+  transition: transform var(--dur-fast) var(--ease-out-cubic);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}

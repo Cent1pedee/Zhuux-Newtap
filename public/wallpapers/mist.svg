@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eef2f7"/>
+      <stop offset="60%" stop-color="#d7e0ec"/>
+      <stop offset="100%" stop-color="#bcc9da"/>
+    </linearGradient>
+    <radialGradient id="haze" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="b"><feGaussianBlur stdDeviation="80"/></filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <ellipse cx="640" cy="420" rx="620" ry="300" fill="url(#haze)" filter="url(#b)"/>
+  <ellipse cx="1420" cy="700" rx="680" ry="340" fill="url(#haze)" filter="url(#b)" opacity="0.8"/>
+  <g stroke="#8ea6c4" stroke-width="2" fill="none" opacity="0.35">
+    <path d="M0 700 C 380 620, 700 760, 1080 700 S 1660 640, 1920 700"/>
+    <path d="M0 820 C 420 740, 740 880, 1120 820 S 1700 760, 1920 820"/>
+    <path d="M0 940 C 460 860, 780 1000, 1160 940 S 1740 880, 1920 940"/>
+  </g>
+</svg>

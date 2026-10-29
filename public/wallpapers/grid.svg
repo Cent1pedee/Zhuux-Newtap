@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#060a12"/>
+      <stop offset="100%" stop-color="#0d1626"/>
+    </linearGradient>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0 H0 V60" fill="none" stroke="#2F6FED" stroke-width="1" opacity="0.18"/>
+    </pattern>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2F6FED" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#2F6FED" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="gb"><feGaussianBlur stdDeviation="70"/></filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#grid)"/>
+  <ellipse cx="960" cy="540" rx="700" ry="420" fill="url(#glow)" filter="url(#gb)"/>
+  <g stroke="#7dd3fc" stroke-width="1.5" fill="none" opacity="0.3">
+    <circle cx="960" cy="540" r="300"/>
+    <circle cx="960" cy="540" r="440"/>
+  </g>
+</svg>
