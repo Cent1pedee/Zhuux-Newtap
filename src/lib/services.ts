@@ -1,9 +1,13 @@
 /**
- * 服务层（PRD 9.1）：所有远程请求必须经过本封装。
+ * 服务层（PRD 9.1）：所有**接口**请求必须经过本封装。
  * 强制约束：
  *  1. 域名必须命中白名单（内置 + 用户自定义），否则直接 reject；
  *  2. 一律带超时（AbortController），超时后由调用方回退本地数据；
  *  3. 不发送 Cookie（credentials: "omit"），不附带任何本地配置。
+ *
+ * 两个刻意保留的例外，都在下面各自函数里写清了理由：
+ *  · favicon —— `<img>` 直连（见 config/site.ts 的 FAVICON_PATH 注释），不进本文件；
+ *  · 自定义壁纸 —— `fetchUserImage`，域名由用户输入，无法枚举，但保留同样的隐私姿势。
  */
 
 import { DEFAULT_WHITELIST, EDGE_WALLPAPER, LIMITS } from "@/config/site";
@@ -76,6 +80,72 @@ export async function safeFetch(url: string, options: SafeFetchOptions): Promise
   }
 }
 
+/* ------------------------------ 用户指定图片 ------------------------------ */
+
+/**
+ * 取用户自己填进「自定义壁纸」的那张图。
+ *
+ * 这是**唯一不走白名单**的网络请求，理由与 favicon 相同：域名由用户当场输入，
+ * 无法预先枚举（写进白名单等于让用户先手动配一次自己的图床，荒谬）。
+ * 但隐私姿势与 safeFetch 完全一致 —— 不带 Cookie、不带 referrer、带超时；
+ * 额外加一条 safeFetch 不需要的约束：**流式读取并卡体积上限**。
+ * 历史问题：原实现直接 `res.blob()`，一张 200MB 的图会被整个读进内存，
+ * 再转 dataURL 写进 IndexedDB，直接把配额撑爆、后续写入全部失败。
+ */
+export async function fetchUserImage(
+  url: string,
+  options: { timeoutMs?: number; maxBytes?: number } = {},
+): Promise<Blob> {
+  const { timeoutMs = LIMITS.wallpaperTimeoutMs, maxBytes = LIMITS.wallpaperMaxBytes } = options;
+  if (!/^https?:\/\//i.test(url)) throw new Error("图片地址必须是 http(s)");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      mode: "cors",
+      signal: controller.signal,
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const type = res.headers.get("content-type") ?? "";
+    if (type && !type.startsWith("image/")) throw new Error("目标不是图片");
+
+    // 有 Content-Length 就先挡一道，省得白下载
+    const declared = Number(res.headers.get("content-length") ?? "");
+    if (Number.isFinite(declared) && declared > maxBytes) throw new Error("图片体积超过上限");
+
+    if (!res.body) {
+      const blob = await res.blob();
+      if (blob.size > maxBytes) throw new Error("图片体积超过上限");
+      return blob;
+    }
+
+    const reader = res.body.getReader();
+    const chunks: BlobPart[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        void reader.cancel();
+        throw new Error("图片体积超过上限");
+      }
+      chunks.push(value);
+    }
+    return new Blob(chunks, { type: type || "image/*" });
+  } catch (err) {
+    if (controller.signal.aborted) throw new TimeoutError(timeoutMs);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* ------------------------------ 远程一言 ------------------------------ */
 
 export type RemoteQuote = { text: string; from: string };
@@ -93,7 +163,8 @@ export async function fetchRemoteQuote(whitelist: string[], signalTimeout = LIMI
 /* ------------------------------ 搜索建议 ------------------------------ */
 
 export async function fetchSuggestions(
-  engineId: string,
+  /** 引擎 id 目前不参与逻辑（suggestUrl 已携带全部信息），保留形参是为了调用方语义清晰 */
+  _engineId: string,
   query: string,
   whitelist: string[],
   suggestUrl?: string,

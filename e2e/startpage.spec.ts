@@ -159,8 +159,10 @@ test.describe("首屏与布局", () => {
     expect(legacy.weatherInStage).toBe(false);
   });
 
-  test("三处玻璃容器都启用了 backdrop-filter 且底色半透明", async ({ page }) => {
+  test("两处玻璃面板都启用了 backdrop-filter 且底色半透明", async ({ page }) => {
     // 一言与时钟已按青柠起始页的做法去掉容器（只剩文字压在壁纸上），不再参与此断言。
+    // 天气胶囊也不再属于这一组：它已改成和右上角动作组同一套「板」材质（近实心 + 描边），
+    // 由下面「天气胶囊与动作组同材质」那条单独守。
     await fresh(page);
     const panels = await page.evaluate(() => {
       const read = (sel: string) => {
@@ -181,7 +183,6 @@ test.describe("首屏与布局", () => {
         };
       };
       return {
-        card: read('.weather-row'),
         search: read('[data-testid="search-shell"]'),
         dock: read('.dock-pill'),
       };
@@ -191,6 +192,38 @@ test.describe("首屏与布局", () => {
       expect(value!.blur, `${key} 应有 backdrop-filter blur`).toBeGreaterThanOrEqual(12);
       expect(value!.alpha, `${key} 底色应半透明`).toBeLessThan(0.95);
     }
+  });
+
+  test("天气胶囊与右上角动作组同高、同材质", async ({ page }) => {
+    // 回归测试：天气胶囊原先用 --panel-bg（通明玻璃），和旁边的 --board-bg 实心胶囊
+    // 并排，一眼就是两块不同来源的控件。现在两者共用同一套板材质与同一个高度。
+    await fresh(page);
+    const m = await page.evaluate(() => {
+      const read = (sel: string) => {
+        const el = document.querySelector(sel) as HTMLElement | null;
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const bg = cs.backgroundColor;
+        const rgba = bg.match(/rgba?\([^)]*?,\s*([\d.]+)\)/);
+        const slash = bg.match(/\/\s*([\d.]+)\)/);
+        return {
+          height: el.getBoundingClientRect().height,
+          alpha: Number(rgba?.[1] ?? slash?.[1] ?? 1),
+          blur: (cs.backdropFilter || "").match(/blur\(([\d.]+)px\)/)?.[1] ?? "0",
+          radius: cs.borderTopLeftRadius,
+        };
+      };
+      return { weather: read(".weather-row"), dock: read(".bar-dock") };
+    });
+    expect(m.weather, "天气胶囊应存在").not.toBeNull();
+    expect(m.dock, "动作组应存在").not.toBeNull();
+    // 同一行左右并排，高度差超过 1px 就会看出来
+    expect(Math.abs(m.weather!.height - m.dock!.height)).toBeLessThanOrEqual(1);
+    // 同一套「板」材质：近实心 + 同样的胶囊圆角 + 同样的毛玻璃
+    expect(m.weather!.alpha).toBeGreaterThanOrEqual(0.9);
+    expect(m.dock!.alpha).toBeGreaterThanOrEqual(0.9);
+    expect(Number(m.weather!.blur)).toBeGreaterThanOrEqual(12);
+    expect(m.weather!.radius).toBe(m.dock!.radius);
   });
 
   test("多种视口下页面不滚动，内容等比缩放到一屏", async ({ page }) => {

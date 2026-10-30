@@ -72,7 +72,6 @@ export function SearchBox() {
     }, 220);
     return () => {
       window.clearTimeout(timer);
-      window.clearTimeout(timer);
     };
   }, [query, config.suggest.enabled, config.privacy.whitelist, engine.suggestUrl, engine.id, focused]);
 

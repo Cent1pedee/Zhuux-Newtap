@@ -38,7 +38,7 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 | **时间与问候** | 大字号 `HH:MM`，**纯实心前景色**（不用渐变文字 —— 早期用 `background-clip: text` + 透明填充，在 Safari / 部分 Chromium 变体上不生效，时钟会彻底不可见）。可在设置里开启秒，秒以 0.56em 单独一档呈现，清晰可辨。按 5/9/12/14/18/23 点切换「早安 / 上午好 / 午安 / 下午好 / 晚上好 / 夜深了」，日期显示「周几 · 月日」。**问候与日期分两行居中**（同一行时两段文字长度差太大，视觉重心会被拉偏）。数字变化时只有 Magic UI 风格的**模糊上浮**轻过渡。字号用 `clamp(46px, min(10vw, 12vh), 104px)`，矮屏自动收小。 |
 | **每日一言** | **没有任何容器 / 边框 / 玻璃底**，就是背景上的一行小字（对齐青柠起始页）。**聚焦搜索框时整块渐隐并轻微下沉，失焦后淡回**（`[data-dimmed]` + CSS transition）。**数据源默认走远程 API**（`v1.hitokoto.cn`），**3 秒超时静默回退**内置 36 条语录库（离线兜底）。**页面上只有一行正文与一行出处** —— 没有「远程 / 本地」标签、没有分类下拉、没有刷新按钮；**点正文就换一条**。切换时逐字 reveal（Magic UI TextAnimate）。 |
 | **快捷跳转** | **一条悬浮 Dock**（参考青柠起始页底部）：不分组、不标题、不卡片，全部图标排成一行（窄屏自动折行），**常态只有图标没有文字**，名称是鼠标悬停时浮出的 macOS 式气泡。图标是**正圆**（与 999px 胶囊同一套圆角语言）。悬停时按 macOS Dock 的方式联动：当前项上浮 4px + 放大到 1.12、左右邻放大到 1.06、背后一团柔光，格子本身没有底色 / 阴影 / 描边。**首页不再有任何编辑入口** —— 增删改与排序全部收进「设置 → 快捷跳转」（`ShortcutManager`）。`Ctrl/Cmd + 1~9` 直达前九项。图标降级链：**用户自定义（上传图片 / Emoji）→ 站点自动抓取的 favicon → 名称首字母**；favicon 白底圆片会掺一成自有品牌色，和旁边的品牌色实心片是同一套投影与内高光。默认 12 项里内网服务（NAS / Jellyfin）给 Emoji，公网站点留空走 favicon。 |
-| **每日壁纸** | **Edge / Bing 每日一图**（原 Magic UI Backgrounds 四种风格已彻底移除）。元数据取自 `bing.biturl.top`（白名单内，带 CORS），图片直链走 `www.bing.com/th?id=...`；成功后写进 IndexedDB，刷新先读缓存再拉网络，失败保留上一次成功结果。**图片先用 `new Image()` + `decode()` 预解码，解完才淡入** —— 否则大图会「先画出上半截再补下半截」，那半秒正好被淡入放大，看起来像被切成两半。可回溯「今天 / -1 天 / -3 天 / -7 天」，可关闭改为纯渐变兜底；可叠加一张自定义图片（优先级更高，远程 URL 或本地文件，≤8MB）；可调暗化程度与基础模糊；输入框聚焦时自动加深模糊（聚焦模式）。 |
+| **每日壁纸** | **Edge / Bing 每日一图**（原 Magic UI Backgrounds 四种风格已彻底移除）。元数据取自 `bing.biturl.top`（白名单内，带 CORS），图片直链走 `www.bing.com/th?id=...`；成功后写进 IndexedDB，刷新先读缓存再拉网络，失败保留上一次成功结果。**图片先用 `new Image()` + `decode()` 预解码，解完才淡入** —— 否则大图会「先画出上半截再补下半截」，那半秒正好被淡入放大，看起来像被切成两半。可回溯「今天 / -1 天 / -3 天 / -7 天」，可关闭改为纯渐变兜底；可叠加一张自定义图片（优先级更高，远程 URL 或本地文件，≤8MB）；可调暗化程度与基础模糊；输入框聚焦时自动加深模糊（聚焦模式）。亮色主题的遮罩是**三层**（整体极淡磨砂 + 内容列椭圆柔光 + 上下边缘渐变），而不是整面白雾 —— 早先那种「同等强度白雾」会把照片洗成粉彩（实测纯黑块被抬到 rgb(110,110,110)，黑白亮度差从 235 掉到 143），看着像糊了但其实边缘是锐的。 |
 
 ### P1 / P2（默认关闭，需在设置里显式开启）
 
@@ -56,7 +56,7 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 - 内容高于可用高度时按 `zoom` **等比缩小**（下限 0.6），保证一屏完整呈现；`main` 上写 `data-fit-scale` 便于验收。
 - 只有设置面板内容区、搜索建议列表这类「本应滚动」的区域用 `thin-scroll` 内部滚动。
 - 纵向层次（对齐青柠起始页）：**左上角天气胶囊 → 时钟 → 搜索框 → 便签卡 → 每日一言 → 底部 Dock**。每个模块都是独立组件、各自独立成层，**没有任何 Bento 便当板**（早期把便签与天气并排锁在一块板里，视觉上读成一个「大框」，已拆开）。天气是唯一脱离主列的元素 —— 它属于「常驻状态」，钉在顶栏左侧，不随内容高度浮动。
-- **毛玻璃材质**统一由一组 token 驱动（`--panel-bg` / `--panel-highlight` / `--panel-refract` / `--panel-blur` / `--panel-shadow`）。两个主题下各只有**四处**玻璃、共用同一套配方：搜索胶囊（`.search-panel`）、便签卡（`.card-panel`）、底部 Dock（`.dock-pill`）与设置面板；天气胶囊（`.weather-row`）是第五处，但只用 `--blur-2`（20px）做更薄的一层，压在左上角不抢视线。配方是半透明底 + `backdrop-filter: blur(32px) saturate(1.6)` + 顶部内高光 + 下沿折射 + 外投影，视觉厚度靠层次叠加而不是把不透明度堆到接近实心，**全部不画描边**。
+- **毛玻璃材质**统一由一组 token 驱动（`--panel-bg` / `--panel-highlight` / `--panel-refract` / `--panel-blur` / `--panel-shadow`）。两个主题下各只有**四处**玻璃、共用同一套配方：搜索胶囊（`.search-panel`）、便签卡（`.card-panel`）、底部 Dock（`.dock-pill`）与设置面板；天气胶囊（`.weather-row`）**不属于这一组**：它和右上角动作组 `.bar-dock` 共用同一套「板」材质（`--board-bg` + `--board-ring` + 38px 同高），因为两者并排在同一行，一个通明一个实心会读成两块不同来源的控件。配方是半透明底 + `backdrop-filter: blur(32px) saturate(1.6)` + 顶部内高光 + 下沿折射 + 外投影，视觉厚度靠层次叠加而不是把不透明度堆到接近实心，**全部不画描边**。
 - **搜索框是两个主题都用的白色胶囊**（`--search-bg` / `--search-highlight` / `--search-bg-focus`），靠「亮」从背景里跳出来，只有下沉投影 + 一道顶部内高光、**没有 1px 描边**；因为底色恒白，`.search-panel` 内部就地改写 `--fg` 系列变量，深色主题下才不会变成白字白底。聚焦时用 CSS `[data-focused="true"]` 叠一圈 accent ring（不用 framer 内联 `boxShadow`，那会把玻璃的高光与投影一起冲掉）。
 - 搜索胶囊与便签卡**统一 `max-width: 560px`**，一言 `520px`，都比内容列窄一档 —— 一列里出现两种宽度会读成「台阶」，统一之后时钟、搜索框、卡片、一言共用同一条中轴。天气胶囊不参与这条中轴（它在左上角，宽度由内容决定）。
 - 快捷跳转沉到页面最底部，做成一颗**悬浮玻璃胶囊**（`.dock-pill`，999px 圆角），整排正圆图标被它托住；悬停时胶囊自身轻轻上浮 2px。`.dock-shell` 顶部留 32px 空档，供名称气泡浮出（否则气泡会压到一言的出处行上）。
@@ -94,7 +94,7 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 
 `background.source` 只有两个值：`edge`（Edge / Bing 每日一图，默认）与 `none`（纯渐变兜底，零网络请求）。`background.offset` 是往前回溯的天数，合法范围 0–7（见 `EDGE_WALLPAPER.maxOffset`）。自定义图片仍然走 `wallpaper` 分区，优先级高于每日壁纸。
 
-**可调常量**（`src/config/site.ts`）：`LIMITS` 里是快捷项标题 16 字、分组名 12 字、单组最多 200 项、最多 12 组、一言超时 3000ms、建议超时 2500ms、图片超时 8000ms；`EDGE_WALLPAPER` 里是壁纸 API 基址、图片域、市场与最大回溯天数。
+**可调常量**（`src/config/site.ts`）：`LIMITS` 里是快捷项标题 16 字、分组名 12 字、单组最多 200 项、最多 12 组、快捷指令 32 条、白名单 32 个域名、一言超时 3000ms、建议超时 2500ms、图片超时 8000ms、自定义壁纸体积 8MB；`EDGE_WALLPAPER` 里是壁纸 API 基址、图片域、市场与最大回溯天数。
 
 **请求白名单**在 [`src/config/site.ts`](src/config/site.ts) 的 `DEFAULT_WHITELIST` 统一维护，所有远程请求必须经过 [`src/lib/services.ts`](src/lib/services.ts) 的 `safeFetch`，命中白名单才放行（支持子域后缀匹配），否则抛 `WhitelistError` 且**根本不会发起 fetch**。
 
@@ -117,18 +117,21 @@ src/
     weather.tsx  settings-panel.tsx  command-palette.tsx  theme-sync.tsx  note-pad.tsx
     engine-glyph.tsx           # EngineBadge：优先取站点 favicon，失败退回内联 SVG（四色 G / Bing / 百度）
     ui/primitives.tsx          # Modal / Toast / Switch / Field / TextInput / Button / Segmented / Range
-    magicui/                   # Magic UI 等价实现（全部自绘，零额外依赖）
-      shimmer-button.tsx  moving-border.tsx  border-beam.tsx    # 按钮 / 边框
-      spotlight-card.tsx  tilted-card.tsx                       # 卡片（备用，当前首页未用）
-      blur-in.tsx  text-animate.tsx  animated-digits.tsx        # 文本 / 数字动效
-      sparkles.tsx  spotlight.tsx
+    settings/                  # 设置面板的页签与控制器（壳留在 settings-panel.tsx）
+      controller.ts            # 草稿状态 + 引擎排序 / 指令 / 背景 / 白名单 / 导入导出 / 定位
+      search-tab.tsx  appearance-tab.tsx  shortcuts-tab.tsx  modules-tab.tsx
+      background-tab.tsx  privacy-tab.tsx  about-tab.tsx  tab-icons.tsx
+    magicui/                   # Magic UI 等价实现（全部自绘，零额外依赖；只保留真正在用的 5 个）
+      animated-digits.tsx  blur-in.tsx  text-animate.tsx        # 文本 / 数字动效
+      spotlight.tsx                                             # 鼠标跟随光斑
       animated-theme-toggler.tsx                                # View Transitions 主题切换
   config/
     site.ts     # 引擎、每日壁纸、强调色、白名单、限额
     types.ts  defaults.ts   # 配置形状与出厂值
     cities.ts   # 34 个省级行政区 / 200+ 城市坐标（离线，不查接口）
   lib/
-    storage.ts     # localStorage / IndexedDB 封装 + 防御式深合并
+    storage.ts     # localStorage / IndexedDB 封装（mergeConfig 转发给 config-schema）
+    config-schema.ts # 配置字段级 schema：枚举 / 数值范围 / 数组元素 / 限额的导入校验
     services.ts    # 白名单校验 + 超时的 fetch 封装
     quotes.ts      # 内置语录库
     commands.ts    # 快捷指令解析
@@ -139,9 +142,9 @@ src/
     config-store.tsx  # 配置 Context + 减少动效偏好
   styles/
     globals.css    # 设计 token（间距/圆角/阴影/模糊/时长）+ 全部 Magic UI 类 + 主题变量
-tests/             # Vitest 单元 / 组件测试（13 文件 172 项）
+tests/             # Vitest 单元 / 组件测试（16 文件 211 项）
 scripts/           # capture-shots.mjs：视觉验收截图脚本
-e2e/               # Playwright 端到端测试（5 文件 38 项，含 axe 无障碍扫描）
+e2e/               # Playwright 端到端测试（5 文件 39 项，含 axe 无障碍扫描）
 ```
 
 ---
@@ -166,7 +169,7 @@ pnpm lint            # ESLint（next/core-web-vitals + next/typescript）
 
 期望：`typecheck` 无输出；`lint` 输出 `0 problems`。
 
-### 5.2 单元 / 组件测试（Vitest，172 项）
+### 5.2 单元 / 组件测试（Vitest，211 项）
 
 ```bash
 pnpm test              # 单次运行
@@ -180,10 +183,13 @@ pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 |---|---|---|
 | `tests/commands.test.ts` | 16 | 快捷指令解析（长指令优先、`/github` 不误命中 `/g`、大小写、URL 编码）、直接网址识别、搜索 URL 拼接 |
 | `tests/greeting.test.ts` | 19 | 时段边界左闭右开（5/9/12/14/18/23 点）、自定义问候优先、日期格式、补零、时间拆分 |
-| `tests/quotes.test.ts` | 9 | 分类过滤、同日稳定、随机换条不重复 |
+| `tests/quotes.test.ts` | 8 | 分类过滤、同日稳定、随机换条不重复 |
 | `tests/color.test.ts` | 10 | 相对亮度、对比度、AA 阈值 |
+| `tests/config-schema.test.ts` | 18 | 导入闸门：可空字段（`weather.lat` 写成字符串必须被拒）、非法枚举、数值越界 clamp、快捷项/分组/白名单的元素级校验与 LIMITS 限额、默认配置往返一致 |
+| `tests/config-store.test.tsx` | 4 | 跨标签页同步：外部写入跟手更新、应用后不回写、清空回到出厂、无关键不触发 |
+| `tests/csp.test.ts` | 11 | 安全响应头纯函数：dev 必须含 `'unsafe-eval'` 且不含 `upgrade-insecure-requests`、生产反之；`connect-src` 不得缺失（缺了会回退 `default-src 'self'` 掐断接口）、`form-action` 覆盖三家引擎 |
 | `tests/storage.test.ts` | 10 | 配置读写、防御式深合并（类型不符不覆盖、未知字段丢弃、可空字段兼容）、清除 |
-| `tests/services.test.ts` | 17 | **白名单拒绝时 fetch 未被调用**、credentials omit、no-referrer、HTTP 500、超时抛错、suggest 截断 8 条、天气码映射 |
+| `tests/services.test.ts` | 24 | **白名单拒绝时 fetch 未被调用**、credentials omit、no-referrer、HTTP 500、超时抛错、suggest 截断 8 条、天气码映射 |
 | `tests/search-box.test.tsx` | 12 | 默认引擎 Google、原生表单属性、点击循环 / 右键菜单、`/` 提示、指令跳转、Esc 清空、**空提交直接新标签打开引擎官网**、**回车与点按钮都在新标签打开（不劫持当前页）**、Shift+Enter |
 | `tests/daily-quote.test.tsx` | 7 | 本地源零网络请求、默认远程取一条、远程失败静默回退、点正文换一条、**不存在来源标签 / 分类 / 刷新按钮**、出处含破折号、聚焦输入框时 `data-dimmed` 翻转 |
 | `tests/shortcut-dock.test.tsx` | 12 | 首页 Dock：展平渲染 12 项、无分组标题、**首页不存在任何编辑 / 删除 / 前移后移 / 添加按钮**、悬停只有图标层、`target=_blank` + `title` 含「打开 」、空态是引导文案；设置内 `ShortcutManager`：列表 12 行、增删改、空名校验、URL 自动补全、删除二次确认、取消不删、前后调序持久化 |
@@ -192,7 +198,7 @@ pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 | `tests/widgets.test.tsx` | 13 | 时钟（问候一致性、显隐、秒）、壁纸（关闭时只渲染渐变兜底且**零网络请求**、Edge 取回后渲染图片、自定义图片失败降级）、天气（默认开启、静默定位、选省市写入坐标、成功、失败） |
 | `tests/note-pad.test.tsx` | 6 | 待办便签显式关闭时不渲染、回填已存内容、防抖落盘、清空与禁用态、「已保存」提示、2000 字截断 |
 
-### 5.3 端到端测试（Playwright，38 项）
+### 5.3 端到端测试（Playwright，39 项）
 
 ```bash
 pnpm test:e2e                            # 全量（自动 build + start，端口 3100）
@@ -210,7 +216,7 @@ Playwright 会自动执行 `pnpm run build && pnpm run start --port 3100`（见 
 
 | 文件 | 项数 | 覆盖内容 |
 |---|---|---|
-| `e2e/startpage.spec.ts` | 29 | 首屏五模块 + 无横向滚动、**每个模块各自独立成层（左上天气→时钟→搜索→便签卡→一言→底部 Dock，且不存在任何 bento 板）**、**玻璃容器均启用 backdrop-filter 且底色半透明**、**四种视口下整页/main 均无滚动且缩放系数在 0.6~1**、时钟走秒、**秒数可见且字号 ≥ 主数字一半**、**首屏请求分两层把关（接口走白名单、图片只允许 favicon）**（并断言「关壁纸 + 关图标抓取 + 一言切本地库后外部请求必须为 0」）、**聚焦搜索框时一言 `opacity` 归零、失焦复原**、引擎切换三种方式（默认 Google）、`/` 指令、**回车与点按钮都在新标签打开、空提交直接进引擎官网**、快捷项增改删**全流程都在设置里**（首页断言无编辑入口与无 `add-shortcut`）、**悬停只有图标层动（格子无底色/无阴影/无描边）**、图标前后调序与顺序持久化、Ctrl+1、**点一言正文换一条且无来源/分类/刷新**、每日壁纸开关与暗化滑杆、主题写 `html[data-theme]`、命令面板搜索执行、模块关闭后刷新保持、一键清除、导出下载、skip-link、焦点陷阱与焦点恢复、减少动效、**设置内「添加」再叠一层编辑弹窗时标题可见且 Esc 只关最上层** |
+| `e2e/startpage.spec.ts` | 30 | 首屏五模块 + 无横向滚动、**每个模块各自独立成层（左上天气→时钟→搜索→便签卡→一言→底部 Dock，且不存在任何 bento 板）**、**玻璃面板均启用 backdrop-filter 且底色半透明**、**天气胶囊与动作组同高同材质**、**四种视口下整页/main 均无滚动且缩放系数在 0.6~1**、时钟走秒、**秒数可见且字号 ≥ 主数字一半**、**首屏请求分两层把关（接口走白名单、图片只允许 favicon）**（并断言「关壁纸 + 关图标抓取 + 一言切本地库后外部请求必须为 0」）、**聚焦搜索框时一言 `opacity` 归零、失焦复原**、引擎切换三种方式（默认 Google）、`/` 指令、**回车与点按钮都在新标签打开、空提交直接进引擎官网**、快捷项增改删**全流程都在设置里**（首页断言无编辑入口与无 `add-shortcut`）、**悬停只有图标层动（格子无底色/无阴影/无描边）**、图标前后调序与顺序持久化、Ctrl+1、**点一言正文换一条且无来源/分类/刷新**、每日壁纸开关与暗化滑杆、主题写 `html[data-theme]`、命令面板搜索执行、模块关闭后刷新保持、一键清除、导出下载、skip-link、焦点陷阱与焦点恢复、减少动效、**设置内「添加」再叠一层编辑弹窗时标题可见且 Esc 只关最上层** |
 | `e2e/a11y.spec.ts` | 5 | axe-core 扫描首页（暗/亮）、设置面板**七个页签**、命令面板、快捷项编辑弹窗 —— 断言 **0 个 serious / critical** |
 | `e2e/no-js.spec.ts` | 1 | 禁用 JS 后页面完整可读，搜索框通过原生表单 GET 真的跳转到 `https://www.google.com/search?q=...` |
 | `e2e/reduced-motion.spec.ts` | 1 | 系统 `prefers-reduced-motion: reduce` 时，四个入场模块首帧即 `opacity:1`、无位移，一言的入场 `animation: none`、聚焦渐隐只淡出不位移，逐字动画降级 |
@@ -279,13 +285,64 @@ Lighthouse 目标（PRD 6.1）：LCP < 1.2s、FCP < 0.8s、CLS < 0.1、TBT < 100
 | 搜索建议 | `api.bing.com` | **关闭**，显式开启 |
 | 天气 | `api.open-meteo.com` | **开启**（默认），仅发坐标 |
 | 站点 favicon | 各站点自身 `/favicon.ico` | **开启**（默认），`<img>` 直链、`referrerPolicy="no-referrer"`、不带 Cookie |
+| 自定义壁纸图片 | 用户自己填的图片地址 | **关闭**（默认用每日壁纸）；开启后按用户填写的域名取图 |
 | 统计 | — | 未接入任何第三方统计 |
 
 所有**接口**请求走 `safeFetch`：`credentials: "omit"`（不带 Cookie）、`referrerPolicy: "no-referrer"`、`cache: "no-store"`，且必须命中白名单。favicon 与壁纸图片是 `<img>` 直链，不经过 `safeFetch`，但同样带 `referrerPolicy="no-referrer"`、不带任何凭据。
 
+**唯一的白名单例外**是自定义壁纸的取图（`fetchUserImage`）：域名由用户当场输入，无法预先枚举，写成白名单等于要求用户先手动配一次自己的图床。它保留与 `safeFetch` 相同的隐私姿势（不带 Cookie、不带 referrer、8s 超时），并额外限制 **8MB 流式体积上限** —— 原实现直接 `res.blob()`，一张大图能同时撑爆内存与 IndexedDB 配额。
+
+### 安全响应头
+
+`next.config.ts` 统一下发（由 `next start` / Vercel 生效，纯静态托管需自行配置）：
+
+| 头 | 值 | 作用 |
+|---|---|---|
+| `Content-Security-Policy` | `default-src 'self'`；`script-src 'self' 'unsafe-inline'`；`img-src 'self' data: blob: https:`；`frame-ancestors 'none'`；`object-src 'none'`；`form-action` 限定三家引擎 | 挡脚本/样式注入、被嵌套、表单被劫持 |
+| `Referrer-Policy` | `no-referrer` | 出站请求一律不带来源页 |
+| `Permissions-Policy` | 只放行 `geolocation=(self)` | 其余传感器/支付一律关闭 |
+| `X-Content-Type-Options` | `nosniff` | 禁止 MIME 嗅探 |
+| `X-Frame-Options` | `DENY` | `frame-ancestors` 的旧浏览器兜底 |
+
+`script-src` 必须带 `'unsafe-inline'`（首屏主题脚本与 Next 水合脚本都是内联的；换 nonce 要求动态渲染，会毁掉全静态产物）。
+
+**开发与生产的差异**（由 `src/lib/csp.ts` 的 `buildCsp(isDev)` 生成，有单测守着）：
+
+| 指令 | 生产 | 开发 | 原因 |
+|---|---|---|---|
+| `script-src` | `'self' 'unsafe-inline'` | 额外加 `'unsafe-eval'` | `next dev` 用 webpack 以 eval 注入模块 + React Refresh。缺它浏览器抛 `Evaluating a string as JavaScript violates ...`，且发生在客户端 bundle 执行前 → **hydration 完全不发生**：页面看得见，但点设置、切主题、搜索建议全部无反应 |
+| `upgrade-insecure-requests` | 有 | **无** | dev 跑在 `http://localhost`，这条会把同源资源与 HMR 的 `ws://` 一起升级成 https/wss，热更新直接失联 |
+`connect-src` 故意写 `https:` 而不是白名单列表 —— 自定义壁纸与用户自定义白名单都允许填任意域名，写死会把这两处功能打死；接口层的白名单仍由 `safeFetch` 在代码里强制，有单测守着「白名单外不发请求」。
+
 ---
 
-## 七、已知限制
+## 七、故障排查
+
+### `Error: [safe-delete] broker denied delete: path=.../.next/xxx`
+
+**表现**：`pnpm dev` 或 `pnpm build` 启动阶段直接退出，栈里出现 `node-safe-delete-shim`。
+
+**原因**：`.next` 里的残留目录（`diagnostics`、`static/webpack`）需要清理，而某些沙箱/托管环境会拦截
+非递归的目录删除。**与项目代码无关**，新机器或干净目录不会出现。
+
+**处理**：先 `pnpm clean` 再重试；仍不行就直接删掉 `.next`（必要时用有权限的终端执行 `rm -rf .next`）。
+`pnpm build` 已挂 `prebuild: pnpm clean`，所以在能正常删除的环境里不会再撞到。
+
+### 页面能看见，但点什么都没反应（开发模式）
+
+**原因**：CSP 的 `script-src` 缺 `'unsafe-eval'`，客户端 bundle 一行都没执行，hydration 没发生。
+控制台里能搜到 `Evaluating a string as JavaScript violates the following Content Security Policy directive`。
+
+**处理**：检查 `src/lib/csp.ts` 的 `buildCsp(isDev)` —— 开发分支必须带 `'unsafe-eval'`；
+`tests/csp.test.ts` 里有对应断言，删掉会立刻红灯。
+
+### `Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` / `ERR_BLOCKED_BY_ORB`
+
+**不是 bug**。这是个别站点（npmjs.com 发 `Cross-Origin-Resource-Policy: same-origin`、caniuse.com 把
+`/favicon.ico?search=` 302 到 HTML 页）拒绝了跨源取图。`shortcut-icon.tsx` 的 `onError` 会按降级链
+退回品牌色首字母，功能不受影响。
+
+## 八、已知限制
 
 - **浏览器矩阵**：仅在 Chrome（Playwright 内置 + 本机 Chrome）上跑过自动化；Safari / Firefox 依赖标准的 `backdrop-filter`、`color-mix()`、`dvh`、`offset-path`，CSS 里已写 `-webkit-` 前缀与降级色，但未做真机回归。主题切换的圆形揭示只在支持 View Transitions 的浏览器上出现，其余退化为颜色过渡。
 - **移动端**：布局自适应（Dock 在窄屏自动折行、设置面板导航由竖排转为横排），但 PRD 定位是桌面优先，移动端只保证「可用」。

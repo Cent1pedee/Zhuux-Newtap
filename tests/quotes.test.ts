@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { QUOTES, QUOTE_CATEGORIES, quoteOfDay, quotesByCategory, randomQuote } from "@/lib/quotes";
+import { QUOTES, quoteOfDay, quotesByCategory, randomQuote } from "@/lib/quotes";
 
 describe("内置语录库", () => {
   it("至少 30 条，字段完整", () => {
@@ -15,10 +15,6 @@ describe("内置语录库", () => {
     for (const c of ["inspire", "tech", "literary"]) {
       expect(quotesByCategory(c).length).toBeGreaterThan(0);
     }
-  });
-
-  it("分类列表包含「全部」+ 3 个分类", () => {
-    expect(QUOTE_CATEGORIES.map((c) => c.id)).toEqual(["all", "inspire", "tech", "literary"]);
   });
 
   it("未知分类回退为全部", () => {

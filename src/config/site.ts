@@ -214,7 +214,11 @@ export const LIMITS = {
   groupNameMax: 12,
   maxShortcuts: 200,
   maxGroups: 12,
+  maxQuickCommands: 32,
+  maxWhitelistHosts: 32,
   quoteTimeoutMs: 3000,
   suggestTimeoutMs: 2500,
   wallpaperTimeoutMs: 8000,
+  /** 自定义壁纸体积上限（字节）：超过就不进 IndexedDB，避免撑爆配额 */
+  wallpaperMaxBytes: 8 * 1024 * 1024,
 } as const;

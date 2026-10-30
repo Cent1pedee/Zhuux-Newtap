@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FALLBACK_GRADIENT } from "@/config/site";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
-import { fetchEdgeWallpaper, type EdgeWallpaper } from "@/lib/services";
+import { fetchEdgeWallpaper, fetchUserImage, type EdgeWallpaper } from "@/lib/services";
 import { cacheGet, cachePut } from "@/lib/storage";
 
 /** 聚焦模式下的额外模糊量（px），类 macOS Spotlight */
@@ -13,6 +13,38 @@ const FOCUS_BLUR = 16;
 /** 每日壁纸元数据的缓存键（带上偏移天数，切换「往前第几天」不互相覆盖） */
 function edgeCacheKey(offset: number): string {
   return `edge-meta:v1:${offset}`;
+}
+
+/**
+ * 壁纸遮罩。
+ *
+ * 暗色：一层黑，暗化度就是它的不透明度。深色主题靠压暗照片立住白色文字，越压越稳，
+ * 没有别的诉求，所以保持一行 rgba 不动。
+ *
+ * 亮色：**不能**用「同等强度的白雾」。旧实现是 `0.3 + dim*0.45` 的整面白 + 一层白色
+ * 上下渐变，实测把棋盘格里 rgb(20,20,20) 的黑块抬到 rgb(109,110,111)，黑白亮度差从
+ * 235 掉到 143 —— 照片边缘其实还是锐的，但整张图被洗成粉彩，观感就是「糊、不透气」。
+ * 现在拆成三层，各自负责一件事：
+ *   1. base   —— 极淡的整体磨砂，只压一点过曝高光，让照片保持本色；
+ *   2. center —— 内容列所在的椭圆柔光，时钟 / 搜索 / 卡片正好落在这里，
+ *                深色文字在照片上也有足够对比度（大字号 3:1 绰绰有余）；
+ *   3. edge   —— 上下边缘一小段渐变，给顶栏与页脚的超小号文字兜底。
+ * 结果是四角与四周保持干净锐利，中间仍然可读 —— 通透与可读性各让一步。
+ */
+function scrimBackground(isLight: boolean, dim: number): string {
+  const d = Math.min(100, Math.max(0, dim)) / 100;
+  if (!isLight) return `rgba(0,0,0,${d.toFixed(2)})`;
+
+  const base = 0.04 + d * 0.14;
+  const center = 0.32 + d * 0.40;
+  const mid = center * 0.5;
+  const edge = 0.12 + d * 0.26;
+
+  return [
+    `radial-gradient(ellipse 68% 52% at 50% 40%, rgba(255,255,255,${center.toFixed(2)}) 0%, rgba(255,255,255,${mid.toFixed(2)}) 46%, rgba(255,255,255,0) 78%)`,
+    `linear-gradient(180deg, rgba(255,255,255,${edge.toFixed(2)}) 0%, rgba(255,255,255,0) 14%, rgba(255,255,255,0) 80%, rgba(255,255,255,${edge.toFixed(2)}) 100%)`,
+    `rgba(248,250,253,${base.toFixed(2)})`,
+  ].join(", ");
 }
 
 /**
@@ -111,9 +143,11 @@ export function Wallpaper() {
       // 仅 http(s) 远程地址才做网络缓存；dataURL 直接使用
       if (/^https?:\/\//i.test(customSrc)) {
         try {
-          const res = await fetch(customSrc, { mode: "cors", credentials: "omit" });
-          if (!res.ok) throw new Error(String(res.status));
-          const blob = await res.blob();
+          // 走统一网络层：omit credentials / no-referrer / 超时 / 8MB 流式上限。
+          // 不再用裸 fetch —— 原实现既没超时也没体积上限，一张大图能把内存和
+          // IndexedDB 配额一起吃掉，失败后还不带 referrer 策略。
+          const blob = await fetchUserImage(customSrc);
+          if (cancelled) return;
           const reader = new FileReader();
           reader.onload = () => {
             const dataUrl = typeof reader.result === "string" ? reader.result : null;
@@ -238,15 +272,11 @@ export function Wallpaper() {
         />
       ) : null}
 
-      {/* 暗化层：亮色主题改为白色柔光罩，保证深色文字在任意背景上都有对比度（PRD 5.1 / 6.2 AA） */}
+      {/* 遮罩层：暗色压黑、亮色分层柔光，见 scrimBackground 的说明 */}
       <div
         className="wallpaper-scrim"
         data-theme-scrim={isLight ? "light" : "dark"}
-        style={
-          isLight
-            ? { background: `rgba(248, 250, 253, ${(0.3 + (background.dim / 100) * 0.45).toFixed(2)})` }
-            : { background: `rgba(0,0,0,${(background.dim / 100).toFixed(2)})` }
-        }
+        style={{ background: scrimBackground(isLight, background.dim) }}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import {
   WhitelistError,
   effectiveWhitelist,
   fetchSuggestions,
+  fetchUserImage,
   hostOf,
   isAllowed,
   normalizeHost,
@@ -132,5 +133,123 @@ describe("weatherLabel", () => {
     expect(weatherLabel(61)).toBe("雨");
     expect(weatherLabel(73)).toBe("雪");
     expect(weatherLabel(95)).toBe("雷雨");
+  });
+});
+
+/**
+ * 自定义壁纸：唯一不走白名单的请求，但隐私姿势与体积约束不能松。
+ *
+ * 这里用手写的 response 替身而不是 `new Response(...)`：jsdom 的 Blob/Response
+ * 实现不完整（Blob 没有 stream()、构造 Response 时直接抛错），测的是本函数的
+ * 判定逻辑，不是 fetch 实现。
+ */
+type FakeBody = { getReader: () => { read: () => Promise<{ done: boolean; value?: Uint8Array }>; cancel: () => void } };
+
+function fakeResponse(opts: {
+  status?: number;
+  headers?: Record<string, string>;
+  body?: FakeBody | null;
+  blob?: Blob;
+}) {
+  const headers = opts.headers ?? {};
+  return {
+    ok: (opts.status ?? 200) >= 200 && (opts.status ?? 200) < 300,
+    status: opts.status ?? 200,
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
+    body: opts.body ?? undefined,
+    blob: async () => opts.blob ?? new Blob([new Uint8Array(0)]),
+  };
+}
+
+function streamOf(chunks: Uint8Array[]): FakeBody {
+  let i = 0;
+  return {
+    getReader: () => ({
+      read: async () =>
+        i < chunks.length ? { done: false, value: chunks[i++] } : { done: true, value: undefined },
+      cancel: () => {},
+    }),
+  };
+}
+
+describe("fetchUserImage（自定义壁纸）", () => {
+  it("非 http(s) 地址直接拒绝且不发请求", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    await expect(fetchUserImage("data:image/png;base64,AAAA")).rejects.toThrow("http(s)");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("始终带 omit credentials 与 no-referrer", async () => {
+    const seen: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        seen.push(init ?? {});
+        return fakeResponse({ headers: { "content-type": "image/png" }, blob: new Blob([new Uint8Array(16)]) });
+      }),
+    );
+    const blob = await fetchUserImage("https://img.example.com/a.png");
+    expect(blob.size).toBe(16);
+    expect(seen[0]?.credentials).toBe("omit");
+    expect(seen[0]?.referrerPolicy).toBe("no-referrer");
+    expect(seen[0]?.signal).toBeDefined();
+  });
+
+  it("返回非图片 content-type 时拒绝", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => fakeResponse({ headers: { "content-type": "text/html" } })));
+    await expect(fetchUserImage("https://img.example.com/a.png")).rejects.toThrow("不是图片");
+  });
+
+  it("Content-Length 超限时立刻拒绝", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        fakeResponse({ headers: { "content-type": "image/png", "content-length": String(64 * 1024 * 1024) } }),
+      ),
+    );
+    await expect(fetchUserImage("https://img.example.com/a.png", { maxBytes: 1024 })).rejects.toThrow("体积超过上限");
+  });
+
+  it("无 Content-Length 时按流式累计卡上限（不会把整个大图读进内存）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        fakeResponse({
+          headers: { "content-type": "image/jpeg" },
+          body: streamOf(Array.from({ length: 8 }, () => new Uint8Array(1024))),
+        }),
+      ),
+    );
+    await expect(fetchUserImage("https://img.example.com/a.jpg", { maxBytes: 2048 })).rejects.toThrow("体积超过上限");
+  });
+
+  it("流式读取正常时拼成完整 Blob", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        fakeResponse({
+          headers: { "content-type": "image/jpeg" },
+          body: streamOf([new Uint8Array(1024), new Uint8Array(1024)]),
+        }),
+      ),
+    );
+    const blob = await fetchUserImage("https://img.example.com/a.jpg");
+    expect(blob.size).toBe(2048);
+  });
+
+  it("超时抛 TimeoutError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      ),
+    );
+    await expect(fetchUserImage("https://img.example.com/a.png", { timeoutMs: 20 })).rejects.toMatchObject({
+      name: "TimeoutError",
+    });
   });
 });

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createDefaultConfig } from "@/config/defaults";
 import type { AppConfig } from "@/config/types";
-import { loadConfig, saveConfig } from "@/lib/storage";
+import { CONFIG_KEY, loadConfig, saveConfig } from "@/lib/storage";
 
 type ConfigContextValue = {
   config: AppConfig;
@@ -25,6 +25,12 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(() => createDefaultConfig());
   const [ready, setReady] = useState(false);
   const mounted = useRef(false);
+  /**
+   * 本次变更是否来自「别的标签页」。
+   * 是的话就不要回写 —— 否则两个标签会互相触发 storage 事件，
+   * 虽然值相同浏览器不会真的广播，但白白多一次 stringify + 写盘。
+   */
+  const external = useRef(false);
 
   // 首帧后读取本地配置
   useEffect(() => {
@@ -34,9 +40,34 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     mounted.current = true;
   }, []);
 
+  /**
+   * 跨标签页同步。
+   *
+   * 历史问题：两个标签同时打开时，A 改设置、B 还是旧配置；
+   * B 再改任何一项，会用自己那份旧配置把 A 的改动整体覆盖掉 —— 最后写入者通吃，
+   * 且用户完全看不出发生了什么。storage 事件只在**其他**标签页触发，正好用来对齐。
+   * 冲突策略仍是「后写覆盖」，但至少两边看到的是同一份数据。
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStorage = (event: StorageEvent) => {
+      // 别的键（比如壁纸缓存）与本次无关
+      if (event.key !== null && event.key !== CONFIG_KEY) return;
+      external.current = true;
+      // newValue === null 表示配置被清空（一键清除 / 恢复出厂在另一个标签触发）
+      setConfig(event.newValue === null ? createDefaultConfig() : loadConfig());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // 配置变化写回（ready 之前不写，防止用默认值覆盖用户数据）
   useEffect(() => {
     if (!ready) return;
+    if (external.current) {
+      external.current = false;
+      return;
+    }
     saveConfig(config);
   }, [config, ready]);
 

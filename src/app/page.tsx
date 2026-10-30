@@ -145,14 +145,12 @@ export default function Home() {
 
   const isLight = config.theme.mode === "light" || (config.theme.mode === "system" && systemLight);
   const scaled = fitScale < 0.999;
-  const quoteVisible = config.quote.show;
-  const noteVisible = config.note.enabled;
-  const weatherVisible = config.weather.enabled;
   // 天气与便签各自独立成卡：不再套进同一块 Bento 玻璃板。
   // 两者都是「次级信息」，但彼此无关，锁在一个框里只会让整块看起来像
   // 一个与内容无关的装饰容器。各自成卡后，谁被关掉都不影响另一个的排版。
-  const noteCardVisible = noteVisible;
-  const weatherCardVisible = weatherVisible;
+  const weatherVisible = config.weather.enabled;
+  const noteVisible = config.note.enabled;
+  const quoteVisible = config.quote.show;
 
   // 主题切换走 View Transitions 圆形扩散（Magic UI Animated Theme Toggler）
   const { toggle: toggleThemeAnimated } = useAnimatedThemeToggle();
@@ -175,7 +173,7 @@ export default function Home() {
         <header className="flex shrink-0 items-center gap-2 px-4 py-3 sm:px-6">
           <h1 className="sr-only">起始页</h1>
           <AnimatePresence initial={false}>
-            {weatherCardVisible ? (
+            {weatherVisible ? (
               <motion.div
                 key="weather"
                 layout={!reduce}
@@ -254,7 +252,7 @@ export default function Home() {
 
               {/* 便签卡：同样独立成卡 */}
               <AnimatePresence initial={false}>
-                {noteCardVisible ? (
+                {noteVisible ? (
                   <motion.div
                     key="note"
                     layout={!reduce}

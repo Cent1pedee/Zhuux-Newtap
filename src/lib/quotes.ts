@@ -7,13 +7,6 @@ export type QuoteCategory = "inspire" | "tech" | "literary";
 
 export type Quote = { text: string; from: string; category: QuoteCategory };
 
-export const QUOTE_CATEGORIES: { id: QuoteCategory | "all"; name: string }[] = [
-  { id: "all", name: "全部" },
-  { id: "inspire", name: "励志" },
-  { id: "tech", name: "技术" },
-  { id: "literary", name: "文艺" },
-];
-
 export const QUOTES: Quote[] = [
   { text: "把每件小事做到极致，就是最好的简历。", from: "佚名", category: "inspire" },
   { text: "慢一点没关系，只要方向是对的。", from: "佚名", category: "inspire" },

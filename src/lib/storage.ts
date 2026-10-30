@@ -3,10 +3,14 @@
  * - localStorage：用户配置（单一 key）
  * - IndexedDB：壁纸 / 图标二进制缓存
  * 全部函数对 SSR 与隐私模式（localStorage 抛错）做兜底，绝不抛出到渲染层。
+ *
+ * 配置的字段级校验在 `config-schema.ts`（对外仍从这里导出 mergeConfig，
+ * 老调用方不用改 import）。
  */
 
 import { createDefaultConfig } from "@/config/defaults";
 import type { AppConfig } from "@/config/types";
+import { mergeConfig as mergeWithSchema } from "@/lib/config-schema";
 
 export const CONFIG_KEY = "startpage.config.v1";
 const DB_NAME = "startpage";
@@ -30,58 +34,9 @@ function safeStorage(): Storage | null {
   }
 }
 
-/** 深度合并：以默认配置为骨架，忽略类型不符的字段（导入时的防御） */
+/** 深度合并：以默认配置为骨架，逐字段校验（schema 见 config-schema.ts） */
 export function mergeConfig(base: AppConfig, patch: unknown): AppConfig {
-  if (!patch || typeof patch !== "object") return base;
-  const p = patch as Record<string, unknown>;
-  const out: AppConfig = structuredCloneSafe(base);
-  for (const key of Object.keys(out) as (keyof AppConfig)[]) {
-    if (!(key in p)) continue;
-    const current = out[key];
-    const next = p[key];
-    if (next === null || next === undefined) continue;
-    if (Array.isArray(current)) {
-      if (Array.isArray(next)) {
-        (out as unknown as Record<string, unknown>)[key] = next;
-      }
-      continue;
-    }
-    if (typeof current === "object") {
-      if (typeof next === "object" && !Array.isArray(next)) {
-        const merged = { ...(current as object) } as Record<string, unknown>;
-        for (const sub of Object.keys(next as object)) {
-          if (!(sub in merged)) continue; // 丢弃不认识的字段
-          const subNext = (next as Record<string, unknown>)[sub];
-          // 只在类型一致时覆盖，防止导入把 accent 写成数字导致渲染崩溃；
-          // 默认值为 null 的可空字段（如 weather.lat）允许写入 number/string。
-          const currentSub = merged[sub];
-          const compatible =
-            typeof subNext === typeof currentSub ||
-            currentSub === null ||
-            subNext === null;
-          if (compatible) merged[sub] = subNext;
-        }
-        (out as unknown as Record<string, unknown>)[key] = merged;
-      }
-      continue;
-    }
-    if (typeof next === typeof current) {
-      (out as unknown as Record<string, unknown>)[key] = next;
-    }
-  }
-  out.version = 1;
-  return out;
-}
-
-function structuredCloneSafe<T>(value: T): T {
-  if (typeof structuredClone === "function") {
-    try {
-      return structuredClone(value);
-    } catch {
-      /* ignore */
-    }
-  }
-  return JSON.parse(JSON.stringify(value)) as T;
+  return mergeWithSchema(base, patch);
 }
 
 export function loadConfig(): AppConfig {

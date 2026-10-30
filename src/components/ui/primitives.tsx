@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /* ==========================================================================
@@ -214,8 +214,6 @@ export function Modal({
 
 type Toast = { id: number; text: string; tone: "info" | "success" | "error" };
 type ToastContextValue = { push: (text: string, tone?: Toast["tone"]) => void };
-
-import { createContext, useContext } from "react";
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 

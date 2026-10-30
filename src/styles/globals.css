@@ -597,48 +597,59 @@ body {
   flex-direction: column;
 }
 
+/* 与右上角 .bar-dock 完全同一套「板」材质：同一个底色 token、同一圈 1px 内描边、
+   同一个投影层级、同样 38px 高。此前它用的是 --panel-bg 那套「通明玻璃」，
+   和旁边的实心胶囊并排，一眼就是两块不同来源的控件。 */
 .weather-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px 4px 5px;
+  height: 38px;
+  padding: 0 9px 0 4px;
   border-radius: var(--radius-pill);
-  background-color: var(--panel-bg);
-  background-image: linear-gradient(to bottom, color-mix(in srgb, #fff 7%, transparent), transparent 60%);
+  background: var(--board-bg);
   box-shadow:
-    0 10px 26px -16px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 var(--panel-highlight);
-  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.5);
-  backdrop-filter: blur(var(--blur-2)) saturate(1.5);
+    var(--shadow-1),
+    inset 0 0 0 1px var(--board-ring);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.3);
+  backdrop-filter: blur(var(--blur-2)) saturate(1.3);
   transition:
     box-shadow var(--dur-base) var(--ease-out-cubic),
     background-color var(--dur-theme) var(--ease-out-cubic);
 }
 
+/* 悬停时描边染一点强调色 —— 和 .bar-action 悬停浮出的 accent 辉光同一套语言 */
 .weather-row:hover {
   box-shadow:
-    0 14px 32px -16px rgba(0, 0, 0, 0.78),
-    inset 0 1px 0 var(--panel-highlight);
+    0 6px 20px -12px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--board-ring));
 }
 
-[data-theme="light"] .weather-row {
-  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.55), transparent 58%);
-}
-
+/* 30px 圆片：刚好填满 38px 胶囊的内高，左边距 4px，
+   和右侧 32px 的圆钮是同一档尺寸语言。去掉那圈描边 —— 描边会让它读成一个「按钮」，
+   而它只是状态指示。 */
 .weather-glyph {
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
   place-items: center;
   border-radius: 999px;
   color: var(--accent);
   background: radial-gradient(
-    circle at 50% 34%,
-    color-mix(in srgb, var(--accent) 26%, transparent),
-    color-mix(in srgb, var(--accent) 10%, transparent)
+    circle at 50% 32%,
+    color-mix(in srgb, var(--accent) 24%, transparent),
+    color-mix(in srgb, var(--accent) 9%, transparent)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+  transition: background var(--dur-base) var(--ease-out-cubic);
+}
+
+.weather-card:hover .weather-glyph {
+  background: radial-gradient(
+    circle at 50% 32%,
+    color-mix(in srgb, var(--accent) 34%, transparent),
+    color-mix(in srgb, var(--accent) 13%, transparent)
+  );
 }
 
 .weather-main {
@@ -658,7 +669,7 @@ button.weather-main:hover {
 }
 
 .weather-temp {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--fg);
@@ -696,8 +707,8 @@ button.weather-main:hover {
 .weather-action {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   color: var(--fg-subtle);
   opacity: 0;
@@ -715,8 +726,8 @@ button.weather-main:hover {
 }
 
 .weather-action:hover {
-  color: var(--fg);
-  background: var(--hover-bg);
+  color: color-mix(in srgb, var(--accent) 78%, var(--fg));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .weather-action[aria-expanded="true"] {
@@ -730,9 +741,9 @@ button.weather-main:hover {
   top: calc(100% + 6px);
   left: 0;
   z-index: 30;
-  width: 232px;
-  padding: 10px;
-  border-radius: var(--radius-md);
+  width: 236px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
   background: var(--board-bg);
   box-shadow:
     0 22px 48px -24px rgba(0, 0, 0, 0.8),
@@ -998,6 +1009,20 @@ button.weather-main:hover {
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
+}
+
+/*
+ * 亮色下照片不再整片洗白（见 wallpaper.tsx 的 scrimBackground），代价是落在这一带的
+ * 小字会直接踩在照片的高频细节上。这里用一层白色柔光描边把字托住 —— 被提亮的只有
+ * 文字周围几个像素，照片本身不受影响，比重新盖一层雾精确得多。
+ */
+[data-theme="light"] .text-quote,
+[data-theme="light"] .quote-from,
+[data-theme="light"] .app-shell footer > span {
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.95),
+    0 0 2px rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(255, 255, 255, 0.8);
 }
 
 /* 减少动效：只淡出，不做位移 */
@@ -1684,157 +1709,12 @@ html.theme-animating *::after {
   opacity: 0.75;
 }
 
+/* 亮色只在最底部留一小段白，给页脚那行 10.5px 小字兜底。
+   原来这里是「上 40% + 下 50%」的双向白渐变，等于又给整张图盖了一层雾 —— 正是它
+   把照片压成粉彩的元凶之一。中间大面积的柔光已经交给 .wallpaper-scrim 的径向层。 */
 [data-theme="light"] .wallpaper-scrim::after {
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.4) 0%,
-    transparent 30%,
-    transparent 60%,
-    rgba(255, 255, 255, 0.5) 100%
-  );
+  background: linear-gradient(to bottom, transparent 84%, rgba(255, 255, 255, 0.42) 100%);
 }
-
-/* ============================================================
-   Magic UI Backgrounds（仅四种：Flickering Grid / Ripple /
-   Dot Pattern / Floating 3D Particles）
-   颜色统一取 --accent，基准不透明度 0.5 以上，保证在明暗两套
-   主题下都能明确辨认出图形，而不是一片灰雾。
-   ============================================================ */
-
-/* ---------------------------- Flickering Grid ---------------------------- */
-
-.flickering-grid-glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    70% 62% at 50% 42%,
-    color-mix(in srgb, var(--accent) 42%, transparent) 0%,
-    transparent 78%
-  );
-  pointer-events: none;
-}
-
-/* ---------------------------- Ripple ---------------------------- */
-
-.ripple-glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    58% 52% at 50% 44%,
-    color-mix(in srgb, var(--accent) 48%, transparent) 0%,
-    transparent 76%
-  );
-}
-
-.ripple-stage {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-}
-
-.ripple-ring {
-  position: absolute;
-  /* 尺寸取到视口对角线的量级：涟漪要从中心一路扩散到屏幕四角，
-     否则只在中部形成一个小圈，看起来像一块污渍 */
-  width: 150vmax;
-  height: 150vmax;
-  border-radius: 50%;
-  border: 2.5px solid color-mix(in srgb, var(--accent) 95%, var(--fg));
-  box-shadow:
-    0 0 40px -2px color-mix(in srgb, var(--accent) 85%, transparent),
-    inset 0 0 40px -4px color-mix(in srgb, var(--accent) 75%, transparent);
-  animation-name: ripple-spread;
-  animation-timing-function: cubic-bezier(0.2, 0.6, 0.3, 1);
-  animation-iteration-count: infinite;
-  will-change: transform, opacity;
-}
-
-@keyframes ripple-spread {
-  0% {
-    transform: scale(0.06);
-    opacity: 0;
-  }
-  14% {
-    opacity: 1;
-  }
-  72% {
-    opacity: 0.55;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0;
-  }
-}
-
-/* ---------------------------- Dot Pattern ---------------------------- */
-
-.dot-pattern-dot {
-  fill: color-mix(in srgb, var(--accent) 72%, var(--fg));
-  opacity: 0.85;
-}
-
-.dot-pattern-glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    70% 62% at 50% 40%,
-    color-mix(in srgb, var(--accent) 46%, transparent) 0%,
-    transparent 78%
-  );
-  pointer-events: none;
-}
-
-/* ---------------------------- Floating 3D Particles ---------------------------- */
-
-.particle-glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    62% 56% at 50% 46%,
-    color-mix(in srgb, var(--accent) 40%, transparent) 0%,
-    transparent 80%
-  );
-}
-
-.particle-stage {
-  position: absolute;
-  inset: -6%;
-  will-change: transform;
-  transition: transform 120ms linear;
-}
-
-.particle-dot {
-  position: absolute;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--fg) 55%, var(--accent));
-  box-shadow:
-    0 0 10px color-mix(in srgb, var(--accent) 95%, transparent),
-    0 0 26px -2px color-mix(in srgb, var(--accent) 75%, transparent);
-  animation-name: particle-float;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  will-change: transform, opacity;
-}
-
-/* 3D 漂浮：纵向缓慢起伏 + 横向漂移 + 按景深缩放的呼吸感 */
-@keyframes particle-float {
-  0% {
-    transform: translate3d(0, 12px, 0) scale(calc(0.85 * var(--depth, 1)));
-    opacity: 0.15;
-  }
-  25% {
-    opacity: 0.85;
-  }
-  75% {
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate3d(var(--drift, 12px), -140px, 0) scale(calc(1.1 * var(--depth, 1)));
-    opacity: 0.1;
-  }
-}
-
 
 /* ============================================================
    玻璃层
@@ -1861,221 +1741,6 @@ html.theme-animating *::after {
   transition:
     background-color var(--dur-theme) var(--ease-out-cubic),
     border-color var(--dur-theme) var(--ease-out-cubic);
-}
-
-/* ============================================================
-   Magic UI 交互组件
-   ============================================================ */
-
-/* —— Shimmer Button —— */
-.shimmer-button {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-bg);
-  color: var(--fg);
-  font-size: 12.5px;
-  line-height: 1;
-  padding: 9px 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  transition:
-    border-color var(--dur-base) var(--ease-out-cubic),
-    box-shadow var(--dur-base) var(--ease-out-cubic),
-    background-color var(--dur-base) var(--ease-out-cubic);
-}
-
-.shimmer-button:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-border));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent),
-    0 10px 26px -14px color-mix(in srgb, var(--accent) 80%, transparent);
-}
-
-/* 方形变体：图标按钮用，保持与输入框同一圆角阶梯 */
-.shimmer-button--icon {
-  border-radius: var(--radius-sm);
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.shimmer-button--icon.shimmer-button--accent {
-  background: var(--accent);
-  border-color: transparent;
-  color: #fff;
-}
-
-.shimmer-button--icon.shimmer-button--accent:hover {
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
-    0 12px 28px -12px color-mix(in srgb, var(--accent) 90%, transparent);
-}
-
-.shimmer-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.shimmer-sweep {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(
-    110deg,
-    transparent 28%,
-    color-mix(in srgb, #ffffff 38%, transparent) 48%,
-    transparent 68%
-  );
-  transform: translateX(-130%);
-  animation: shimmer-sweep 3.8s var(--ease-out-cubic) infinite;
-  pointer-events: none;
-}
-
-@keyframes shimmer-sweep {
-  0%,
-  55% {
-    transform: translateX(-130%);
-  }
-  100% {
-    transform: translateX(130%);
-  }
-}
-
-/* —— Moving Border —— */
-/*
- * Moving Border（Magic UI）：1px 描边光沿边框巡游。
- * 用 conic-gradient + mask 抠出「只有 1px 边」的环，再靠 @property 动画角度 ——
- * 这样不旋转元素本身，圆角与边框始终贴合；内层不做背景，让卡片自己的玻璃层透出来。
- */
-@property --mb-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
-.moving-border {
-  position: relative;
-  border-radius: inherit;
-}
-
-.moving-border-ring {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  padding: 1px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--mb-angle, 0deg),
-    transparent 0deg 230deg,
-    color-mix(in srgb, var(--accent) 55%, transparent) 290deg,
-    var(--accent) 335deg,
-    transparent 360deg
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  animation: moving-border-angle linear infinite;
-}
-
-.moving-border-inner {
-  position: relative;
-  border-radius: inherit;
-}
-
-@keyframes moving-border-angle {
-  to {
-    --mb-angle: 360deg;
-  }
-}
-
-/* —— Border Beam —— */
-.border-beam {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.border-beam-dot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--beam-from, var(--accent)), var(--beam-to, transparent));
-  offset-path: border-box;
-  offset-distance: 0%;
-  animation-name: beam-travel;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-@keyframes beam-travel {
-  to {
-    offset-distance: 100%;
-  }
-}
-
-/* —— Spotlight Card —— */
-.spotlight-card {
-  position: relative;
-  overflow: hidden;
-  border-radius: inherit;
-}
-
-.spotlight-card-glow {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(
-    200px circle at var(--sx, 50%) var(--sy, 50%),
-    color-mix(in srgb, var(--accent) 30%, transparent) 0%,
-    transparent 68%
-  );
-  opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out-cubic);
-  pointer-events: none;
-}
-
-.spotlight-card:hover .spotlight-card-glow,
-.spotlight-card:focus-within .spotlight-card-glow {
-  opacity: 1;
-}
-
-/* —— Sparkles —— */
-.sparkle-dot {
-  position: absolute;
-  border-radius: 50%;
-  background: var(--sparkle-color, var(--accent));
-  box-shadow: 0 0 8px var(--sparkle-color, var(--accent));
-  animation: sparkle-twinkle var(--sparkle-dur, 3s) ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes sparkle-twinkle {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.15);
-  }
 }
 
 /* ============================================================

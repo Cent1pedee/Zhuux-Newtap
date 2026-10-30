@@ -1,5 +1,4 @@
 import {
-  ACCENTS,
   DEFAULT_ACCENT,
   DEFAULT_ENGINE_ID,
   DEFAULT_GROUPS,
@@ -64,8 +63,4 @@ export function orderedEngines(config: AppConfig): Engine[] {
 export function activeEngine(config: AppConfig): Engine {
   const list = orderedEngines(config);
   return list.find((e) => e.id === config.engineId) ?? list[0] ?? ENGINES[0];
-}
-
-export function accentList() {
-  return ACCENTS;
 }
