@@ -57,6 +57,7 @@ var raw=localStorage.getItem("startpage.config.v1");
 var cfg=raw?JSON.parse(raw):null;
 var mode=(cfg&&cfg.theme&&cfg.theme.mode)||"dark";
 var accent=(cfg&&cfg.theme&&cfg.theme.accent)||"#2f6fed";
+if(typeof accent!=="string"||!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(accent))accent="#2f6fed";
 var reduce=cfg&&cfg.a11y?cfg.a11y.reducedMotion:null;
 var dark=mode==="dark"||(mode==="system"&&!window.matchMedia("(prefers-color-scheme: light)").matches);
 var el=document.documentElement;

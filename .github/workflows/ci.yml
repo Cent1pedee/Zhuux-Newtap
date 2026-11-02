@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支的新提交直接取消上一轮，省 runner 时间也避免「旧提交红灯」误导
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: 静态检查 / 单测 / 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 不写 version：pnpm/action-setup 会读 package.json 的 packageManager 字段，
+      # 保证 CI 与本地用同一个 pnpm（9.15.0），不出现「本地能装、CI 装出别的树」
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # 顺序即失败速度：类型 → lint → 覆盖率门禁 → 构建
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run test:coverage
+      - run: pnpm run build
+
+  e2e:
+    name: 端到端（Chromium）
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # playwright.config.ts 用的是 channel: "chrome"（复用已安装的 Chrome，不下载内核）；
+      # ubuntu-latest 镜像自带 Google Chrome，所以这里不需要 playwright install。
+      # 若哪天换成 bundled chromium，这里要补 `pnpm exec playwright install --with-deps chromium`。
+      - run: pnpm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-test-results
+          path: test-results/
+          retention-days: 7

@@ -6,6 +6,7 @@ import { ENGINES } from "@/config/site";
 import { orderedEngines } from "@/config/defaults";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { EASE_OUT_CUBIC } from "@/lib/motion";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 import { resolveSearchUrl } from "@/lib/commands";
 import { useToast } from "@/components/ui/primitives";
 
@@ -62,8 +63,8 @@ export function CommandPalette({
     restoreRef.current = document.activeElement as HTMLElement | null;
     setQuery("");
     setActive(0);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // 与设置弹窗共用同一把引用计数锁：两者可以互相叠加，顺序无关
+    const unlockScroll = lockBodyScroll();
     const timer = window.setTimeout(() => inputRef.current?.focus(), 40);
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -74,7 +75,7 @@ export function CommandPalette({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = prev;
+      unlockScroll();
       window.clearTimeout(timer);
       document.removeEventListener("keydown", onKeyDown);
       restoreRef.current?.focus?.();

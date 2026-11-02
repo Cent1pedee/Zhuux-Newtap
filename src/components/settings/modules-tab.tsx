@@ -1,26 +1,8 @@
 "use client";
 
 import { PROVINCES, citiesOf } from "@/config/cities";
-import { Button, Field, Segmented, Switch, TextInput } from "@/components/ui/primitives";
+import { Button, ChevronDown, Field, Segmented, Switch, TextInput } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
-
-/** 下拉框右侧的自绘箭头（原生 select 的箭头在深色下几乎看不见） */
-function ChevronDown() {
-  return (
-    <svg
-      className="weather-select-chevron"
-      width="11"
-      height="11"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 /** 模块页签：时间 / 问候 / 便签 / 天气 / 一言 */
 export function ModulesTab({ s }: { s: SettingsController }) {

@@ -80,4 +80,20 @@ describe("安全响应头", () => {
     expect(value).toContain("camera=()");
     expect(value).toContain("microphone=()");
   });
+
+  it("补齐传输层与跨源隔离头", () => {
+    const byKey = new Map(headers.map((h) => [h.key, h.value]));
+    // HSTS：首次 http 访问不被降级；浏览器只在 https 响应里接受，dev 无副作用
+    expect(byKey.get("Strict-Transport-Security")).toMatch(/max-age=\d+/);
+    expect(byKey.get("Strict-Transport-Security")).toContain("includeSubDomains");
+    // 外跳全部 noopener，不依赖 opener，可以安全地做跨源隔离
+    expect(byKey.get("Cross-Origin-Opener-Policy")).toBe("same-origin");
+    expect(byKey.get("Cross-Origin-Resource-Policy")).toBe("same-origin");
+  });
+
+  it("跨源隔离头不能误伤外部图片（CORP 只约束别人加载本站资源）", () => {
+    // 这条是给未来的自己看的：img-src / connect-src 仍然放行 https:，
+    // 不要把 CORP 误解成「禁止外链图片」而顺手收紧 CSP。
+    expect(buildCsp(false)).toContain("img-src 'self' data: blob: https:");
+  });
 });

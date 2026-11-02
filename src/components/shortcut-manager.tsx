@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LIMITS, type Shortcut } from "@/config/site";
+import { ACCENTS, LIMITS, type Shortcut } from "@/config/site";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import {
   Button,
@@ -32,17 +32,11 @@ const ICON_KINDS = [
   { value: "image" as const, label: "上传图片" },
 ];
 
-const PALETTE = [
-  "#2F6FED",
-  "#7C5CFF",
-  "#0EA5A5",
-  "#12A150",
-  "#D97706",
-  "#E11D63",
-  "#EA580C",
-  "#64748B",
-  "#24292F",
-];
+/**
+ * 图标底色候选：直接复用主题的 8 个预设强调色，外加一个近黑（GitHub / Vercel 这类
+ * 品牌底）。早先这里手抄了一份色板，跟 `ACCENTS` 各改各的 —— 现在只有一处来源。
+ */
+const PALETTE = [...ACCENTS.map((a) => a.value), "#24292F"];
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;

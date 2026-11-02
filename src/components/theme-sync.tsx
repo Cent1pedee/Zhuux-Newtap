@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
-import { contrastRatio, hexToRgb } from "@/lib/color";
+import { hexToRgb } from "@/lib/color";
 
 /**
  * 把配置写进 <html> 的 data-* 与 CSS 变量（PRD 5.1 / 8.2）
@@ -11,7 +11,7 @@ import { contrastRatio, hexToRgb } from "@/lib/color";
  * - data-motion：reduce 时全局禁用动画（globals.css 有对应规则）
  */
 export function ThemeSync() {
-  const { config, ready } = useConfig();
+  const { config } = useConfig();
   const reduce = useReducedMotionPref();
   const mode = config.theme.mode;
 
@@ -52,17 +52,6 @@ export function ThemeSync() {
     if (reduce) root.dataset.motion = "reduce";
     else delete root.dataset.motion;
   }, [reduce]);
-
-  // 主题切换后校验对比度，不达标时仅提示（不阻断用户选择）
-  useEffect(() => {
-    if (!ready) return;
-    const theme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
-    const ratio = contrastRatio(
-      config.theme.accent,
-      theme === "light" ? "#ffffff" : "#0a0d14",
-    );
-    document.documentElement.dataset.accentContrast = ratio.toFixed(2);
-  }, [config.theme.accent, ready]);
 
   return null;
 }

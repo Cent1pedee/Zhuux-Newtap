@@ -39,7 +39,7 @@ export function DailyQuote() {
     fetchRemoteQuote(config.privacy.whitelist)
       .then((remote) => {
         if (!alive || seq.current !== seqId) return;
-        setQuote({ text: remote.text, from: remote.from, category: "literary" });
+        setQuote({ text: remote.text, from: remote.from });
       })
       .catch(() => {
         if (!alive || seq.current !== seqId) return;
@@ -87,7 +87,7 @@ export function DailyQuote() {
     try {
       const remote = await fetchRemoteQuote(config.privacy.whitelist);
       if (seq.current !== seqId) return;
-      setQuote({ text: remote.text, from: remote.from, category: "literary" });
+      setQuote({ text: remote.text, from: remote.from });
     } catch {
       if (seq.current !== seqId) return;
       setQuote(fallback);

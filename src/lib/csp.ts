@@ -65,5 +65,22 @@ export function buildSecurityHeaders(isDev: boolean): Header[] {
     // frame-ancestors 的旧浏览器兜底
     { key: "X-Frame-Options", value: "DENY" },
     { key: "X-DNS-Prefetch-Control", value: "off" },
+    /*
+     * 强制 HTTPS 两年。首次 http 访问不会被降级劫持。
+     * 浏览器只在 https 响应里接受这一条，所以对 http://localhost 的开发环境无副作用
+     * （因此不像 upgrade-insecure-requests 那样需要区分 dev/prod）。
+     */
+    { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+    /*
+     * 跨源隔离：不与其它源共享 browsing context group。
+     * 本项目所有外跳都是 window.open(..., "noopener")，不依赖 opener，打开搜索页不受影响；
+     * 代价是拿不到被打开窗口的引用（本来也没用）。
+     */
+    { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+    /*
+     * 本站资源（JS / CSS / 字体 / 图片）不允许被其它源拿去内联。
+     * 只约束「别人加载我们」，不影响我们加载 bing.com 的壁纸与各站 favicon。
+     */
+    { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
   ];
 }

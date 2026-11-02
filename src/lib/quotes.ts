@@ -5,7 +5,11 @@
 
 export type QuoteCategory = "inspire" | "tech" | "literary";
 
-export type Quote = { text: string; from: string; category: QuoteCategory };
+/**
+ * 一条引用。`category` 只对内置语录库有意义 ——
+ * 远程接口（hitokoto）不返回分类，硬塞一个 "literary" 是在类型上撒谎。
+ */
+export type Quote = { text: string; from: string; category?: QuoteCategory };
 
 export const QUOTES: Quote[] = [
   { text: "把每件小事做到极致，就是最好的简历。", from: "佚名", category: "inspire" },

@@ -1,49 +1,9 @@
 "use client";
 
 import { ENGINES } from "@/config/site";
-import { Button, Switch, TextInput } from "@/components/ui/primitives";
+import { Button, Switch, SwitchButton, TextInput } from "@/components/ui/primitives";
 import { EngineBadge } from "@/components/engine-glyph";
 import type { SettingsController } from "@/components/settings/controller";
-
-/** 引擎行内的小号开关：与设置里的大号 Switch 同一套语言，只是缩小一半 */
-function MiniSwitch({
-  checked,
-  onChange,
-  label,
-  testId,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  label: string;
-  testId: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      data-testid={testId}
-      data-state={checked ? "on" : "off"}
-      className={`relative h-[18px] w-8 shrink-0 rounded-full transition-colors duration-200 ease-out ${
-        checked ? "" : "bg-[color-mix(in_srgb,var(--fg)_16%,transparent)]"
-      }`}
-      style={
-        checked
-          ? { background: "var(--accent)", boxShadow: "0 0 0 2.5px color-mix(in srgb, var(--accent) 16%, transparent)" }
-          : undefined
-      }
-    >
-      <span
-        className={`absolute top-[2px] left-[2px] size-3.5 rounded-full bg-white transition-transform duration-200 ease-out ${
-          checked ? "translate-x-[14px]" : "translate-x-0"
-        }`}
-        style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
-      />
-    </button>
-  );
-}
 
 /** 搜索引擎页签：引擎启停 / 排序、搜索建议、快捷指令 */
 export function SearchTab({ s }: { s: SettingsController }) {
@@ -92,7 +52,8 @@ export function SearchTab({ s }: { s: SettingsController }) {
                     </button>
                   </div>
                 ) : null}
-                <MiniSwitch
+                <SwitchButton
+                  size="sm"
                   checked={enabled}
                   onChange={(next) => toggleEngine(engine.id, next)}
                   label={`${enabled ? "停用" : "启用"} ${engine.name}`}

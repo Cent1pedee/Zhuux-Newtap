@@ -17,8 +17,6 @@ import { faviconUrl } from "@/lib/favicon";
  * 每个图标都在 24×24 视口里绘制，外圈交给调用方的圆形容器。
  */
 
-export type EngineGlyphId = "google" | "bing" | "baidu";
-
 export function EngineGlyph({ id, size = 18 }: { id: string; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": true } as const;
 

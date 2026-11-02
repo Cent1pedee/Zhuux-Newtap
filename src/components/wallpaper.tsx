@@ -125,9 +125,8 @@ export function Wallpaper() {
         setDaily(next);
         void cachePut(key, JSON.stringify(next));
       } catch {
+        // 网络不可用：保留上一次的成功结果（daily 不动），从没成功过则由渐变兜底
         if (ticket !== seq.current) return;
-        // 网络不可用：若已有上一次的成功结果就保留，否则由 onError 走渐变兜底
-        setDaily((prev) => prev);
       }
     })();
   }, [ready, edgeEnabled, background.offset, config.privacy.whitelist]);

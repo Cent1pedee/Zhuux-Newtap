@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { fetchWeather, weatherLabel, type WeatherNow } from "@/lib/services";
-import { useToast } from "@/components/ui/primitives";
+import { ChevronDown, useToast } from "@/components/ui/primitives";
 import { EASE_OUT_CUBIC } from "@/lib/motion";
 import { PROVINCES, citiesOf, findCity, nearestCity } from "@/config/cities";
 
@@ -366,22 +366,5 @@ export function Weather() {
         ) : null}
       </AnimatePresence>
     </motion.div>
-  );
-}
-
-function ChevronDown() {
-  return (
-    <svg
-      className="weather-select-chevron"
-      width="11"
-      height="11"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

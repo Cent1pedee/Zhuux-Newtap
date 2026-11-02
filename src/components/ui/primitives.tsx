@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 import { PERSIST_ERROR_EVENT } from "@/lib/storage";
 
 /* ==========================================================================
@@ -116,8 +117,8 @@ export function Modal({
     };
 
     document.addEventListener("keydown", onKeyDown, true);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // 引用计数锁：与命令面板等其它浮层共用，谁最后关谁还原（见 lib/scroll-lock.ts）
+    const unlockScroll = lockBodyScroll();
 
     const timer = window.setTimeout(() => {
       const node = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
@@ -128,7 +129,7 @@ export function Modal({
       document.removeEventListener("keydown", onKeyDown, true);
       const at = modalStack.indexOf(token);
       if (at >= 0) modalStack.splice(at, 1);
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       window.clearTimeout(timer);
       restoreRef.current?.focus?.();
     };
@@ -341,6 +342,67 @@ export function useToast(): ToastContextValue {
    基础控件
    ========================================================================== */
 
+/**
+ * 开关本体（不含文字说明）。
+ *
+ * 拆出来是因为设置里有两处用法：带标题与描述的整行开关（`Switch`），
+ * 以及引擎列表里那种只有 32×18 的一行内小开关。原来后者在 `search-tab.tsx`
+ * 里被复制了一份（MiniSwitch），两边改一处忘一处 —— 现在共用同一个组件。
+ *
+ * 关于尺寸：原先是 h-5 w-9 + 1px 边框 + size-4 滑块，轨道内宽只有 34px、
+ * 滑块 16px，打开态两侧各剩 1px，深色背景下那圈 border 透出来像「滑块被卡在灰框里」。
+ * 现在不用边框，用「底色深浅」表达开/关：md 34×20 / 滑块 16 / 位移 14，
+ * sm 32×18 / 滑块 14 / 位移 14。
+ */
+export function SwitchButton({
+  checked,
+  onChange,
+  label,
+  testId,
+  size = "md",
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  testId?: string;
+  size?: "md" | "sm";
+  disabled?: boolean;
+}) {
+  const small = size === "sm";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      data-testid={testId}
+      data-state={checked ? "on" : "off"}
+      className={`relative shrink-0 rounded-full transition-colors duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
+        small ? "h-[18px] w-8" : "mt-0.5 h-5 w-[34px]"
+      } ${checked ? "" : "bg-[color-mix(in_srgb,var(--fg)_16%,transparent)]"}`}
+      style={
+        checked
+          ? {
+              background: "var(--accent)",
+              boxShadow: `0 0 0 ${small ? "2.5px" : "3px"} color-mix(in srgb, var(--accent) 16%, transparent)`,
+            }
+          : undefined
+      }
+    >
+      <span
+        className={`absolute rounded-full bg-white transition-transform duration-200 ease-out ${
+          small ? "top-[2px] left-[2px] size-3.5" : "top-0.5 left-0.5 size-4"
+        } ${checked ? "translate-x-[14px]" : "translate-x-0"}`}
+        style={{ boxShadow: small ? "0 1px 2px rgba(0,0,0,0.35)" : "0 1px 3px rgba(0,0,0,0.35)" }}
+      />
+    </button>
+  );
+}
+
+/** 带标题与描述的整行开关（点标题文字也能切换 —— label 里只有这一个可标注控件） */
 export function Switch({
   checked,
   onChange,
@@ -364,43 +426,26 @@ export function Switch({
           <span className="mt-0.5 block text-[11px] leading-relaxed text-[var(--fg-subtle)]">{description}</span>
         ) : null}
       </span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        data-testid={testId}
-        data-state={checked ? "on" : "off"}
-        /*
-          开关重新做过：原先 h-5 w-9 + 1px 边框 + size-4 滑块，
-          轨道内宽只有 34px、滑块 16px，打开态两侧各剩 1px ——
-          深色背景下那圈 border 还会透出来，看起来像「滑块被卡在灰框里」。
-          现在：轨道 34×20，不用边框而是用「底色深浅」表达开/关，
-          滑块 16px 带 2px 内边距，位移 14px，两侧各留 2px；
-          关态是半透明前景色（不是阴影灰），开态是强调色 + 同色柔光。
-        */
-        className={`relative mt-0.5 h-5 w-[34px] shrink-0 rounded-full transition-colors duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
-          checked ? "" : "bg-[color-mix(in_srgb,var(--fg)_16%,transparent)]"
-        }`}
-        style={
-          checked
-            ? {
-                background: "var(--accent)",
-                boxShadow: "0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent)",
-              }
-            : undefined
-        }
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform duration-200 ease-out ${
-            checked ? "translate-x-[14px]" : "translate-x-0"
-          }`}
-          style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.35)" }}
-        />
-      </button>
+      <SwitchButton checked={checked} onChange={onChange} label={label} disabled={disabled} testId={testId} />
     </label>
+  );
+}
+
+/** 下拉框右侧的自绘箭头（原生 select 的箭头在深色下几乎看不见） */
+export function ChevronDown({ className = "weather-select-chevron" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

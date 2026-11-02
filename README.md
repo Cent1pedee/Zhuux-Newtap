@@ -165,7 +165,8 @@ src/
     config-store.tsx  # 配置 Context + 减少动效偏好
   styles/
     globals.css    # 设计 token（间距/圆角/阴影/模糊/时长）+ 全部 Magic UI 类 + 主题变量
-tests/             # Vitest 单元 / 组件测试（18 文件 232 项）
+tests/             # Vitest 单元 / 组件测试（19 文件 237 项，有覆盖率门禁）
+.github/workflows/ci.yml  # CI：typecheck → lint → 覆盖率 → build → e2e
 scripts/           # capture-shots.mjs：视觉验收截图脚本
 e2e/               # Playwright 端到端测试（5 文件 39 项，含 axe 无障碍扫描）
 ```
@@ -192,11 +193,12 @@ pnpm lint            # ESLint（next/core-web-vitals + next/typescript）
 
 期望：`typecheck` 无输出；`lint` 输出 `0 problems`。
 
-### 5.2 单元 / 组件测试（Vitest，232 项）
+### 5.2 单元 / 组件测试（Vitest，237 项）
 
 ```bash
 pnpm test              # 单次运行
 pnpm test:watch        # 监听模式
+pnpm test:coverage     # 带覆盖率 + 阈值门禁（低于 70% 直接失败）
 pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 ```
 
@@ -210,7 +212,7 @@ pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 | `tests/color.test.ts` | 10 | 相对亮度、对比度、AA 阈值 |
 | `tests/config-schema.test.ts` | 18 | 导入闸门：可空字段（`weather.lat` 写成字符串必须被拒）、非法枚举、数值越界 clamp、快捷项/分组/白名单的元素级校验与 LIMITS 限额、默认配置往返一致 |
 | `tests/config-store.test.tsx` | 4 | 跨标签页同步：外部写入跟手更新、应用后不回写、清空回到出厂、无关键不触发 |
-| `tests/csp.test.ts` | 11 | 安全响应头纯函数：dev 必须含 `'unsafe-eval'` 且不含 `upgrade-insecure-requests`、生产反之；`connect-src` 不得缺失（缺了会回退 `default-src 'self'` 掐断接口）、`form-action` 覆盖三家引擎 |
+| `tests/csp.test.ts` | 13 | 安全响应头纯函数：dev 必须含 `'unsafe-eval'` 且不含 `upgrade-insecure-requests`、生产反之；`connect-src` 不得缺失（缺了会回退 `default-src 'self'` 掐断接口）、`form-action` 覆盖三家引擎 |
 | `tests/storage.test.ts` | 10 | 配置读写、防御式深合并（类型不符不覆盖、未知字段丢弃、可空字段兼容）、清除 |
 | `tests/services.test.ts` | 24 | **白名单拒绝时 fetch 未被调用**、credentials omit、no-referrer、HTTP 500、超时抛错、suggest 截断 8 条、天气码映射 |
 | `tests/search-box.test.tsx` | 12 | 默认引擎 Google、原生表单属性、点击循环 / 右键菜单、`/` 提示、指令跳转、Esc 清空、**空提交直接新标签打开引擎官网**、**回车与点按钮都在新标签打开（不劫持当前页）**、Shift+Enter |
@@ -218,6 +220,7 @@ pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 | `tests/shortcut-dock.test.tsx` | 13 | 首页 Dock：展平渲染 12 项、无分组标题、**首页不存在任何编辑 / 删除 / 前移后移 / 添加按钮**、悬停只有图标层、`target=_blank` + `title` 含「打开 」、空态是引导文案；设置内 `ShortcutManager`：列表 12 行、增删改、空名校验、URL 自动补全、删除二次确认、取消不删、前后调序持久化 |
 | `tests/settings-panel.test.tsx` | 35 | **七个分类页签**全部设置项（搜索引擎 / 外观 / 快捷跳转 / 模块 / 背景 / 隐私与数据 / 关于）、每日壁纸开关与回溯天数、对比度校验、导入导出、一键清除、恢复出厂；**本地图片落的是 `idb:` 引用而非 dataURL**、写失败明确报错、拒绝 dataURL 地址、点「往前回溯」标题不再重置偏移、上传图标存成引用 |
 | `tests/command-palette.test.tsx` | 11 | 默认条目、搜索过滤、方向键 + Enter、Esc、⌘K、点主题 / 每日壁纸开关 / 回溯 / 设置项真的改配置 |
+| `tests/scroll-lock.test.ts` | 3 | 浮层滚动锁的引用计数语义：多个浮层叠加时「最后一个关的人还原」、重复释放不把计数减穿、还原成锁之前的值 |
 | `tests/image-store.test.ts` | 11 | 图片资源库：引用格式、内容去重（同图只占一份）、非图片数据拒绝、写入失败抛错、内存缓存命中、删除回收、旧配置 dataURL 迁移与幂等性 |
 | `tests/field-group.test.tsx` | 3 | `FieldGroup` 点标题不触发内部选项（`label` 激活行为回归）、`role=group` 可访问名、`Field` 仍保留单控件转发 |
 | `tests/widgets.test.tsx` | 13 | 时钟（问候一致性、显隐、秒）、壁纸（关闭时只渲染渐变兜底且**零网络请求**、Edge 取回后渲染图片、自定义图片失败降级）、天气（默认开启、静默定位、选省市写入坐标、成功、失败） |
@@ -250,10 +253,21 @@ Playwright 会自动执行 `pnpm run build && pnpm run start --port 3100`（见 
 ### 5.4 一条命令跑完
 
 ```bash
-pnpm test:all   # typecheck → lint → vitest → playwright
+pnpm test:all   # typecheck → lint → 覆盖率 → playwright
 ```
 
-### 5.5 手工验收清单（建议按顺序点一遍）
+### 5.5 CI
+
+`.github/workflows/ci.yml` 两个 job，PR 与 push 到 main 都跑：
+
+| Job | 步骤 | 说明 |
+|---|---|---|
+| `quality` | `typecheck` → `lint` → `test:coverage` → `build` | 按失败速度排序；覆盖率低于阈值直接失败，不进入构建 |
+| `e2e` | `test:e2e` | `needs: quality`；失败时上传 `test-results/` 作为 artifact，保留 7 天 |
+
+pnpm 版本不写死，由 `pnpm/action-setup@v4` 读 `package.json` 的 `packageManager` 字段，避免 CI 与本地装出两套依赖树。E2E 复用 `ubuntu-latest` 自带的 Google Chrome（与 `playwright.config.ts` 的 `channel: "chrome"` 对齐），不额外下载内核。
+
+### 5.6 手工验收清单（建议按顺序点一遍）
 
 1. **一屏**：在 1440×900、1366×768、1280×600、390×844 下刷新，页面均**无纵向 / 横向滚动条**；缩小窗口时内容整体等比缩小，不裁切顶部（`main[data-fit-scale]` 可查当前缩放）。
 2. **入场**：刷新后壁纸先预解码再淡入（0.7s），时钟 150ms、搜索 300ms、卡片 450ms、一言 600ms 依次淡入。
@@ -270,7 +284,7 @@ pnpm test:all   # typecheck → lint → vitest → playwright
 13. **隐私与图标**：打开 DevTools → Network，清空后刷新首页 —— **external 请求应只有三类：`bing.biturl.top` + `www.bing.com`（壁纸）、`v1.hitokoto.cn`（远程一言）、各站点自身的 `/favicon.ico`（图标）**，接口类请求全部落在白名单内。去设置 → 隐私与数据，确认「自动抓取站点图标（favicon）」**默认是开启的**（这是新默认值，早先是手动开启）；关掉它再刷新，favicon 请求应消失、Dock 图标退回品牌色首字母。再「导出配置」下载 JSON → 改几项后「导入配置」应还原 → 「一键清除全部数据」二次确认后回到出厂状态。
 14. **无障碍**：按 Tab，第一下应出现「跳到主要内容」并可 Enter 跳转；打开设置后 Tab 不会跑到弹窗外；焦点环始终可见。
 
-### 5.6 视觉验收截图（可选）
+### 5.7 视觉验收截图（可选）
 
 ```bash
 pnpm build && pnpm run start --port 3100   # 先起服务
@@ -280,7 +294,7 @@ node scripts/capture-shots.mjs             # 输出到 shots/，每张打印三�
 脚本用本机 Chrome（`channel: "chrome"`）在 **18 个场景**下截图：暗/亮主题 1440×900、1280×600 矮屏、390×844 移动端、设置面板的外观 / 背景 / 快捷跳转 / 模块 / 搜索引擎 / 隐私与数据六个页签、命令面板、搜索框聚焦（accent ring + 柔光扫过 + 一言渐隐）、Dock 悬停（放大 + 柔光 + 名称气泡）、关闭每日壁纸的纯渐变兜底、回溯 -3 天的亮色主题、快捷项编辑弹窗（自动取 favicon 预览）、开启便签后的一屏表现。
 每张都会打印 `docScroll / mainScroll / horizontal`，三项都应为 `0`（一屏原则的机器可验证据）。
 
-### 5.7 性能与产物体检
+### 5.8 性能与产物体检
 
 ```bash
 pnpm build
@@ -328,6 +342,9 @@ Lighthouse 目标（PRD 6.1）：LCP < 1.2s、FCP < 0.8s、CLS < 0.1、TBT < 100
 | `Permissions-Policy` | 只放行 `geolocation=(self)` | 其余传感器/支付一律关闭 |
 | `X-Content-Type-Options` | `nosniff` | 禁止 MIME 嗅探 |
 | `X-Frame-Options` | `DENY` | `frame-ancestors` 的旧浏览器兜底 |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains` | 强制 HTTPS 两年，首次 http 访问不被降级（浏览器只在 https 响应里接受，dev 无副作用） |
+| `Cross-Origin-Opener-Policy` | `same-origin` | 不与其它源共享 browsing context group；外跳全部带 `noopener`，不依赖 opener |
+| `Cross-Origin-Resource-Policy` | `same-origin` | 本站资源不允许被别站内联；**只约束别人加载我们**，不影响加载 bing 壁纸与各站 favicon |
 
 `script-src` 必须带 `'unsafe-inline'`（首屏主题脚本与 Next 水合脚本都是内联的；换 nonce 要求动态渲染，会毁掉全静态产物）。
 

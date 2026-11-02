@@ -1,4 +1,4 @@
-import type { Transition, Variants } from "motion/react";
+import type { Variants } from "motion/react";
 
 /**
  * 统一动效变体（PRD 8.5）
@@ -7,8 +7,6 @@ import type { Transition, Variants } from "motion/react";
  */
 
 export const EASE_OUT_CUBIC = [0.215, 0.61, 0.355, 1] as const;
-
-export const SPRING_SOFT: Transition = { type: "spring", stiffness: 380, damping: 30, mass: 0.9 };
 
 export function dur(ms: number, reduce: boolean): number {
   return reduce ? 0 : ms / 1000;
@@ -21,38 +19,6 @@ export function fadeUp(reduce: boolean, distance = 12): Variants {
       opacity: 1,
       y: 0,
       transition: { duration: dur(220, reduce), ease: EASE_OUT_CUBIC },
-    },
-  };
-}
-
-export function fadeIn(reduce: boolean): Variants {
-  return {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { duration: dur(200, reduce), ease: EASE_OUT_CUBIC } },
-  };
-}
-
-export function scaleIn(reduce: boolean): Variants {
-  return {
-    hidden: { opacity: 0, scale: reduce ? 1 : 0.96 },
-    show: { opacity: 1, scale: 1, transition: { duration: dur(200, reduce), ease: EASE_OUT_CUBIC } },
-  };
-}
-
-/** 快捷项入场：stagger 30-50ms，scale 0.9→1 + fade up */
-export function gridItem(reduce: boolean): Variants {
-  return {
-    hidden: { opacity: 0, y: reduce ? 0 : 8, scale: reduce ? 1 : 0.9 },
-    show: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: { duration: dur(200, reduce), ease: EASE_OUT_CUBIC },
-    },
-    exit: {
-      opacity: 0,
-      scale: reduce ? 1 : 0.9,
-      transition: { duration: dur(150, reduce), ease: EASE_OUT_CUBIC },
     },
   };
 }
