@@ -333,7 +333,14 @@ export function SearchBox() {
                 setFocusedMode(false);
               }, 120);
             }}
-            placeholder={`在 ${engine.name} 搜索，或输入 / 使用快捷指令`}
+            /*
+             * 占位符不能再写成「在 Google 搜索，或输入 / 使用快捷指令」——
+             * 320px 屏上输入框内宽只有约 196px，那串文字会被硬切在「使」字中间，
+             * 看起来像排版坏了。引擎是谁已经由左侧 favicon 和 aria-label 交代，
+             * 这里只留最短的可用提示（完整说明放 title）。
+             */
+            placeholder="搜索，或输入 / 使用指令"
+            title="输入关键词搜索；输入 / 使用快捷指令；输入网址直接打开"
             aria-label="搜索关键词"
             role="combobox"
             aria-autocomplete="list"
@@ -385,7 +392,9 @@ export function SearchBox() {
           </motion.button>
         </motion.div>
 
-        {/* 建议 / 指令列表 */}
+        {/* 建议 / 指令列表
+            不再 overflow-hidden：移动端软键盘弹起后列表要能内部滚动，
+            限高与滚动策略见 globals.css 的 .search-suggestions */}
         <AnimatePresence>
           {openList ? (
             <motion.ul
@@ -393,7 +402,7 @@ export function SearchBox() {
               role="listbox"
               aria-label="搜索建议与快捷指令"
               data-testid="suggestions"
-              className="glass-strong absolute inset-x-0 top-[calc(100%+2px)] z-20 mt-1 overflow-hidden rounded-xl p-1"
+              className="search-suggestions glass-strong absolute inset-x-0 top-[calc(100%+2px)] z-20 mt-1 rounded-xl p-1"
               initial={{ opacity: 0, y: reduce ? 0 : -6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: reduce ? 0 : -4 }}

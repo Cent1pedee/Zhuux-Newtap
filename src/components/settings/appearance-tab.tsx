@@ -50,7 +50,8 @@ export function AppearanceTab({ s }: { s: SettingsController }) {
             onChange={(e) => pickAccent(e.target.value)}
             aria-label="自定义强调色"
             data-testid="accent-picker"
-            className="size-8 cursor-pointer rounded border border-[var(--glass-border)] bg-transparent"
+            /* 圆形与上面 8 颗预设色块同一套形状语言；原生外观由 globals.css 统一抹平 */
+            className="size-8 cursor-pointer overflow-hidden rounded-full"
           />
           <span className="font-mono text-[11px] text-[var(--fg-subtle)]">{customAccent}</span>
           <span

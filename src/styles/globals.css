@@ -194,6 +194,8 @@ body {
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 移动端点按不再闪一层灰块（iOS / Android 都会画，圆图标上尤其脏） */
+  -webkit-tap-highlight-color: transparent;
   transition:
     color var(--dur-theme) var(--ease-out-cubic),
     background-color var(--dur-theme) var(--ease-out-cubic);
@@ -202,6 +204,10 @@ body {
 /* 一屏原则：所有内容在单视口内，禁止滚动（PRD 3.2） */
 .app-shell {
   position: relative;
+  /* 先给 vh 兜底：dvh 在 Safari 15.4 / 旧 Android WebView 上整条声明无效，
+     那样 .app-shell 会退回 auto 高度，配合 body 的 overflow:hidden 直接裁掉底部。
+     支持 dvh 的引擎会用第二行覆盖，地址栏收放时仍然跟手。 */
+  height: 100vh;
   height: 100dvh;
   width: 100%;
   overflow: hidden;
@@ -741,7 +747,10 @@ button.weather-main:hover {
   top: calc(100% + 6px);
   left: 0;
   z-index: 30;
-  width: 236px;
+  /* 236px 是设计宽度。宽屏固定不变，但窄于 ~270px（超窄屏、分屏、iframe 内嵌）
+     或用户放大字号时可以兜住，不让浮层顶出视口右缘。 */
+  width: min(236px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
   padding: 12px;
   border-radius: var(--radius-lg);
   background: var(--board-bg);
@@ -881,7 +890,9 @@ button.weather-main:hover {
   position: absolute;
   top: 50%;
   right: 7px;
-  translate: 0 -50%;
+  /* 用 transform 而不是 translate 属性：translate 在 Safari < 14.1 / Chrome < 104
+     上不支持，会让箭头不居中、压在文字上 */
+  transform: translateY(-50%);
   color: var(--fg-subtle);
   pointer-events: none;
 }
@@ -1514,6 +1525,7 @@ button.weather-main:hover {
   border-radius: var(--radius-pill);
   /* 气泡会盖在一言上方，必须把底下的字彻底糊掉 —— 否则两层文字会读成一团 */
   background: var(--board-bg);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   box-shadow:
     var(--shadow-1),
@@ -1889,6 +1901,252 @@ html.theme-animating *::after {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
+}
+
+/* ============================================================
+   跨端适配：触屏 / 窄屏 / 旧引擎 / 安全区
+   这里集中处理「同一份代码在不同设备上表现不一致」的问题，
+   桌面端的既有观感不受影响（全部包在媒体查询或特性查询里）。
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1) 触屏输入：去掉 300ms 双击缩放延迟与点击灰块
+   ------------------------------------------------------------ */
+button,
+a,
+[role="button"],
+[role="switch"],
+[role="option"],
+[role="radio"],
+[role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ------------------------------------------------------------
+   2) 刘海屏横向安全区
+   竖屏 inset 为 0，不会改变现有留白；横屏时 iPhone 的刘海在左/右，
+   顶栏与页脚必须让开，否则天气胶囊会被吃掉一角。
+   ------------------------------------------------------------ */
+.app-shell > header,
+.app-shell > footer {
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+}
+
+/* ------------------------------------------------------------
+   3) 设置面板导航（< 640px）
+   原来每个 tab 都是 width:100%，横向排列时等于「一屏一个分类」——
+   390px 屏上实测 nav 可滚宽度 2280px，要横滑 7 屏才能看到「关于」。
+   窄屏改成按内容宽度换行，7 个分类两行内全部可见，不再有隐藏项。
+   ------------------------------------------------------------ */
+@media (max-width: 639px) {
+  .settings-nav {
+    flex-wrap: wrap;
+    gap: 4px;
+    overflow-x: visible;
+  }
+
+  .settings-tab {
+    width: auto;
+    flex: 0 0 auto;
+  }
+}
+
+/* ------------------------------------------------------------
+   4) 窄屏顶栏：先让城市名让位
+   320px 上实测 header 内容宽 350px（天气 220 + 动作组 106），
+   右侧齿轮被 overflow:hidden 裁掉。按优先级依次收：城市名 → 内边距 → 按钮尺寸。
+   ------------------------------------------------------------ */
+@media (max-width: 360px) {
+  /* 320px 上横向预算只剩 288px：天气胶囊 189 + 动作组 94 + 间距 8 = 291，
+     差 3px 就会换行。把两侧 gutter 从 16 收到 12，一次省 8px，
+     比让顶栏折成两行更体面（也会一并收窄一言与 Dock 的边距，保持同一套栅格）。 */
+  :root {
+    --gutter: 12px;
+  }
+
+  .weather-city {
+    display: none;
+  }
+
+  /* 真正的兜底：极端窄屏 + 长文案时允许顶栏换行，
+     宁可多占一行纵向空间，也不要把齿轮按钮裁掉。 */
+  .app-shell > header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .weather-row {
+    gap: 6px;
+    padding-right: 6px;
+  }
+
+  .bar-dock {
+    gap: 0;
+    padding: 2px;
+  }
+
+  .bar-action {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* ------------------------------------------------------------
+   5) 触屏没有 hover
+   天气的两颗动作钮常态 opacity:0，只在 hover / focus-within 出现 ——
+   触屏上既没有 hover，这两颗钮又拿不到焦点，用户看不到「选城市 / 定位」入口。
+   触屏下改为常显（降到 0.72，仍不抢视线）。
+   ------------------------------------------------------------ */
+@media (hover: none) {
+  .weather-action {
+    opacity: 0.72;
+  }
+
+  /* 触屏点击后 hover 状态会「粘住」，Dock 胶囊会一直悬在半空 */
+  .dock-pill:hover {
+    transform: none;
+  }
+
+  /* 名称气泡在触屏上改为按下即显（title 属性在移动端不生效） */
+  .shortcut-item:active .shortcut-item-label {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ------------------------------------------------------------
+   6) 搜索建议列表限高
+   9 条建议在移动端软键盘弹起后可滚区域只剩 ~300px，
+   原来 overflow:hidden 会把后面的条目直接切掉且无法滚动。
+   ------------------------------------------------------------ */
+.search-suggestions {
+  max-height: min(46dvh, 340px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 长占位符在窄屏被硬切在字符中间，用省略号收尾更可读 */
+.search-input::placeholder {
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------
+   7) iOS Safari 聚焦放大
+   控件字号 < 16px 时，iOS 会在聚焦瞬间把整页放大且不自动还原，
+   表现为「点一下搜索框，整页错位」。仅对 iOS 与窄屏生效，
+   桌面端字号保持不变。
+   ------------------------------------------------------------ */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 820px) {
+    .search-input,
+    .note-input,
+    .weather-select,
+    .glow-field input,
+    input[type="text"],
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* ------------------------------------------------------------
+   8) 表单控件的跨引擎外观
+   - range：显式声明 thumb/track，避免 Firefox / Safari 在 appearance:none
+     下单方面决定滑块长什么样（Chrome 下当前是 14px 圆点，另两家会跑偏）
+   - color：Safari 会画一圈内嵌边框 + 方形色块，与圆形的强调色预设不一致
+   ------------------------------------------------------------ */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--input-bg);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--input-bg);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+input[type="color"] {
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: 0;
+}
+
+input[type="color"]::-moz-color-swatch {
+  border: 0;
+}
+
+/* ------------------------------------------------------------
+   9) Toast 抬到 Dock 之上
+   bottom-6（24px）会压在底部 Dock 上：390px 屏实测与 Dock 重叠 18px，
+   提示文字和图标叠在一起。但 Dock 高度不是常数 —— 窄屏会折成两行
+   （56px → 110px），所以偏移由 ToastProvider 实测 .dock-shell 高度后
+   写进 --toast-bottom；变量缺失时退回 92px。
+   ------------------------------------------------------------ */
+.toast-stack {
+  bottom: var(--toast-bottom, 92px);
+}
+
+/* ------------------------------------------------------------
+   10) 横屏矮视口（手机横放，高度 320~460）
+   等比缩放的下限是 0.6，844×390 实测缩到下限仍溢出 35px。
+   先把间距与页脚高度收一档，减少「必须靠缩放 + 滚动」的概率。
+   ------------------------------------------------------------ */
+@media (max-height: 460px) {
+  :root {
+    --stack-gap: 6px;
+  }
+
+  /* 32px 的气泡空档在横屏手机上是纯浪费：这一档本来就没有指针悬停，
+     名称气泡几乎不会出现。收到 16px 正好让便签卡不再被切掉最后十几像素。 */
+  .dock-shell {
+    padding-top: 16px;
+  }
+
+  .app-shell > footer {
+    padding-bottom: 2px;
+    font-size: 9.5px;
+  }
 }
 
 /* ============================================================

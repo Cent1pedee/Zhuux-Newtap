@@ -235,10 +235,14 @@ export function Weather() {
             <button
               type="button"
               onClick={() => (lat !== null && lon !== null ? void load(lat, lon) : setPicking(true))}
+              title="天气获取失败，点击重试"
+              aria-label="天气获取失败，点击重试"
               data-testid="weather-retry"
+              /* 文案收短：「获取失败 · 点击重试」在 320px 屏上会把整个顶栏挤到换行，
+                 一个状态胶囊不该占用一句话的宽度 */
               className="weather-main text-amber-400"
             >
-              获取失败 · 点击重试
+              获取失败 · 重试
             </button>
           ) : (
             <span className="weather-main text-[var(--fg-muted)]" data-testid="weather-idle">

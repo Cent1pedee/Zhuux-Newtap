@@ -36,7 +36,8 @@ export function Modal({
   onClose: () => void;
   title: string;
   description?: string;
-  children: React.ReactNode;
+  /** 可选：只有确认类弹窗把描述交给 header 就够了，正文留空时不再渲染一块空 body */
+  children?: React.ReactNode;
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg";
   reduceMotion?: boolean;
@@ -194,7 +195,9 @@ export function Modal({
                 <CloseIcon />
               </button>
             </header>
-            <div className={bodyClassName ?? "thin-scroll flex-1 overflow-y-auto px-5 py-4"}>{children}</div>
+            {children ? (
+              <div className={bodyClassName ?? "thin-scroll flex-1 overflow-y-auto px-5 py-4"}>{children}</div>
+            ) : null}
             {footer ? (
               <footer className="flex items-center justify-end gap-2 border-t border-[var(--glass-border)] px-5 py-3">
                 {footer}
@@ -217,9 +220,58 @@ type ToastContextValue = { push: (text: string, tone?: Toast["tone"]) => void };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-export function ToastProvider({ children, reduceMotion = false }: { children: React.ReactNode; reduceMotion?: boolean }) {
+/**
+ * 系统级「减少动效」偏好。
+ * 之前 ToastProvider 只在调用方显式传 reduceMotion 时才降级，而 layout 里没有传，
+ * 于是「减少动效」开着、页面其他动画全停了，提示气泡还在弹跳 —— 跨端（尤其
+ * 开了无障碍选项的 iOS / Android）表现不一致。这里自己读一次系统偏好兜底。
+ */
+function useSystemReduceMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setReduce(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  return reduce;
+}
+
+export function ToastProvider({
+  children,
+  reduceMotion,
+}: {
+  children: React.ReactNode;
+  /** 不传则跟随系统偏好；显式传入（通常是配置里的 a11y.reducedMotion）优先 */
+  reduceMotion?: boolean;
+}) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
+  const systemReduce = useSystemReduceMotion();
+  const reduce = reduceMotion ?? systemReduce;
+
+  /**
+   * 把 Toast 抬到底部 Dock 之上。
+   * Dock 的高度随视口变化：桌面一行 56px，390px 手机折成两行 110px，
+   * 横屏又回到一行。写死一个 bottom 值必然在某个端上压住图标，
+   * 所以实测 .dock-shell 的高度（含它自己的内边距与安全区），再留 8px 间隙。
+   * 没有 Dock 的页面（组件测试 / 独立弹窗）保持 CSS 里的 92px 兜底。
+   */
+  const [toastBottom, setToastBottom] = useState(0);
+
+  useEffect(() => {
+    const dock = document.querySelector(".dock-shell");
+    if (!dock || typeof ResizeObserver === "undefined") return;
+    const apply = () => setToastBottom(Math.round(dock.getBoundingClientRect().height) + 8);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(dock);
+    return () => ro.disconnect();
+  }, []);
 
   const push = useCallback((text: string, tone: Toast["tone"] = "info") => {
     const id = (seq.current += 1);
@@ -233,7 +285,8 @@ export function ToastProvider({ children, reduceMotion = false }: { children: Re
     <ToastContext.Provider value={{ push }}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex flex-col items-center gap-2"
+        className="toast-stack pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2"
+        style={toastBottom ? ({ "--toast-bottom": `${toastBottom}px` } as React.CSSProperties) : undefined}
         role="status"
         aria-live="polite"
       >
@@ -241,10 +294,10 @@ export function ToastProvider({ children, reduceMotion = false }: { children: Re
           {toasts.map((t) => (
             <motion.div
               key={t.id}
-              initial={{ opacity: 0, y: reduceMotion ? 0 : 10, scale: reduceMotion ? 1 : 0.97 }}
+              initial={{ opacity: 0, y: reduce ? 0 : 10, scale: reduce ? 1 : 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: reduceMotion ? 0 : 6 }}
-              transition={{ duration: reduceMotion ? 0 : 0.18 }}
+              exit={{ opacity: 0, y: reduce ? 0 : 6 }}
+              transition={{ duration: reduce ? 0 : 0.18 }}
               className="glass-strong pointer-events-auto max-w-[90vw] rounded-full px-4 py-2 text-xs shadow-lg"
               data-testid="toast"
             >
@@ -555,7 +608,8 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-[13px] leading-relaxed text-[var(--fg-muted)]">{description}</p>
+      {/* 描述只由 Modal 的 header 渲染一次：原先这里又抄了一遍 <p>{description}</p>，
+          同一句话在弹窗里出现两次，视觉重复、读屏也会被 aria-describedby + 正文念两遍 */}
     </Modal>
   );
 }

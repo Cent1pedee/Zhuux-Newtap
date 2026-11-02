@@ -31,7 +31,15 @@ function tileStyle(bg: string, size: number): React.CSSProperties {
   return {
     width: size,
     height: size,
-    background: `linear-gradient(160deg, color-mix(in srgb, ${bg} 88%, #ffffff 12%), ${bg} 58%, color-mix(in srgb, ${bg} 82%, #000000 18%))`,
+    /*
+     * 纯色打底 + 渐变叠层，分两条声明写。
+     * `color-mix()` 在 Safari < 16.2 / Chrome < 111 上不受支持，整条 background 会被判无效；
+     * 若只写 background: linear-gradient(color-mix(...)) 的简写，底色会一起消失 ——
+     * 图标变成透明圆片，白色首字母直接看不见。拆成 background + backgroundImage 之后，
+     * 渐变失效时仍留着品牌色实心底。
+     */
+    background: bg,
+    backgroundImage: `linear-gradient(160deg, color-mix(in srgb, ${bg} 88%, #ffffff 12%), ${bg} 58%, color-mix(in srgb, ${bg} 82%, #000000 18%))`,
     boxShadow: tileShadow(),
   };
 }
@@ -45,7 +53,9 @@ function faviconPlateStyle(bg: string, size: number): React.CSSProperties {
   return {
     width: size,
     height: size,
-    background: `linear-gradient(170deg, color-mix(in srgb, ${bg} 8%, #ffffff), color-mix(in srgb, ${bg} 16%, #f4f6fa))`,
+    /* 同 tileStyle：白底用纯色兜底，渐变（含 color-mix）单独叠加，旧引擎退化后仍是白片 */
+    background: "#f4f6fa",
+    backgroundImage: `linear-gradient(170deg, color-mix(in srgb, ${bg} 8%, #ffffff), color-mix(in srgb, ${bg} 16%, #f4f6fa))`,
     boxShadow: tileShadow(),
   };
 }

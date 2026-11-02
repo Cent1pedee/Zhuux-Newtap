@@ -99,6 +99,23 @@ export default function Home() {
   const mainRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [fitScale, setFitScale] = useState(1);
+  /**
+   * 是否支持 CSS `zoom`。
+   *
+   * 缩放靠 `zoom` 而不是 `transform: scale`（前者真实改变布局尺寸）。
+   * 但 Firefox 直到 126 才支持 zoom，旧版 WebView 也不认 —— 在那些引擎上
+   * `zoom` 声明被整条丢弃，内容并没有缩小，而 main 又被切成 overflow:hidden，
+   * 结果就是底部内容被直接裁掉且无法滚动。这里先探测，不支持就退回「不缩放 + 允许滚动」。
+   */
+  const [zoomSupported, setZoomSupported] = useState(true);
+
+  useEffect(() => {
+    try {
+      setZoomSupported(CSS.supports("zoom", "0.9"));
+    } catch {
+      setZoomSupported("zoom" in document.documentElement.style);
+    }
+  }, []);
 
   const measure = useCallback(() => {
     const main = mainRef.current;
@@ -144,7 +161,8 @@ export default function Home() {
   }, []);
 
   const isLight = config.theme.mode === "light" || (config.theme.mode === "system" && systemLight);
-  const scaled = fitScale < 0.999;
+  // zoom 不可用时即便算出 <1 也不落地，直接走「不缩放 + main 内部滚动」的兜底
+  const scaled = fitScale < 0.999 && zoomSupported;
   // 天气与便签各自独立成卡：不再套进同一块 Bento 玻璃板。
   // 两者都是「次级信息」，但彼此无关，锁在一个框里只会让整块看起来像
   // 一个与内容无关的装饰容器。各自成卡后，谁被关掉都不影响另一个的排版。
@@ -212,14 +230,14 @@ export default function Home() {
           ref={mainRef}
           tabIndex={-1}
           data-fit-scale={scaled ? fitScale.toFixed(3) : "1"}
-          className={`no-scrollbar flex min-h-0 flex-1 flex-col items-center px-4 pb-2 pt-1 sm:px-6 ${
-            scaled ? "overflow-hidden" : "overflow-y-auto"
-          }`}
+          className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-2 pt-1 sm:px-6"
         >
           {/*
             居中用 m-auto 而非 justify-center：内容超出视口时前者不会裁掉顶部。
             放不下时按 fitScale 等比缩小，保证「一屏呈现、页面不滚动」；
-            缩到下限仍不够，才由 main 内部滚动兜底。
+            缩到下限（0.6）仍不够（典型是手机横屏 844×390），或浏览器不支持 zoom 时，
+            由 main 内部滚动兜底 —— 所以这里始终保留 overflow-y-auto。
+            页面本身（body / .app-shell）仍然锁死，不会出现整页滚动条。
           */}
           <div
             ref={contentRef}

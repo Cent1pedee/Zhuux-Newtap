@@ -87,8 +87,10 @@ export function Clock() {
         )}
       </div>
 
-      {/* 屏幕阅读器读取完整时间，避免逐字播报 */}
-      <span className="sr-only" aria-live="polite">
+      {/* 屏幕阅读器读取完整时间。
+          aria-live 必须是 off：这个节点每秒都在更新，用 polite 会让读屏
+          每秒播报一次时间，等于持续打断用户。需要时手动读即可。 */}
+      <span className="sr-only" aria-live="off">
         {now ? `现在是 ${now.getHours()} 点 ${now.getMinutes()} 分，${greeting}，${dateLabel}` : ""}
       </span>
 

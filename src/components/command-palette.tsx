@@ -93,7 +93,10 @@ export function CommandPalette({
         label: `在 ${engine.name} 搜索「${q}」`,
         hint: "Enter",
         run: () => {
-          window.location.href = resolveSearchUrl(engine.searchUrl, q);
+          // 与搜索框保持一致：一律新标签打开。
+          // 原来用 location.href 会把当前页导航走 —— 起始页是「出发点」，
+          // 桌面和移动端都不该因为一次命令面板搜索而丢掉这个页面。
+          window.open(resolveSearchUrl(engine.searchUrl, q), "_blank", "noopener,noreferrer");
         },
       });
     }
