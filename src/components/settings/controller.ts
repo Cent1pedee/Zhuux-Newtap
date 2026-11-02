@@ -23,8 +23,6 @@ import { useConfig } from "@/lib/config-store";
 import { mergeConfig } from "@/lib/storage";
 import { useToast } from "@/components/ui/primitives";
 
-/** 自定义壁纸体积上限：与 services.ts 的 fetchUserImage 保持同一口径 */
-const WALLPAPER_MAX_BYTES = 8 * 1024 * 1024;
 /** 导入文件上限：超过 1MB 的 JSON 只可能是被塞了二进制 */
 const IMPORT_MAX_BYTES = 1024 * 1024;
 /** 快捷指令条数上限：与导入校验共用同一个常量，避免 UI 与 schema 各说各话 */
@@ -147,8 +145,14 @@ export function useSettingsController() {
       push("请选择图片文件", "error");
       return;
     }
-    if (file.size > WALLPAPER_MAX_BYTES) {
-      push("图片需小于 8MB", "error");
+    /*
+     * 本地上传的图是以 dataURL 写进配置（localStorage）的，base64 会把体积放大 1.37 倍。
+     * 用 8MB 的远程取图上限来放行本地图，必然把 localStorage 配额撑爆，
+     * 而 saveConfig 失败时界面不会变 —— 用户以为存住了，刷新才发现回到旧图。
+     * 所以这里用独立的、更保守的本地上限（LIMITS.wallpaperLocalMaxBytes）。
+     */
+    if (file.size > LIMITS.wallpaperLocalMaxBytes) {
+      push(`本地图片需小于 ${Math.round(LIMITS.wallpaperLocalMaxBytes / 1024 / 1024)}MB，更大的图请用图片地址`, "error");
       return;
     }
     const reader = new FileReader();

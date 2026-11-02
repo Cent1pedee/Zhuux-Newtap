@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createDefaultConfig } from "@/config/defaults";
 import type { AppConfig } from "@/config/types";
-import { CONFIG_KEY, loadConfig, saveConfig } from "@/lib/storage";
+import { CONFIG_KEY, PERSIST_ERROR_EVENT, loadConfig, saveConfig } from "@/lib/storage";
 
 type ConfigContextValue = {
   config: AppConfig;
@@ -62,13 +62,26 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // 配置变化写回（ready 之前不写，防止用默认值覆盖用户数据）
+  const persistFailed = useRef(false);
   useEffect(() => {
     if (!ready) return;
     if (external.current) {
       external.current = false;
       return;
     }
-    saveConfig(config);
+    /*
+     * 写盘失败必须让用户知道。
+     * 典型场景：本地上传了一张大图，dataURL 把 localStorage 配额撑爆 —— 界面里
+     * 壁纸已经换了，`saveConfig` 却返回 false，刷新后悄悄回到旧图。
+     * 只在「首次失败」时广播一次，避免用户每改一个字就弹一次提示。
+     */
+    const ok = saveConfig(config);
+    if (!ok && !persistFailed.current) {
+      persistFailed.current = true;
+      window.dispatchEvent(new CustomEvent(PERSIST_ERROR_EVENT));
+    } else if (ok) {
+      persistFailed.current = false;
+    }
   }, [config, ready]);
 
   const update = useCallback(<K extends keyof AppConfig>(key: K, patch: Partial<AppConfig[K]>) => {

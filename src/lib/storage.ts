@@ -17,6 +17,16 @@ const DB_NAME = "startpage";
 const DB_VERSION = 1;
 const STORE_IMAGES = "images";
 
+/**
+ * 配置写盘失败时广播的事件。
+ *
+ * localStorage 在配额满、Safari 隐私模式、被策略禁用时都会让 `setItem` 抛错，
+ * `saveConfig` 只能返回 false —— 但调用方（ConfigProvider）没有 UI 能力提醒用户。
+ * 用一条全局事件把「写入失败」这件事交出去，由 ToastProvider 负责显示，
+ * 这样数据层不必依赖任何 React 组件。
+ */
+export const PERSIST_ERROR_EVENT = "startpage:persist-error";
+
 export function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
@@ -74,6 +84,27 @@ export function clearConfig(): void {
 }
 
 /* ---------------------------- IndexedDB 图片缓存 ---------------------------- */
+
+/** FNV-1a 32 位：只用来把长字符串压成稳定的短键，不做加密用途 */
+function hashString(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * 图片来源对应的缓存键。
+ *
+ * 历史写法是 `wallpaper:${value}` —— value 是 dataURL 时键能到 10MB 级：
+ * 每次渲染都要拼一次超长字符串，IndexedDB 也会把这个键原样存进去。
+ * 改用「长度 + 内容哈希」，键长固定，同一个图仍然命同一个坑位。
+ */
+export function imageCacheKey(value: string): string {
+  return `wallpaper:${value.length}:${hashString(value)}`;
+}
 
 function openDb(): Promise<IDBDatabase | null> {
   if (!isBrowser() || typeof indexedDB === "undefined") return Promise.resolve(null);

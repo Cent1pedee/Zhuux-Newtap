@@ -60,10 +60,11 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 | `< 640px` 设置面板 | 七个分类按内容宽度换行成两行全部可见。此前每个 tab 都是 `width:100%`，390px 屏上 nav 可滚宽度 **2280px**，要横滑 7 屏才够得着「关于」 |
 | `≤ 420px` 顶栏 | 隐藏 `.weather-city`、收紧动作组内边距与按钮尺寸（32 → 30）。320px 实测顶栏内容宽 **350px**，齿轮按钮原先被 `overflow:hidden` 裁掉 |
 | `≤ 360px` | 两侧 gutter 16 → 12（一次省 8px，让天气胶囊 + 动作组在 320px 上仍能单行），并保留 `flex-wrap` 作为极端文案的兜底 |
-| 触屏（`hover: none`） | 天气的两颗动作钮常显（opacity .72）；Dock 胶囊取消 hover 上浮（触屏点击会让 hover 状态粘住）；名称气泡改为按下即显 —— `title` 在移动端不生效 |
+| 触屏（`hover: none`） | 天气的两颗动作钮常显（opacity .72）；Dock 胶囊取消 hover 上浮（触屏点击会让 hover 状态粘住）；快捷项名称改为图标下常显（`title` 在移动端不生效） |
+| `≤ 639px` Dock | 一行横向滑动 + 名称常显：每格 58×66、热区 54×54、间距 6px，两端按「是否真的还能滚」做渐隐。此前折成两行、间距 4px、第二行只剩几个居中 |
 | iOS Safari | 表单控件在 `≤ 820px` 时字号提到 16px。控件小于 16px 时 Safari 会在聚焦瞬间放大整页且不还原，表现为「点一下搜索框，整页错位」 |
 | 刘海屏 | 顶栏 / 页脚补 `env(safe-area-inset-left/right)`，Dock 补 `safe-area-inset-bottom` |
-| 横屏矮视口（`max-height: 460px`） | `--stack-gap` 收到 6px、Dock 顶部空档 32 → 16px。844×390 缩放到下限 0.6 后原本仍溢出 35px，现在为 3px（已在 `main` 内部可滚） |
+| 横屏矮视口（`max-height: 460px`） | `--stack-gap` 收到 6px、Dock 顶部空档收到 10px。844×390 缩放到下限 0.6 后原本仍溢出 35px，现在为 3px（已在 `main` 内部可滚） |
 | Toast | 位置由 `ToastProvider` 用 ResizeObserver 实测 `.dock-shell` 高度后写入 `--toast-bottom`。Dock 在窄屏会折成两行（56 → 110px），写死一个 bottom 值必然在某个端压住图标（原 `bottom-6` 实测重叠 18px） |
 | 旧引擎 | `height:100vh` 给 `dvh` 兜底；`zoom` 先做 `CSS.supports` 探测，不支持则退回「不缩放 + `main` 内滚」；下拉箭头用 `transform` 而非 `translate` 属性；图标底色先给纯色再叠 `color-mix` 渐变，避免整条 `background` 失效后图标变透明 |
 
@@ -77,7 +78,8 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 - **毛玻璃材质**统一由一组 token 驱动（`--panel-bg` / `--panel-highlight` / `--panel-refract` / `--panel-blur` / `--panel-shadow`）。两个主题下各只有**四处**玻璃、共用同一套配方：搜索胶囊（`.search-panel`）、便签卡（`.card-panel`）、底部 Dock（`.dock-pill`）与设置面板；天气胶囊（`.weather-row`）**不属于这一组**：它和右上角动作组 `.bar-dock` 共用同一套「板」材质（`--board-bg` + `--board-ring` + 38px 同高），因为两者并排在同一行，一个通明一个实心会读成两块不同来源的控件。配方是半透明底 + `backdrop-filter: blur(32px) saturate(1.6)` + 顶部内高光 + 下沿折射 + 外投影，视觉厚度靠层次叠加而不是把不透明度堆到接近实心，**全部不画描边**。
 - **搜索框是两个主题都用的白色胶囊**（`--search-bg` / `--search-highlight` / `--search-bg-focus`），靠「亮」从背景里跳出来，只有下沉投影 + 一道顶部内高光、**没有 1px 描边**；因为底色恒白，`.search-panel` 内部就地改写 `--fg` 系列变量，深色主题下才不会变成白字白底。聚焦时用 CSS `[data-focused="true"]` 叠一圈 accent ring（不用 framer 内联 `boxShadow`，那会把玻璃的高光与投影一起冲掉）。
 - 搜索胶囊与便签卡**统一 `max-width: 560px`**，一言 `520px`，都比内容列窄一档 —— 一列里出现两种宽度会读成「台阶」，统一之后时钟、搜索框、卡片、一言共用同一条中轴。天气胶囊不参与这条中轴（它在左上角，宽度由内容决定）。
-- 快捷跳转沉到页面最底部，做成一颗**悬浮玻璃胶囊**（`.dock-pill`，999px 圆角），整排正圆图标被它托住；悬停时胶囊自身轻轻上浮 2px。`.dock-shell` 顶部留 32px 空档，供名称气泡浮出（否则气泡会压到一言的出处行上）。
+- 快捷跳转沉到页面最底部，做成一颗**悬浮玻璃胶囊**（`.dock-pill`，999px 圆角），整排正圆图标被它托住；悬停时胶囊自身轻轻上浮 2px。`.dock-shell` 顶部留 32px 空档，供名称气泡浮出（否则气泡会压到一言的出处行上）—— 这一档空档在 `≤639px` 会收到 14px，因为手机上的名称已改成常显文字、不再有气泡。
+- **小屏 Dock 是一行横向滑动，不是两行折行**：每格 58×66（触控热区 54×54，均大于 44px 下限）、间距 6px、名称常显在图标下方；滑到哪一端就在哪一端淡出提示还有内容。此前 12 个 46px 图标在 368px 宽里折成两行、间隙只有 4px，第二行剩余几个居中，整颗胶囊被撑成「药丸套药丸」，既挤又认不出是谁。
 - 时钟没有容器，直接压在大背景上，只靠字号成立。
 - 卡片显隐、增删时用弹簧（stiffness 380 / damping 30）平滑移动，移除的先淡出再让位；悬停时卡片上浮 2px 并加深投影。`md` 以下自动退化为单列。
 
@@ -112,7 +114,7 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 
 `background.source` 只有两个值：`edge`（Edge / Bing 每日一图，默认）与 `none`（纯渐变兜底，零网络请求）。`background.offset` 是往前回溯的天数，合法范围 0–7（见 `EDGE_WALLPAPER.maxOffset`）。自定义图片仍然走 `wallpaper` 分区，优先级高于每日壁纸。
 
-**可调常量**（`src/config/site.ts`）：`LIMITS` 里是快捷项标题 16 字、分组名 12 字、单组最多 200 项、最多 12 组、快捷指令 32 条、白名单 32 个域名、一言超时 3000ms、建议超时 2500ms、图片超时 8000ms、自定义壁纸体积 8MB；`EDGE_WALLPAPER` 里是壁纸 API 基址、图片域、市场与最大回溯天数。
+**可调常量**（`src/config/site.ts`）：`LIMITS` 里是快捷项标题 16 字、分组名 12 字、单组最多 200 项、最多 12 组、快捷指令 32 条、白名单 32 个域名、一言超时 3000ms、建议超时 2500ms、图片超时 8000ms、远程壁纸 8MB、**本地上传壁纸 3MB**（本地图以 dataURL 存 localStorage，8MB 转 base64 约 10.7M 字符必然超出配额）；`EDGE_WALLPAPER` 里是壁纸 API 基址、图片域、市场与最大回溯天数。
 
 **请求白名单**在 [`src/config/site.ts`](src/config/site.ts) 的 `DEFAULT_WHITELIST` 统一维护，所有远程请求必须经过 [`src/lib/services.ts`](src/lib/services.ts) 的 `safeFetch`，命中白名单才放行（支持子域后缀匹配），否则抛 `WhitelistError` 且**根本不会发起 fetch**。
 
@@ -359,6 +361,14 @@ Lighthouse 目标（PRD 6.1）：LCP < 1.2s、FCP < 0.8s、CLS < 0.1、TBT < 100
 **不是 bug**。这是个别站点（npmjs.com 发 `Cross-Origin-Resource-Policy: same-origin`、caniuse.com 把
 `/favicon.ico?search=` 302 到 HTML 页）拒绝了跨源取图。`shortcut-icon.tsx` 的 `onError` 会按降级链
 退回品牌色首字母，功能不受影响。
+
+### 改了设置，刷新后又回到旧值
+
+**表现**：右下角弹出「本地存储写入失败，设置可能无法保存」，刷新后配置回退。
+
+**原因**：`localStorage` 配额满（最常见是把大图直接上传成自定义壁纸）、Safari 隐私模式、或被浏览器策略禁用，`setItem` 抛错 → `saveConfig` 返回 `false`。界面里的状态已经变了，但没落盘。
+
+**处理**：`ConfigProvider` 会广播 `startpage:persist-error`，由 `ToastProvider` 显示提示（只在首次失败时弹一次，避免每改一个字弹一次）。清理站点存储后重试；大图请改用图片地址（远程图走 IndexedDB，不进配置）。本地上传上限已收到 **3MB**，见 `LIMITS.wallpaperLocalMaxBytes`。
 
 ## 八、已知限制
 

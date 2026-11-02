@@ -180,4 +180,42 @@ describe("快捷跳转管理（设置内）", () => {
       expect(after[1]).toBe(before[0]);
     });
   });
+
+  it("多分组配置被编辑后收敛成一组，不会把同一批图标复制一遍", async () => {
+    const item = (id: string, title: string, url: string) => ({
+      id,
+      title,
+      url,
+      iconKind: "letter",
+      iconValue: "",
+    });
+    window.localStorage.setItem(
+      CONFIG_KEY,
+      JSON.stringify({
+        groups: [
+          { id: "grp-a", name: "第一组", items: [item("s1", "站点一", "https://a.com")] },
+          { id: "grp-b", name: "第二组", items: [item("s2", "站点二", "https://b.com")] },
+        ],
+      }),
+    );
+
+    renderWithProviders(<ShortcutManager />);
+    await waitFor(() => expect(screen.getByTestId("shortcut-list")).toBeTruthy());
+    // 展平后两行都在
+    expect(document.querySelectorAll("[data-shortcut-id]").length).toBe(2);
+
+    // 任意一次编辑都会触发写回
+    const first = document.querySelectorAll<HTMLElement>("[data-shortcut-id]")[0];
+    fireEvent.click(within(first).getByLabelText(/后移/));
+
+    await waitFor(() => {
+      const groups = readConfig().groups;
+      expect(groups).toHaveLength(1);
+      const titles = groups[0].items.map((i: { title: string }) => i.title);
+      expect(titles).toEqual(["站点二", "站点一"]);
+      // 不允许出现重复 id（否则 Dock 会 React duplicate key + 同一图标出现两次）
+      const ids = groups[0].items.map((i: { id: string }) => i.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+  });
 });

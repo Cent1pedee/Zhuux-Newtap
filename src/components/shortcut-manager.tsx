@@ -69,14 +69,17 @@ export function ShortcutManager() {
   const items = useMemo(() => config.groups.flatMap((g) => g.items), [config.groups]);
   const groupId = config.groups[0]?.id ?? "grp-main";
 
-  /** 写回配置：保留分组结构（向后兼容），界面上一律展平 */
+  /**
+   * 写回配置：始终收敛成「一个分组」。
+   *
+   * 界面本来就是一条展平的 Dock，分组只是历史数据结构。旧实现把展平后的 items
+   * 写回 groups[0]，同时又保留 groups.slice(1) 里的原有 items —— 于是一份多分组配置
+   * 只要被编辑过一次，同一批图标就会在列表和 Dock 里各出现一遍（React 还会报
+   * duplicate key）。这里直接把其余分组并入第一个分组，数据与界面重新对齐。
+   */
   const commitItems = (next: Shortcut[]) => {
     const first = config.groups[0];
-    if (!first) {
-      set("groups", [{ id: groupId, name: "快捷跳转", items: next }]);
-      return;
-    }
-    set("groups", [{ ...first, items: next }, ...config.groups.slice(1)]);
+    set("groups", [{ id: first?.id ?? groupId, name: first?.name ?? "快捷跳转", items: next }]);
   };
 
   const saveItem = (item: Shortcut) => {

@@ -81,7 +81,7 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
           <Button onClick={clearWallpaper} size="sm" variant="ghost" testId="wallpaper-clear">
             移除图片
           </Button>
-          <span className="text-[11px] text-[var(--fg-subtle)]">小于 8MB，仅存本机</span>
+          <span className="text-[11px] text-[var(--fg-subtle)]">本地图片小于 3MB，仅存本机</span>
         </div>
       </section>
 

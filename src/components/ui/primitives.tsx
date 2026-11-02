@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { PERSIST_ERROR_EVENT } from "@/lib/storage";
 
 /* ==========================================================================
    模态框：无障碍 dialog（焦点陷阱 + Esc 关闭 + 遮罩点击关闭 + 滚动锁定）
@@ -280,6 +281,19 @@ export function ToastProvider({
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 2600);
   }, []);
+
+  /**
+   * 配置写盘失败的提示。
+   * ConfigProvider 在 `saveConfig()` 返回 false 时广播事件（它自己拿不到 UI），
+   * 这里接住并显示 —— 否则「改了设置、刷新就回退」会变成一个无法解释的 bug。
+   */
+  useEffect(() => {
+    const onPersistError = () => {
+      push("本地存储写入失败，设置可能无法保存：请清理浏览器存储，或改用图片地址而非本地上传", "error");
+    };
+    window.addEventListener(PERSIST_ERROR_EVENT, onPersistError);
+    return () => window.removeEventListener(PERSIST_ERROR_EVENT, onPersistError);
+  }, [push]);
 
   return (
     <ToastContext.Provider value={{ push }}>

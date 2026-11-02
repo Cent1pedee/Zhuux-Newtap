@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { ENTRANCE_DELAY, fadeUp, staggerContainer } from "@/lib/motion";
 import { useToast } from "@/components/ui/primitives";
@@ -30,6 +30,69 @@ export function ShortcutDock() {
    */
   const [hovered, setHovered] = useState<number | null>(null);
 
+  /**
+   * 小屏下的横向滚动渐隐。
+   *
+   * 手机上 Dock 改成「一行 + 横向滚动」（见 globals.css 的 .shortcut-dock），
+   * 一屏放不下 12 项。没有渐隐时，右边缘会硬切半个图标，读起来像布局坏了；
+   * 有渐隐才读得出「右边还有」。两端只在该方向真的有内容时才淡出，
+   * 滚到头就恢复满亮度 —— 所以这两个标记要跟着滚动位置实时算。
+   */
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [fade, setFade] = useState({ start: false, end: false });
+
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el) return;
+    const update = () => {
+      // 只有横向滚动真的生效时才需要渐隐（桌面是 wrap，不该出现淡出）
+      if (getComputedStyle(el).overflowX !== "auto") {
+        setFade({ start: false, end: false });
+        return;
+      }
+      /*
+       * 不能直接看 scrollWidth：名称气泡是绝对定位的，桌面端它会溢出到格子之外，
+       * 把 scrollWidth 顶大，于是「三项、根本不用滚」也会被判定成可滚并淡出右边缘。
+       * 这里改成按子项的实宽累加来算内容宽度 —— 只统计参与流式布局的格子。
+       */
+      const nodes = Array.from(el.querySelectorAll<HTMLElement>(".shortcut-item"));
+      if (nodes.length === 0) {
+        setFade({ start: false, end: false });
+        return;
+      }
+      const gap = Number.parseFloat(getComputedStyle(el).columnGap || "0") || 0;
+      const contentWidth =
+        nodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0) + gap * (nodes.length - 1);
+      const overflow = contentWidth - el.clientWidth;
+      const scrollable = overflow > 2;
+      setFade({
+        start: scrollable && el.scrollLeft > 2,
+        end: scrollable && el.scrollLeft < overflow - 2,
+      });
+    };
+    update();
+    // 首帧量到的可能是「样式尚未生效」的尺寸，下一帧再校一次
+    const raf = requestAnimationFrame(update);
+    el.addEventListener("scroll", update, { passive: true });
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => {
+        cancelAnimationFrame(raf);
+        el.removeEventListener("scroll", update);
+        window.removeEventListener("resize", update);
+      };
+    }
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    // 胶囊宽度变化（旋转屏幕 / 断点切换）同样会影响是否可滚
+    if (el.parentElement) ro.observe(el.parentElement);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, [items.length]);
+
   /** Ctrl+数字直达（PRD 4.4）：纯键盘启动，不产生任何界面元素 */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -56,7 +119,13 @@ export function ShortcutDock() {
       initial="hidden"
       animate="show"
     >
-      <div className="shortcut-dock" data-testid="shortcut-dock">
+      <div
+        ref={dockRef}
+        className="shortcut-dock"
+        data-testid="shortcut-dock"
+        data-fade-start={fade.start ? "true" : "false"}
+        data-fade-end={fade.end ? "true" : "false"}
+      >
         <AnimatePresence initial={false}>
           {items.map((item, index) => (
             <motion.div

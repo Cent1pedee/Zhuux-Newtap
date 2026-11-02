@@ -2138,14 +2138,125 @@ input[type="color"]::-moz-color-swatch {
   }
 
   /* 32px 的气泡空档在横屏手机上是纯浪费：这一档本来就没有指针悬停，
-     名称气泡几乎不会出现。收到 16px 正好让便签卡不再被切掉最后十几像素。 */
+     名称气泡几乎不会出现（≤639px 时名称已改成常显说明）。 */
   .dock-shell {
-    padding-top: 16px;
+    padding-top: 10px;
   }
 
   .app-shell > footer {
     padding-bottom: 2px;
     font-size: 9.5px;
+  }
+}
+
+/* ------------------------------------------------------------
+   11) 小屏 Dock：一行横向滚动 + 常显名称
+   原来 12 个 46px 图标在 368px 宽里折成两行、间隙只有 4px：
+   第二行只剩几个居中，整颗胶囊被撑成「药丸套药丸」，看着像排错了；
+   图标之间 4px、且没有任何文字，触屏上既难点也认不出是谁。
+   改为一行可滚：每格 58×64（大于 44px 触控下限），间距 6px，
+   名称常显 —— 悬浮气泡在触屏上本来就不会出现。
+   ------------------------------------------------------------ */
+@media (max-width: 639px) {
+  .dock-shell {
+    /* 名称不再是浮出的气泡，不必为它预留 32px 空档 */
+    padding-top: 14px;
+  }
+
+  .dock-pill {
+    padding: 6px 8px;
+  }
+
+  .shortcut-dock {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    /* 留 2px 给焦点环，别被 overflow 裁掉 */
+    padding: 2px;
+  }
+
+  .shortcut-dock::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shortcut-item {
+    flex: 0 0 auto;
+    width: 58px;
+    min-height: 64px;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 6px 2px 5px;
+    scroll-snap-align: center;
+  }
+
+  /* 链接撑满整格：触控热区从「42×54」变成「54×54」，
+     手指落在标签上也能点开，而不是必须压在图标正中 */
+  .shortcut-item > a {
+    width: 100%;
+  }
+
+  /* 同一个 DOM 节点：从「浮出的气泡」变成「图标下的常驻说明」 */
+  .shortcut-item-label {
+    position: static;
+    max-width: 100%;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    opacity: 1;
+    transform: none;
+    /* 常驻文字不能再用气泡那档极淡色：10px 的字压在玻璃上，
+       --fg-subtle（52%）在壁纸背景里读不出来，提到 muted */
+    color: var(--fg-muted);
+    font-size: 10.5px;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 静态定位下不要再让 hover / active 去平移它 */
+  .shortcut-item:hover .shortcut-item-label,
+  .shortcut-item:focus-within .shortcut-item-label,
+  .shortcut-item:active .shortcut-item-label {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* 两端渐隐：只在该方向真的有更多内容时才淡出 */
+  .shortcut-dock[data-fade-start="true"] {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px);
+    mask-image: linear-gradient(to right, transparent 0, #000 22px);
+  }
+
+  .shortcut-dock[data-fade-end="true"] {
+    -webkit-mask-image: linear-gradient(to left, transparent 0, #000 22px);
+    mask-image: linear-gradient(to left, transparent 0, #000 22px);
+  }
+
+  .shortcut-dock[data-fade-start="true"][data-fade-end="true"] {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 22px,
+      #000 calc(100% - 22px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 22px,
+      #000 calc(100% - 22px),
+      transparent 100%
+    );
   }
 }
 

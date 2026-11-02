@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FALLBACK_GRADIENT } from "@/config/site";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { fetchEdgeWallpaper, fetchUserImage, type EdgeWallpaper } from "@/lib/services";
-import { cacheGet, cachePut } from "@/lib/storage";
+import { cacheGet, cachePut, imageCacheKey } from "@/lib/storage";
 
 /** 聚焦模式下的额外模糊量（px），类 macOS Spotlight */
 const FOCUS_BLUR = 16;
@@ -132,7 +132,13 @@ export function Wallpaper() {
     setFailed(false);
     setCachedSrc(null);
     if (!customSrc) return;
-    const key = `wallpaper:${customSrc}`;
+    /*
+     * dataURL（本地上传）已经随配置存在 localStorage 里，再写一份进 IndexedDB
+     * 等于同一张图存两遍；而 `wallpaper:${dataURL}` 这种把整串 base64 当键的写法，
+     * 还会让每次渲染都拼一次 10MB 级字符串。这两件事一起改掉。
+     */
+    if (customSrc.startsWith("data:")) return;
+    const key = imageCacheKey(customSrc);
     void (async () => {
       const cached = await cacheGet(key);
       if (cancelled) return;

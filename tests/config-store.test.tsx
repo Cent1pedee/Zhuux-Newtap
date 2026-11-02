@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { ConfigProvider, useConfig } from "@/lib/config-store";
 import { CONFIG_KEY, saveConfig } from "@/lib/storage";
+import { ToastProvider } from "@/components/ui/primitives";
 import { createDefaultConfig } from "@/config/defaults";
 
 function Probe() {
@@ -111,5 +112,28 @@ describe("跨标签页配置同步", () => {
     emitStorage("startpage.wallpaper.daily", JSON.stringify(other));
 
     expect(screen.getByTestId("mode").textContent).toBe("dark");
+  });
+});
+
+describe("配置写盘失败", () => {
+  it("localStorage 不可写时提醒用户，而不是静默丢掉配置", async () => {
+    window.localStorage.clear();
+    // 配额满 / 隐私模式下 setItem 直接抛错 —— safeStorage 的探针会失败，saveConfig 返回 false
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("QuotaExceededError");
+    });
+
+    render(
+      <ConfigProvider>
+        <ToastProvider>
+          <Probe />
+        </ToastProvider>
+      </ConfigProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("ready").textContent).toBe("true"));
+    await waitFor(() => {
+      expect(screen.getByTestId("toast").textContent).toContain("本地存储写入失败");
+    });
   });
 });
