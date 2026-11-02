@@ -102,7 +102,7 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
   greeting:  { show: true, custom: "" },          // custom 非空时覆盖时段问候
   quote:     { show: true, source: "remote" | "local" },   // 默认远程 API，失败回退内置库
   background:{ source: "edge" | "none", offset: 0,  dim: 18, blur: 0, kenBurns: true },
-  wallpaper: { source: "none" | "url" | "local", value: "" },  // 仅自定义图片叠加层
+  wallpaper: { source: "none" | "url" | "local", value: "" },  // local 存 idb: 引用，不存 dataURL
   suggest:   { enabled: false },                   // 实时搜索建议（仅 Bing 有 suggest 接口）
   weather:   { enabled: true, unit: "c" | "f", province: "", city: "", lat: null, lon: null, source: "none" | "manual" | "geo" },
   icons:     { autoFetch: true },                  // 抓取站点 favicon（默认开启）
@@ -114,7 +114,7 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 
 `background.source` 只有两个值：`edge`（Edge / Bing 每日一图，默认）与 `none`（纯渐变兜底，零网络请求）。`background.offset` 是往前回溯的天数，合法范围 0–7（见 `EDGE_WALLPAPER.maxOffset`）。自定义图片仍然走 `wallpaper` 分区，优先级高于每日壁纸。
 
-**可调常量**（`src/config/site.ts`）：`LIMITS` 里是快捷项标题 16 字、分组名 12 字、单组最多 200 项、最多 12 组、快捷指令 32 条、白名单 32 个域名、一言超时 3000ms、建议超时 2500ms、图片超时 8000ms、远程壁纸 8MB、**本地上传壁纸 3MB**（本地图以 dataURL 存 localStorage，8MB 转 base64 约 10.7M 字符必然超出配额）；`EDGE_WALLPAPER` 里是壁纸 API 基址、图片域、市场与最大回溯天数。
+**可调常量**（`src/config/site.ts`）：`LIMITS` 里是快捷项标题 16 字、分组名 12 字、单组最多 200 项、最多 12 组、快捷指令 32 条、白名单 32 个域名、一言超时 3000ms、建议超时 2500ms、图片超时 8000ms、图片体积上限 8MB（远程取图与本地自选共用 —— 图片本体存 IndexedDB，配置里只有几十字节的 `idb:` 引用）；`EDGE_WALLPAPER` 里是壁纸 API 基址、图片域、市场与最大回溯天数。
 
 **请求白名单**在 [`src/config/site.ts`](src/config/site.ts) 的 `DEFAULT_WHITELIST` 统一维护，所有远程请求必须经过 [`src/lib/services.ts`](src/lib/services.ts) 的 `safeFetch`，命中白名单才放行（支持子域后缀匹配），否则抛 `WhitelistError` 且**根本不会发起 fetch**。
 
@@ -130,6 +130,7 @@ src/
     sitemap.ts        # /sitemap.xml
     robots.ts         # /robots.txt
     not-found.tsx     # 404
+    error.tsx         # 段级错误边界（重试 / 回首页），避免异常时整页纯白
   components/
     clock.tsx  search-box.tsx  daily-quote.tsx  shortcut-dock.tsx  shortcut-icon.tsx
     shortcut-manager.tsx       # 快捷项增删改与排序（只在设置面板里出现）
@@ -151,6 +152,8 @@ src/
     cities.ts   # 34 个省级行政区 / 200+ 城市坐标（离线，不查接口）
   lib/
     storage.ts     # localStorage / IndexedDB 封装（mergeConfig 转发给 config-schema）
+    image-store.ts # 图片资源库：本体进 IndexedDB，配置只留 idb: 引用；旧 dataURL 自动迁移
+    use-stored-image.ts # 把 idb:/data:/http(s) 三种取值解析成可直接用的 img src
     config-schema.ts # 配置字段级 schema：枚举 / 数值范围 / 数组元素 / 限额的导入校验
     services.ts    # 白名单校验 + 超时的 fetch 封装
     quotes.ts      # 内置语录库
@@ -162,7 +165,7 @@ src/
     config-store.tsx  # 配置 Context + 减少动效偏好
   styles/
     globals.css    # 设计 token（间距/圆角/阴影/模糊/时长）+ 全部 Magic UI 类 + 主题变量
-tests/             # Vitest 单元 / 组件测试（16 文件 211 项）
+tests/             # Vitest 单元 / 组件测试（18 文件 232 项）
 scripts/           # capture-shots.mjs：视觉验收截图脚本
 e2e/               # Playwright 端到端测试（5 文件 39 项，含 axe 无障碍扫描）
 ```
@@ -189,7 +192,7 @@ pnpm lint            # ESLint（next/core-web-vitals + next/typescript）
 
 期望：`typecheck` 无输出；`lint` 输出 `0 problems`。
 
-### 5.2 单元 / 组件测试（Vitest，211 项）
+### 5.2 单元 / 组件测试（Vitest，232 项）
 
 ```bash
 pnpm test              # 单次运行
@@ -212,9 +215,11 @@ pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 | `tests/services.test.ts` | 24 | **白名单拒绝时 fetch 未被调用**、credentials omit、no-referrer、HTTP 500、超时抛错、suggest 截断 8 条、天气码映射 |
 | `tests/search-box.test.tsx` | 12 | 默认引擎 Google、原生表单属性、点击循环 / 右键菜单、`/` 提示、指令跳转、Esc 清空、**空提交直接新标签打开引擎官网**、**回车与点按钮都在新标签打开（不劫持当前页）**、Shift+Enter |
 | `tests/daily-quote.test.tsx` | 7 | 本地源零网络请求、默认远程取一条、远程失败静默回退、点正文换一条、**不存在来源标签 / 分类 / 刷新按钮**、出处含破折号、聚焦输入框时 `data-dimmed` 翻转 |
-| `tests/shortcut-dock.test.tsx` | 12 | 首页 Dock：展平渲染 12 项、无分组标题、**首页不存在任何编辑 / 删除 / 前移后移 / 添加按钮**、悬停只有图标层、`target=_blank` + `title` 含「打开 」、空态是引导文案；设置内 `ShortcutManager`：列表 12 行、增删改、空名校验、URL 自动补全、删除二次确认、取消不删、前后调序持久化 |
-| `tests/settings-panel.test.tsx` | 30 | **七个分类页签**全部设置项（搜索引擎 / 外观 / 快捷跳转 / 模块 / 背景 / 隐私与数据 / 关于）、每日壁纸开关与回溯天数、对比度校验、导入导出、一键清除、恢复出厂 |
+| `tests/shortcut-dock.test.tsx` | 13 | 首页 Dock：展平渲染 12 项、无分组标题、**首页不存在任何编辑 / 删除 / 前移后移 / 添加按钮**、悬停只有图标层、`target=_blank` + `title` 含「打开 」、空态是引导文案；设置内 `ShortcutManager`：列表 12 行、增删改、空名校验、URL 自动补全、删除二次确认、取消不删、前后调序持久化 |
+| `tests/settings-panel.test.tsx` | 35 | **七个分类页签**全部设置项（搜索引擎 / 外观 / 快捷跳转 / 模块 / 背景 / 隐私与数据 / 关于）、每日壁纸开关与回溯天数、对比度校验、导入导出、一键清除、恢复出厂；**本地图片落的是 `idb:` 引用而非 dataURL**、写失败明确报错、拒绝 dataURL 地址、点「往前回溯」标题不再重置偏移、上传图标存成引用 |
 | `tests/command-palette.test.tsx` | 11 | 默认条目、搜索过滤、方向键 + Enter、Esc、⌘K、点主题 / 每日壁纸开关 / 回溯 / 设置项真的改配置 |
+| `tests/image-store.test.ts` | 11 | 图片资源库：引用格式、内容去重（同图只占一份）、非图片数据拒绝、写入失败抛错、内存缓存命中、删除回收、旧配置 dataURL 迁移与幂等性 |
+| `tests/field-group.test.tsx` | 3 | `FieldGroup` 点标题不触发内部选项（`label` 激活行为回归）、`role=group` 可访问名、`Field` 仍保留单控件转发 |
 | `tests/widgets.test.tsx` | 13 | 时钟（问候一致性、显隐、秒）、壁纸（关闭时只渲染渐变兜底且**零网络请求**、Edge 取回后渲染图片、自定义图片失败降级）、天气（默认开启、静默定位、选省市写入坐标、成功、失败） |
 | `tests/note-pad.test.tsx` | 6 | 待办便签显式关闭时不渲染、回填已存内容、防抖落盘、清空与禁用态、「已保存」提示、2000 字截断 |
 
@@ -279,13 +284,13 @@ node scripts/capture-shots.mjs             # 输出到 shots/，每张打印三�
 
 ```bash
 pnpm build
-# 产物分析：/ 页面 First Load JS ≈ 175 kB（shared 103 kB）
+# 产物分析：/ 页面 First Load JS ≈ 179 kB（shared 103 kB）
 pnpm exec serve .next   # 或用 pnpm start，再用 Lighthouse 移动模拟跑一遍
 ```
 
 Lighthouse 目标（PRD 6.1）：LCP < 1.2s、FCP < 0.8s、CLS < 0.1、TBT < 100ms。
 
-> **关于体积**：首屏 JS 为 175 kB（Next 统计口径，gzip 前），**不再追求 PRD 里 < 60KB gzip 的目标** ——
+> **关于体积**：首屏 JS 为 179 kB（Next 统计口径，gzip 前），**不再追求 PRD 里 < 60KB gzip 的目标** ——
 > 该预算与「Next.js 15 + React 19 基线（shared 103 kB）」不可兼得，而要手感丝滑就必须让 Motion 留在主 bundle 里
 > （而不是为了抠体积把它拆成异步块、换来首屏动画延迟）。已做的优化仍然保留：设置面板 `next/dynamic` 按需加载，
 > 未引入状态库 / UI 库 / 图标库 / 字体文件，Magic UI 组件全部自绘无额外运行时。
@@ -297,7 +302,7 @@ Lighthouse 目标（PRD 6.1）：LCP < 1.2s、FCP < 0.8s、CLS < 0.1、TBT < 100
 | 数据 | 位置 | 默认 |
 |---|---|---|
 | 用户配置 | localStorage | 启用，仅本机 |
-| 自定义背景图片缓存 | IndexedDB（`startpage` / `images`） | 启用，仅本机 |
+| 自定义背景图片 / 自定义图标 | IndexedDB（`startpage` / `images`，配置里只存 `idb:` 引用） | 启用，仅本机 |
 | 内置语录库 | 静态包 | 启用，零请求 |
 | 每日壁纸元数据 | `bing.biturl.top` | **开启**（默认） |
 | 每日壁纸图片 | `www.bing.com` | **开启**（默认，`<img>` 直链） |
@@ -368,7 +373,7 @@ Lighthouse 目标（PRD 6.1）：LCP < 1.2s、FCP < 0.8s、CLS < 0.1、TBT < 100
 
 **原因**：`localStorage` 配额满（最常见是把大图直接上传成自定义壁纸）、Safari 隐私模式、或被浏览器策略禁用，`setItem` 抛错 → `saveConfig` 返回 `false`。界面里的状态已经变了，但没落盘。
 
-**处理**：`ConfigProvider` 会广播 `startpage:persist-error`，由 `ToastProvider` 显示提示（只在首次失败时弹一次，避免每改一个字弹一次）。清理站点存储后重试；大图请改用图片地址（远程图走 IndexedDB，不进配置）。本地上传上限已收到 **3MB**，见 `LIMITS.wallpaperLocalMaxBytes`。
+**处理**：`ConfigProvider` 会广播 `startpage:persist-error`，由 `ToastProvider` 显示提示（只在首次失败时弹一次，避免每改一个字弹一次）。清理站点存储后重试。图片（壁纸与自定义图标）已统一存 IndexedDB，配置里只有引用，所以「传一张大图」不再会撑爆 localStorage；若仍报错，多半是隐私模式禁用了 IndexedDB（`putStoredImage` 会抛错，界面上会直接显示「图片保存失败」而不是谎报成功）。
 
 ## 八、已知限制
 

@@ -196,12 +196,30 @@ export function CommandPalette({
     node?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
+  /**
+   * 延迟执行的那一枪必须能取消。
+   * 原来直接 `setTimeout(..., 60)` 不记句柄：面板在 60ms 内被卸载（切页、关闭页面、
+   * 组件测试结束）后回调仍会跑，落在已销毁的树上是 `window is not defined` 这类
+   * 「测试环境已拆除」的噪声，真机上则是往已卸载组件里 setState。
+   */
+  const runTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (runTimer.current !== null) window.clearTimeout(runTimer.current);
+    },
+    [],
+  );
+
   const runItem = useCallback(
     (item: Item | undefined) => {
       if (!item) return;
       onOpenChange(false);
       // 延迟执行，避免与关闭动画抢焦点
-      window.setTimeout(() => item.run(), 60);
+      if (runTimer.current !== null) window.clearTimeout(runTimer.current);
+      runTimer.current = window.setTimeout(() => {
+        runTimer.current = null;
+        item.run();
+      }, 60);
       push(`${KIND_LABEL[item.kind]}：${item.label}`, "info");
     },
     [onOpenChange, push],

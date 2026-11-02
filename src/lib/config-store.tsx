@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createDefaultConfig } from "@/config/defaults";
 import type { AppConfig } from "@/config/types";
+import { hasInlineImages, migrateInlineImages } from "@/lib/image-store";
 import { CONFIG_KEY, PERSIST_ERROR_EVENT, loadConfig, saveConfig } from "@/lib/storage";
 
 type ConfigContextValue = {
@@ -34,10 +35,32 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
 
   // 首帧后读取本地配置
   useEffect(() => {
+    let alive = true;
     const loaded = loadConfig();
-    setConfig(loaded);
-    setReady(true);
-    mounted.current = true;
+    /*
+     * 老版本的配置把图片以 dataURL 直接写在 wallpaper.value / iconValue 里，
+     * 那份配置本身就超过 localStorage 配额（8MB 图 ≈ 11M 字符），写回必然失败。
+     * 这里先把它搬进 IndexedDB、字段换成 `idb:` 引用，再交给状态 —— 一次修复，永久生效。
+     *
+     * 没有内联图时走同步分支：启动时序与加这个迁移之前完全一致，
+     * 不为「可能迁移」凭空多等一个微任务（首帧读配置是同步的，别的地方依赖这点）。
+     */
+    if (!hasInlineImages(loaded)) {
+      setConfig(loaded);
+      setReady(true);
+      mounted.current = true;
+      return;
+    }
+    void (async () => {
+      const migrated = await migrateInlineImages(loaded);
+      if (!alive) return;
+      setConfig(migrated ?? loaded);
+      setReady(true);
+      mounted.current = true;
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   /**

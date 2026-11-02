@@ -8,6 +8,7 @@ import {
   Button,
   ConfirmDialog,
   Field,
+  FieldGroup,
   Modal,
   Segmented,
   TextInput,
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/primitives";
 import { ShortcutIcon } from "@/components/shortcut-icon";
 import { faviconCapability } from "@/lib/favicon";
+import { putStoredImage } from "@/lib/image-store";
 import { hostOf } from "@/lib/services";
 
 /**
@@ -271,7 +273,7 @@ function ShortcutEditor({
     color,
   };
 
-  const submit = () => {
+  const submit = async () => {
     const t = title.trim();
     const u = url.trim();
     if (!t) {
@@ -294,12 +296,29 @@ function ShortcutEditor({
       setError("链接格式不正确，请填写完整域名");
       return;
     }
+    if (iconKind === "image" && !iconValue) {
+      setError("请选择图片，或把图标来源改回「自动 / 首字母」");
+      return;
+    }
+    /*
+     * 自定义图片存 IndexedDB，配置里只留几十字节的引用。
+     * 写入失败必须停在这里报错 —— 放过去就会变成「保存成功、刷新后图标没了」。
+     */
+    let nextIconValue = iconKind === "letter" ? (iconValue || t).charAt(0) : iconValue;
+    if (iconKind === "image" && iconValue.startsWith("data:image/")) {
+      try {
+        nextIconValue = await putStoredImage("icon", iconValue);
+      } catch {
+        setError("图标保存失败：本地存储不可用或空间不足");
+        return;
+      }
+    }
     onSave({
       id: item?.id ?? uid("sc"),
       title: t,
       url: normalized,
       iconKind,
-      iconValue: iconKind === "letter" ? (iconValue || t).charAt(0) : iconValue,
+      iconValue: nextIconValue,
       color,
     });
   };
@@ -397,7 +416,7 @@ function ShortcutEditor({
         />
       </Field>
 
-      <Field label="图标来源" hint="上传图片或填 Emoji 会覆盖自动抓取的站点图标">
+      <FieldGroup label="图标来源" hint="上传图片或填 Emoji 会覆盖自动抓取的站点图标">
         <Segmented
           options={ICON_KINDS}
           value={iconKind}
@@ -405,7 +424,7 @@ function ShortcutEditor({
           label="图标类型"
           testId="shortcut-icon-kind"
         />
-      </Field>
+      </FieldGroup>
 
       {iconKind === "emoji" ? (
         <Field label="Emoji" hint="粘贴一个 Emoji，例如 🚀">
@@ -434,7 +453,7 @@ function ShortcutEditor({
       ) : null}
 
       {iconKind === "image" ? (
-        <Field label="图片" hint="小于 512KB，仅存本地（dataURL）">
+        <FieldGroup label="图片" hint="小于 512KB，仅存本机（IndexedDB）">
           <div className="flex items-center gap-2">
             <Button onClick={() => fileRef.current?.click()} size="sm" testId="shortcut-upload">
               选择图片
@@ -448,13 +467,13 @@ function ShortcutEditor({
               onChange={(e) => onFile(e.target.files?.[0])}
             />
             <span className="truncate text-[11px] text-[var(--fg-subtle)]">
-              {iconValue.startsWith("data:") ? "已选择本地图片" : "未选择"}
+              {iconValue ? "已选择本地图片" : "未选择"}
             </span>
           </div>
-        </Field>
+        </FieldGroup>
       ) : null}
 
-      <Field label="图标底色" hint="首字母与 Emoji 会铺这块底色；站点图标自带白色托底">
+      <FieldGroup label="图标底色" hint="首字母与 Emoji 会铺这块底色；站点图标自带白色托底">
         <div className="flex flex-wrap gap-1.5">
           {PALETTE.map((c) => (
             <button
@@ -471,7 +490,7 @@ function ShortcutEditor({
             />
           ))}
         </div>
-      </Field>
+      </FieldGroup>
 
       {error ? (
         <p

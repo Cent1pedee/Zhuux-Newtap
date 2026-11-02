@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Shortcut } from "@/config/site";
 import { useConfig } from "@/lib/config-store";
 import { faviconUrl } from "@/lib/favicon";
+import { useStoredImage } from "@/lib/use-stored-image";
 
 /**
  * 图标降级链（v2）：用户自定义 > 站点 favicon > 首字母
@@ -73,7 +74,12 @@ export function ShortcutIcon({ item, size = 40 }: { item: Shortcut; size?: numbe
 
   const letter = (item.title || "?").trim().charAt(0).toUpperCase() || "?";
   const bg = item.color ?? "var(--accent)";
-  const customImage = item.iconKind === "image" && item.iconValue !== "";
+  /**
+   * 自定义图片现在存 IndexedDB，配置里是 `idb:` 引用（历史配置仍是 dataURL，直接用）。
+   * 引用还没解析出来时 `resolvedImage` 为 null，先按后面的阶梯降级，
+   * 解析完成后自动切到图片 —— 不会出现破图图标。
+   */
+  const resolvedImage = useStoredImage(item.iconKind === "image" ? item.iconValue : "");
   const customEmoji = item.iconKind === "emoji" && item.iconValue !== "";
   /*
    * 必须等配置就绪再发请求：ConfigProvider 首帧给的是默认值（autoFetch=true），
@@ -83,12 +89,12 @@ export function ShortcutIcon({ item, size = 40 }: { item: Shortcut; size?: numbe
     ready && config.icons.autoFetch ? faviconUrl(item.url, Math.max(32, Math.round(size * 2))) : "";
 
   // 1) 用户自定义图片
-  if (customImage && !imageFailed) {
+  if (resolvedImage && item.iconKind === "image" && !imageFailed) {
     return (
       <span className="grid shrink-0 place-items-center overflow-hidden rounded-full" style={tileStyle(bg, size)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={item.iconValue}
+          src={resolvedImage}
           alt=""
           width={size}
           height={size}

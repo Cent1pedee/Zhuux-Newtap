@@ -16,10 +16,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findCity, nearestCity } from "@/config/cities";
 import { createDefaultConfig } from "@/config/defaults";
-import { ENGINES } from "@/config/site";
-import { LIMITS } from "@/config/site";
+import { ENGINES, LIMITS } from "@/config/site";
 import { accentContrast, isAccentAcceptable } from "@/lib/color";
 import { useConfig } from "@/lib/config-store";
+import { deleteStoredImage, IMAGE_REF_PREFIX, putStoredImage } from "@/lib/image-store";
 import { mergeConfig } from "@/lib/storage";
 import { useToast } from "@/components/ui/primitives";
 
@@ -125,17 +125,28 @@ export function useSettingsController() {
 
   /* ------------------------------ 背景 ------------------------------ */
 
+  /** 只回收「被换掉的本地上传图」：引用是内容寻址的，不会误删别的字段还在用的图 */
+  const dropStoredImage = (value: string) => {
+    if (value.startsWith(IMAGE_REF_PREFIX)) void deleteStoredImage(value);
+  };
+
   const applyWallpaperUrl = () => {
     const value = wallpaperUrl.trim();
     if (!value) {
       push("请填写图片地址", "error");
       return;
     }
-    if (!/^https?:\/\//i.test(value) && !value.startsWith("data:image/")) {
+    /*
+     * 只收 http(s)。早先还放行 data:image/ —— 那是给「本地图存配置」时代留的口子，
+     * 现在图片统一进 IndexedDB，再允许粘贴 dataURL 等于把配额炸弹重新交回用户手里。
+     */
+    if (!/^https?:\/\//i.test(value)) {
       push("图片需为 http(s) 地址", "error");
       return;
     }
+    const previous = config.wallpaper.value;
     set("wallpaper", { source: "url", value });
+    dropStoredImage(previous);
     push("背景图片已应用", "success");
   };
 
@@ -146,27 +157,42 @@ export function useSettingsController() {
       return;
     }
     /*
-     * 本地上传的图是以 dataURL 写进配置（localStorage）的，base64 会把体积放大 1.37 倍。
-     * 用 8MB 的远程取图上限来放行本地图，必然把 localStorage 配额撑爆，
-     * 而 saveConfig 失败时界面不会变 —— 用户以为存住了，刷新才发现回到旧图。
-     * 所以这里用独立的、更保守的本地上限（LIMITS.wallpaperLocalMaxBytes）。
+     * 图片本体进 IndexedDB，配置里只留 `idb:` 引用，所以这里可以用真正的取图上限 8MB。
+     * 早先直接存 dataURL 时，3MB 以上就会把 localStorage 配额撑爆 ——
+     * 界面换了图、刷新又回去，用户完全看不出发生了什么。
      */
-    if (file.size > LIMITS.wallpaperLocalMaxBytes) {
-      push(`本地图片需小于 ${Math.round(LIMITS.wallpaperLocalMaxBytes / 1024 / 1024)}MB，更大的图请用图片地址`, "error");
+    if (file.size > LIMITS.wallpaperMaxBytes) {
+      push(`图片需小于 ${Math.round(LIMITS.wallpaperMaxBytes / 1024 / 1024)}MB`, "error");
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      set("wallpaper", { source: "local", value: reader.result });
-      push("本地图片已应用", "success");
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) {
+        push("图片读取失败，请换一张", "error");
+        return;
+      }
+      void (async () => {
+        try {
+          const ref = await putStoredImage("wallpaper", dataUrl);
+          const previous = config.wallpaper.value;
+          set("wallpaper", { source: "local", value: ref });
+          dropStoredImage(previous);
+          push("本地图片已应用", "success");
+        } catch {
+          // 写不进去就明说，绝不能让「已应用」这句话落在一个没存住的配置上
+          push("图片保存失败：本地存储不可用或空间不足", "error");
+        }
+      })();
     };
     reader.readAsDataURL(file);
   };
 
   const clearWallpaper = () => {
+    const previous = config.wallpaper.value;
     set("wallpaper", { source: "none", value: "" });
     setWallpaperUrl("");
+    dropStoredImage(previous);
     push("已移除自定义图片", "success");
   };
 

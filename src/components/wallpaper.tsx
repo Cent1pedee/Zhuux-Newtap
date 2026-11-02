@@ -6,6 +6,7 @@ import { FALLBACK_GRADIENT } from "@/config/site";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { fetchEdgeWallpaper, fetchUserImage, type EdgeWallpaper } from "@/lib/services";
 import { cacheGet, cachePut, imageCacheKey } from "@/lib/storage";
+import { useStoredImage } from "@/lib/use-stored-image";
 
 /** 聚焦模式下的额外模糊量（px），类 macOS Spotlight */
 const FOCUS_BLUR = 16;
@@ -79,7 +80,12 @@ export function Wallpaper() {
   }, []);
   const isLight = theme.mode === "light" || (theme.mode === "system" && systemLight);
 
-  const customSrc = wallpaper.source === "none" ? "" : wallpaper.value;
+  /*
+   * 本地上传的图存在 IndexedDB，配置里只留 `idb:` 引用；远程地址与历史 dataURL 直接用。
+   * 引用解析期间（一次 IndexedDB 读）这里是空串，先露出每日壁纸 —— 比白屏好。
+   */
+  const customValue = wallpaper.source === "none" ? "" : wallpaper.value;
+  const customSrc = useStoredImage(customValue) ?? "";
   const edgeEnabled = background.source === "edge";
 
   /**

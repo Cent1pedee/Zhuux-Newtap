@@ -404,6 +404,10 @@ export function Switch({
   );
 }
 
+/**
+ * 单控件字段：用 <label> 包住，点标题文字 = 聚焦/切换那个控件。
+ * 只能用在「里面确实只有一个可标注控件」的场景（TextInput / Range）。
+ */
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block py-2">
@@ -411,6 +415,35 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
       {children}
       {hint ? <span className="mt-1 block text-[11px] text-[var(--fg-subtle)]">{hint}</span> : null}
     </label>
+  );
+}
+
+/**
+ * 多控件字段：视觉与 Field 一致，但**不用 <label>**。
+ *
+ * <label> 的激活行为会转发给「第一个可标注后代」。里面放 Segmented（一排按钮）
+ * 或色板时，点标题文字等于点了第一个选项 —— 实测：点「往前回溯」会把壁纸
+ * 重置回「今天」，点「图标来源」会把自定义图标重置成自动图标，且没有任何提示。
+ * 这类容器只能用 role="group" + aria-labelledby。
+ */
+export function FieldGroup({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  const id = useId();
+  return (
+    <div role="group" aria-labelledby={id} className="block py-2">
+      <span id={id} className="mb-1.5 block text-[13px] font-medium leading-5">
+        {label}
+      </span>
+      {children}
+      {hint ? <span className="mt-1 block text-[11px] text-[var(--fg-subtle)]">{hint}</span> : null}
+    </div>
   );
 }
 

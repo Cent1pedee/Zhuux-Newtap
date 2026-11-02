@@ -4,6 +4,25 @@ import { renderWithProviders } from "./utils";
 import { SettingsPanel } from "@/components/settings-panel";
 import { CONFIG_KEY } from "@/lib/storage";
 
+/**
+ * jsdom 没有 IndexedDB，图片资源库整体换成可控替身。
+ * 这里只验证两件事：配置里留的是引用还是 dataURL；写失败会不会明说。
+ */
+const imageMocks = vi.hoisted(() => ({
+  putStoredImage: vi.fn(async (kind: string) => `idb:img:${kind}:42:abc`),
+}));
+
+vi.mock("@/lib/image-store", () => ({
+  IMAGE_REF_PREFIX: "idb:",
+  isStoredImageRef: (value: string) => value.startsWith("idb:"),
+  peekStoredImage: () => null,
+  getStoredImage: async () => null,
+  deleteStoredImage: async () => {},
+  hasInlineImages: () => false,
+  migrateInlineImages: async () => null,
+  putStoredImage: imageMocks.putStoredImage,
+}));
+
 function readConfig() {
   return JSON.parse(window.localStorage.getItem(CONFIG_KEY) ?? "{}");
 }
@@ -272,6 +291,51 @@ describe("设置面板：背景", () => {
     await waitFor(() => expect(readConfig().wallpaper.source).toBe("none"));
   });
 
+  it("本地上传的图片写进 IndexedDB，配置里只留引用", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    await openTab("background");
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "bg.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("wallpaper-file"), { target: { files: [file] } });
+
+    await waitFor(() => expect(readConfig().wallpaper.source).toBe("local"));
+    expect(readConfig().wallpaper.value).toBe("idb:img:wallpaper:42:abc");
+    expect(readConfig().wallpaper.value).not.toContain("data:");
+  });
+
+  it("图片写不进本地存储时明确报错，不谎报成功", async () => {
+    imageMocks.putStoredImage.mockRejectedValueOnce(new Error("quota"));
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    await openTab("background");
+    const file = new File([new Uint8Array([1, 2, 3])], "big.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("wallpaper-file"), { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByTestId("toast").textContent).toContain("图片保存失败"));
+    expect(readConfig().wallpaper?.source ?? "none").not.toBe("local");
+  });
+
+  it("拒绝把 dataURL 当图片地址粘贴（避免重新撑爆 localStorage）", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    await openTab("background");
+    fireEvent.change(screen.getByTestId("wallpaper-url"), {
+      target: { value: "data:image/png;base64,AAAA" },
+    });
+    fireEvent.click(screen.getByTestId("wallpaper-url-apply"));
+    await waitFor(() => expect(screen.getByTestId("toast").textContent).toContain("http(s)"));
+  });
+
+  it("点「往前回溯」标题不会把偏移重置回今天", async () => {
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ background: { offset: 3 } }));
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    await openTab("background");
+
+    fireEvent.click(screen.getByText("往前回溯"));
+    await waitFor(() => {
+      const group = screen.getByTestId("background-offset");
+      expect(within(group).getByText("-3 天").getAttribute("aria-checked")).toBe("true");
+    });
+    expect(readConfig().background.offset).toBe(3);
+  });
+
   it("暗化与模糊滑杆可调", async () => {
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
     await openTab("background");
@@ -283,6 +347,38 @@ describe("设置面板：背景", () => {
     const blur = screen.getByTestId("wallpaper-blur") as HTMLInputElement;
     fireEvent.change(blur, { target: { value: "8" } });
     await waitFor(() => expect(readConfig().background.blur).toBe(8));
+  });
+});
+
+describe("设置面板：快捷跳转", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    imageMocks.putStoredImage.mockClear();
+  });
+
+  it("上传图标后存成引用，不把 dataURL 写进配置", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    await openTab("shortcuts");
+    fireEvent.click(screen.getByTestId("add-shortcut"));
+    await waitFor(() => expect(screen.getByTestId("shortcut-title")).toBeTruthy());
+
+    fireEvent.change(screen.getByTestId("shortcut-title"), { target: { value: "图床" } });
+    fireEvent.change(screen.getByTestId("shortcut-url"), { target: { value: "https://img.example.com" } });
+    pickRadio("shortcut-icon-kind", "上传图片");
+    await waitFor(() => expect(screen.getByTestId("shortcut-file")).toBeTruthy());
+
+    const file = new File([new Uint8Array([1, 2, 3])], "icon.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("shortcut-file"), { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByText("已选择本地图片")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("shortcut-save"));
+
+    await waitFor(() => {
+      const items = readConfig().groups[0].items;
+      const added = items[items.length - 1];
+      expect(added.title).toBe("图床");
+      expect(added.iconValue).toBe("idb:img:icon:42:abc");
+    });
   });
 });
 

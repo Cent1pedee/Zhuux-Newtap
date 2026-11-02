@@ -219,15 +219,12 @@ export const LIMITS = {
   quoteTimeoutMs: 3000,
   suggestTimeoutMs: 2500,
   wallpaperTimeoutMs: 8000,
-  /** 自定义壁纸体积上限（字节）：远程取图走 IndexedDB，上限宽一些 */
-  wallpaperMaxBytes: 8 * 1024 * 1024,
   /**
-   * 本地上传图片的体积上限。
+   * 图片体积上限（字节）：远程取图与本地自选共用。
    *
-   * 本地图片是以 dataURL 形式写进**配置**（localStorage）的，base64 会把体积放大到
-   * 约 1.37 倍，而 localStorage 整站配额通常只有 5MB 左右。8MB 的图转完是 10.7M 字符，
-   * 必然 QuotaExceeded —— 表现为「点了应用、界面也变了，刷新就没了」。
-   * 这里收到 3MB（≈4.1M 字符），给其余配置留足余量；更大的图请用远程 URL。
+   * 图片本体一律存 IndexedDB（配额按磁盘算），配置里只留几十字节的引用，
+   * 所以这里不必再为「localStorage 只有 5MB」妥协 —— 早先那条 3MB 的本地上限
+   * 是给「dataURL 写进配置」兜底的，图片搬进 IndexedDB 后已经取消。
    */
-  wallpaperLocalMaxBytes: 3 * 1024 * 1024,
+  wallpaperMaxBytes: 8 * 1024 * 1024,
 } as const;

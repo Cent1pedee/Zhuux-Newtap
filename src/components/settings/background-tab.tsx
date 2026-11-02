@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Field, Range, Segmented, Switch, TextInput } from "@/components/ui/primitives";
+import { Button, FieldGroup, Range, Segmented, Switch, TextInput } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
 
 /** 背景页签：每日壁纸、自定义图片、前景可读性 */
@@ -31,7 +31,7 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
           description="关闭后只剩纯渐变底色，第三方请求数降为 0。"
           testId="background-edge"
         />
-        <Field label="往前回溯" hint="0 = 今天；想看前几天的图可以往后调">
+        <FieldGroup label="往前回溯" hint="0 = 今天；想看前几天的图可以往后调">
           <Segmented
             options={[
               { value: "0", label: "今天" },
@@ -44,7 +44,7 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
             label="壁纸回溯天数"
             testId="background-offset"
           />
-        </Field>
+        </FieldGroup>
       </section>
 
       <section className="settings-section">
@@ -81,7 +81,7 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
           <Button onClick={clearWallpaper} size="sm" variant="ghost" testId="wallpaper-clear">
             移除图片
           </Button>
-          <span className="text-[11px] text-[var(--fg-subtle)]">本地图片小于 3MB，仅存本机</span>
+          <span className="text-[11px] text-[var(--fg-subtle)]">本地图片小于 8MB，仅存本机</span>
         </div>
       </section>
 

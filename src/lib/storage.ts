@@ -96,25 +96,44 @@ function hashString(input: string): string {
 }
 
 /**
- * 图片来源对应的缓存键。
+ * 内容寻址的缓存键：`<前缀>:<长度>:<内容哈希>`。
  *
  * 历史写法是 `wallpaper:${value}` —— value 是 dataURL 时键能到 10MB 级：
  * 每次渲染都要拼一次超长字符串，IndexedDB 也会把这个键原样存进去。
- * 改用「长度 + 内容哈希」，键长固定，同一个图仍然命同一个坑位。
+ * 现在键长固定，同一个内容仍然命同一个坑位（可去重）。
  */
-export function imageCacheKey(value: string): string {
-  return `wallpaper:${value.length}:${hashString(value)}`;
+export function contentCacheKey(prefix: string, value: string): string {
+  return `${prefix}:${value.length}:${hashString(value)}`;
 }
+
+export function imageCacheKey(value: string): string {
+  return contentCacheKey("wallpaper", value);
+}
+
+/**
+ * 单例连接。
+ *
+ * 原来每次 `cachePut` / `cacheGet` 都 open + close 一次：一排 12 个快捷图标
+ * 各自读一次图就是 12 次开库；更糟的是 2s 超时分支把 `settled` 置位后，
+ * 迟到的 `onsuccess` 被直接丢弃 —— 那个连接永远不会被关掉。
+ * 现在连接复用，并在 `onversionchange` 时主动关闭让位给新版本。
+ */
+let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
   if (!isBrowser() || typeof indexedDB === "undefined") return Promise.resolve(null);
-  return new Promise((resolve) => {
+  if (dbPromise) return dbPromise;
+
+  const attempt = new Promise<IDBDatabase | null>((resolve) => {
     let settled = false;
     const done = (db: IDBDatabase | null) => {
-      if (!settled) {
-        settled = true;
-        resolve(db);
+      if (settled) {
+        // 超时之后才打开成功的连接必须在这里关掉，否则就是泄漏
+        db?.close();
+        return;
       }
+      settled = true;
+      resolve(db);
     };
     try {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -122,7 +141,14 @@ function openDb(): Promise<IDBDatabase | null> {
         const db = req.result;
         if (!db.objectStoreNames.contains(STORE_IMAGES)) db.createObjectStore(STORE_IMAGES);
       };
-      req.onsuccess = () => done(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
+        };
+        done(db);
+      };
       req.onerror = () => done(null);
       req.onblocked = () => done(null);
       // 隐私模式下 open 可能永久挂起，2s 后放弃
@@ -130,30 +156,37 @@ function openDb(): Promise<IDBDatabase | null> {
     } catch {
       done(null);
     }
+  }).then((db) => {
+    // 拿不到就允许下次重试，别把失败结果缓存一辈子
+    if (!db) dbPromise = null;
+    return db;
   });
+
+  dbPromise = attempt;
+  return attempt;
 }
 
-export async function cachePut(key: string, value: string): Promise<void> {
+/** 写缓存。返回是否真的写进去了 —— 调用方需要据此提示用户，不能静默失败 */
+export async function cachePut(key: string, value: string): Promise<boolean> {
   const db = await openDb();
-  if (!db) return;
-  await new Promise<void>((resolve) => {
+  if (!db) return false;
+  return new Promise<boolean>((resolve) => {
     try {
       const tx = db.transaction(STORE_IMAGES, "readwrite");
       tx.objectStore(STORE_IMAGES).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-      tx.onabort = () => resolve();
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
     } catch {
-      resolve();
+      resolve(false);
     }
   });
-  db.close();
 }
 
 export async function cacheGet(key: string): Promise<string | null> {
   const db = await openDb();
   if (!db) return null;
-  const result = await new Promise<string | null>((resolve) => {
+  return new Promise<string | null>((resolve) => {
     try {
       const tx = db.transaction(STORE_IMAGES, "readonly");
       const req = tx.objectStore(STORE_IMAGES).get(key);
@@ -163,8 +196,22 @@ export async function cacheGet(key: string): Promise<string | null> {
       resolve(null);
     }
   });
-  db.close();
-  return result;
+}
+
+export async function cacheDelete(key: string): Promise<void> {
+  const db = await openDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(STORE_IMAGES, "readwrite");
+      tx.objectStore(STORE_IMAGES).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
 }
 
 export async function cacheClear(): Promise<void> {
@@ -176,11 +223,11 @@ export async function cacheClear(): Promise<void> {
       tx.objectStore(STORE_IMAGES).clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
     } catch {
       resolve();
     }
   });
-  db.close();
 }
 
 /** 一键清除全部本地数据（PRD 9.3） */
