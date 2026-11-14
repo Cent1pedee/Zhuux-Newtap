@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import { Button, Switch, TextInput } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
 
@@ -89,7 +90,7 @@ export function PrivacyTab({ s, onClear }: { s: SettingsController; onClear: () 
           <Button onClick={() => importRef.current?.click()} size="sm" testId="import-config">
             导入配置
           </Button>
-          <input
+          <Input
             ref={importRef}
             type="file"
             accept="application/json,.json"

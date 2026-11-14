@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import { Button, FieldGroup, Range, Segmented, Switch, TextInput } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
 
@@ -70,7 +71,7 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
           <Button onClick={() => wallpaperFileRef.current?.click()} size="sm" testId="wallpaper-upload">
             选择本地图片
           </Button>
-          <input
+          <Input
             ref={wallpaperFileRef}
             type="file"
             accept="image/*"

@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeEngine, orderedEngines } from "@/config/defaults";
@@ -316,7 +317,7 @@ export function SearchBox() {
             </AnimatePresence>
           </div>
 
-          <input
+          <Input
             ref={inputRef}
             type="text"
             value={query}

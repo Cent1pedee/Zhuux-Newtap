@@ -2,6 +2,7 @@
 
 import { PROVINCES, citiesOf } from "@/config/cities";
 import { Button, ChevronDown, Field, Segmented, Switch, TextInput } from "@/components/ui/primitives";
+import { NativeSelect } from "@/components/ui/native-select";
 import type { SettingsController } from "@/components/settings/controller";
 
 /** 模块页签：时间 / 问候 / 便签 / 天气 / 一言 */
@@ -91,7 +92,8 @@ export function ModulesTab({ s }: { s: SettingsController }) {
               <span className="mb-1.5 block text-[13px] font-medium">城市</span>
               <div className="grid grid-cols-2 gap-1.5">
                 <div className="weather-select-wrap">
-                  <select
+                  <NativeSelect
+                    withWrapper={false}
                     aria-label="省份"
                     data-testid="weather-province"
                     value={draftProvince}
@@ -104,11 +106,12 @@ export function ModulesTab({ s }: { s: SettingsController }) {
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                   <ChevronDown />
                 </div>
                 <div className="weather-select-wrap">
-                  <select
+                  <NativeSelect
+                    withWrapper={false}
                     aria-label="城市"
                     data-testid="weather-city-select"
                     value={cities.some((c) => c.name === config.weather.city) ? config.weather.city : ""}
@@ -122,7 +125,7 @@ export function ModulesTab({ s }: { s: SettingsController }) {
                         {c.name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                   <ChevronDown />
                 </div>
               </div>

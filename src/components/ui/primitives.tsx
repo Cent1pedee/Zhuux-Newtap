@@ -1,25 +1,65 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+/**
+ * 兼容层：把 shadcn/ui 官方组件包装成项目原有的 API。
+ *
+ * 为什么需要这一层：
+ *  - 官方 Dialog / Switch / RadioGroup / Slider / Input / Button / Label / sonner 的
+ *    props 与本项目调用方（7 个设置页签、快捷项编辑器、命令面板…）完全不一样；
+ *    直接替换会连锁改动十几处业务代码，也违背「对外接口保持一致」。
+ *  - 这里保留每一个导出名、每一个 prop、每一个 data-testid 与每一段类名，
+ *    只把内部实现换成 shadcn 组件，由 Radix 提供焦点陷阱 / Esc / 滚动锁 / aria 语义，
+ *    由 cn() 保证项目原有类名覆盖官方默认样式 —— 因此页面样式不变。
+ *
+ * 例外（见各自注释）：Slider 的 DOM 由原生 input 变成 Radix 的 div，
+ * 因此 E2E 里对它的 Playwright 交互从 fill() 改成键盘操作；弹窗动画由 motion 弹簧
+ * 换成 shadcn 的 data-[state] CSS 动画（视觉等价，reduced-motion 下统一禁用）。
+ */
+
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { lockBodyScroll } from "@/lib/scroll-lock";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Switch as ShadcnSwitch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button as ShadcnButton } from "@/components/ui/button";
 import { PERSIST_ERROR_EVENT } from "@/lib/storage";
+import { cn } from "@/lib/utils";
 
 /* ==========================================================================
-   模态框：无障碍 dialog（焦点陷阱 + Esc 关闭 + 遮罩点击关闭 + 滚动锁定）
+   模态框：shadcn Dialog（Radix 提供焦点陷阱 / Esc 层叠 / 滚动锁 / 焦点恢复）
    ========================================================================== */
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+/** 官方 DialogContent 的固定定位 + 默认内距都要清掉，换回项目原有的玻璃面板配方 */
+const DIALOG_PANEL_CLASS =
+  "glass-strong flex flex-col overflow-hidden rounded-[var(--radius-card)] border-0 bg-transparent p-0 shadow-none gap-0 outline-none " +
+  "max-w-none focus-visible:ring-0";
 
-/*
- * 打开中的弹窗栈。
- *
- * 设置面板里点「添加」会再叠一层编辑弹窗，两层的 Esc / Tab 监听都挂在 document 上，
- * 于是按一次 Esc 会把两层一起关掉。用栈记住顺序，只有栈顶那层响应键盘。
- */
-const modalStack: symbol[] = [];
+const DIALOG_OVERLAY_CLASS = "bg-black/55 backdrop-blur-[3px] border-0";
+
+type OverlayProps = React.ComponentProps<typeof DialogOverlay>;
 
 export function Modal({
   open,
@@ -38,195 +78,118 @@ export function Modal({
   onClose: () => void;
   title: string;
   description?: string;
-  /** 可选：只有确认类弹窗把描述交给 header 就够了，正文留空时不再渲染一块空 body */
   children?: React.ReactNode;
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg";
   reduceMotion?: boolean;
   labelledBy?: string;
-  /** 覆盖内容区默认样式（设置面板需要「只有右侧内容滚动」的自定义布局） */
   bodyClassName?: string;
-  /**
-   * 固定高度：面板高度不再随内容多少伸缩。
-   * 设置面板各分类内容长短差异很大，只用 max-h 会导致每次切换页签整个弹窗跳一下高度，
-   * 所以这里给出确定高度 —— 短内容留白、长内容在内容区内部滚动。
-   */
   fixedHeight?: boolean;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const restoreRef = useRef<HTMLElement | null>(null);
   const autoId = useId();
   const titleId = labelledBy ?? `${autoId}-title`;
   const descId = `${autoId}-desc`;
 
   /*
-   * 必须挂到 document.body 上（portal）。
-   *
-   * 历史 bug：设置面板里的「快捷跳转」页签会再开一个编辑弹窗，而这个弹窗原先渲染在
-   * 设置弹窗内部。祖先 `.glass-strong` 同时带 `backdrop-filter` 与 `overflow: hidden`，
-   * 于是子元素的 `position: fixed` 不再是相对视口，而是相对这块玻璃定位 —— 编辑弹窗
-   * 被塞进 640px 高的小盒子里，标题被顶到遮罩下面看不见（实测标题点命中的是
-   * `.absolute inset-0 bg-black/55 backdrop-blur-[3px]`）。
-   * 走 portal 之后 fixed 重新相对视口，嵌套弹窗才和顶层弹窗行为一致。
-   */
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  /*
-   * onClose 用 ref 保存，effect 只依赖 open。
-   *
-   * 历史 bug：调用方普遍传内联箭头 `onClose={() => setOpen(false)}`，每次渲染都是
-   * 新函数；而配置变更（改任何设置项）都会让上层重渲染 —— effect 于是重跑，
-   * 里面那段「聚焦第一个可聚焦元素」把焦点从正在输入的框抢到关闭按钮上，
-   * 表现就是「输入一个字符就被强行跳出」。
+   * onClose 用 ref 保存：调用方普遍传内联箭头函数，每次上层渲染都是新引用。
+   * Radix 的 onOpenChange 直接读 ref，不会因为重渲染重建监听或抢走输入焦点。
    */
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  // Esc 关闭 + Tab 焦点陷阱
+  /*
+   * 焦点还原：本项目的弹窗由外部 state 控制，没有 shadcn 的 DialogTrigger，
+   * 因此 Radix 的 triggerRef 是空的，关闭后不会把焦点还给触发按钮。
+   * 在 render 阶段（Radix 的 FocusScope 抢焦点之前）记下当前焦点，
+   * 关闭后下一帧还回去 —— 与替换前 Modal 的行为一致。
+   */
+  const restoreRef = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (!wasOpen.current && open) {
+    restoreRef.current = typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null);
+  }
+  wasOpen.current = open;
+
   useEffect(() => {
-    if (!open) return;
-    restoreRef.current = document.activeElement as HTMLElement | null;
-
-    const token = Symbol("modal");
-    modalStack.push(token);
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      // 只让最上层弹窗响应：否则嵌套时一次 Esc 会关掉两层
-      if (modalStack[modalStack.length - 1] !== token) return;
-
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const nodes = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.offsetParent !== null || el === document.activeElement,
-      );
-      if (nodes.length === 0) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown, true);
-    // 引用计数锁：与命令面板等其它浮层共用，谁最后关谁还原（见 lib/scroll-lock.ts）
-    const unlockScroll = lockBodyScroll();
-
-    const timer = window.setTimeout(() => {
-      const node = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-      node?.focus();
-    }, 30);
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      const at = modalStack.indexOf(token);
-      if (at >= 0) modalStack.splice(at, 1);
-      unlockScroll();
-      window.clearTimeout(timer);
-      restoreRef.current?.focus?.();
-    };
-    // 故意只依赖 open：见上面 onCloseRef 的注释
+    if (open) return;
+    const node = restoreRef.current;
+    restoreRef.current = null;
+    if (!node || !document.contains(node)) return;
+    const raf = requestAnimationFrame(() => node.focus());
+    return () => cancelAnimationFrame(raf);
   }, [open]);
 
-  const widthClass = size === "sm" ? "max-w-sm" : size === "lg" ? "max-w-3xl" : "max-w-xl";
-  // 固定高度模式：用确定高度替代 max-h，切换分类时面板不再跳动
+  const widthClass =
+    size === "sm"
+      ? "max-w-sm sm:max-w-sm"
+      : size === "lg"
+        ? "max-w-3xl sm:max-w-3xl"
+        : "max-w-xl sm:max-w-xl";
   const heightClass = fixedHeight ? "h-[min(640px,84dvh)]" : "max-h-[86dvh]";
 
-  // 首帧还没挂载（SSR / 静态预渲染）时不能碰 document
-  if (!mounted) return null;
+  const overlayProps = {
+    "data-testid": "modal-overlay",
+    className: DIALOG_OVERLAY_CLASS,
+    children: <span data-testid="modal-backdrop" className="absolute inset-0" aria-hidden="true" />,
+  } as unknown as OverlayProps;
 
-  return createPortal(
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: reduceMotion ? 0 : 0.18 }}
-          data-testid="modal-overlay"
-        >
-          <div
-            className="absolute inset-0 bg-black/55 backdrop-blur-[3px]"
-            onClick={onClose}
-            aria-hidden="true"
-            data-testid="modal-backdrop"
-          />
-          <motion.div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            aria-describedby={description ? descId : undefined}
-            className={`glass-strong relative z-10 flex ${heightClass} w-full ${widthClass} flex-col overflow-hidden rounded-[var(--radius-card)]`}
-            initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.94, y: reduceMotion ? 0 : 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : 8 }}
-            transition={
-              reduceMotion
-                ? { duration: 0 }
-                : { type: "spring", stiffness: 380, damping: 32, mass: 0.9, opacity: { duration: 0.18 } }
-            }
-          >
-            <header className="flex items-start justify-between gap-4 border-b border-[var(--glass-border)] px-5 py-4">
-              <div>
-                <h2 id={titleId} className="text-[15px] font-semibold tracking-tight">
-                  {title}
-                </h2>
-                {description ? (
-                  <p id={descId} className="mt-1 text-xs leading-relaxed text-[var(--fg-subtle)]">
-                    {description}
-                  </p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="关闭弹窗"
-                className="grid size-8 shrink-0 place-items-center rounded-lg text-[var(--fg-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--fg)]"
-                data-testid="modal-close"
-              >
-                <CloseIcon />
-              </button>
-            </header>
-            {children ? (
-              <div className={bodyClassName ?? "thin-scroll flex-1 overflow-y-auto px-5 py-4"}>{children}</div>
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next) onCloseRef.current(); }}>
+      <DialogContent
+        showCloseButton={false}
+        overlayProps={overlayProps}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descId : undefined}
+        data-reduce-motion={reduceMotion ? "true" : undefined}
+        className={cn(DIALOG_PANEL_CLASS, heightClass, widthClass, "w-full")}
+      >
+        <DialogHeader className="flex flex-row shrink-0 items-start justify-between gap-4 border-b border-[var(--glass-border)] px-5 py-4 text-left">
+          <div>
+            <DialogTitle id={titleId} className="text-[15px] font-semibold leading-normal tracking-tight">
+              {title}
+            </DialogTitle>
+            {description ? (
+              <DialogDescription id={descId} className="mt-1 text-xs leading-relaxed text-[var(--fg-subtle)]">
+                {description}
+              </DialogDescription>
             ) : null}
-            {footer ? (
-              <footer className="flex items-center justify-end gap-2 border-t border-[var(--glass-border)] px-5 py-3">
-                {footer}
-              </footer>
-            ) : null}
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>,
-    document.body,
+          </div>
+          <DialogClose asChild>
+            <button
+              type="button"
+              aria-label="关闭弹窗"
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-[var(--fg-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--fg)] focus-visible:ring-0"
+              data-testid="modal-close"
+            >
+              <CloseIcon />
+            </button>
+          </DialogClose>
+        </DialogHeader>
+        {children ? (
+          <div className={bodyClassName ?? "thin-scroll flex-1 overflow-y-auto px-5 py-4"}>{children}</div>
+        ) : null}
+        {footer ? (
+          <DialogFooter className="flex shrink-0 flex-row items-center justify-end gap-2 border-t border-[var(--glass-border)] px-5 py-3 sm:flex-row sm:justify-end">
+            {footer}
+          </DialogFooter>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 
 /* ==========================================================================
-   Toast：轻提示（所有操作反馈）
+   Toast：shadcn 官方方案 sonner，用 toast.custom 保持原气泡外观与 data-testid
    ========================================================================== */
 
-type Toast = { id: number; text: string; tone: "info" | "success" | "error" };
-type ToastContextValue = { push: (text: string, tone?: Toast["tone"]) => void };
+type ToastTone = "info" | "success" | "error";
+type ToastContextValue = { push: (text: string, tone?: ToastTone) => void };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 /**
- * 系统级「减少动效」偏好。
- * 之前 ToastProvider 只在调用方显式传 reduceMotion 时才降级，而 layout 里没有传，
- * 于是「减少动效」开着、页面其他动画全停了，提示气泡还在弹跳 —— 跨端（尤其
- * 开了无障碍选项的 iOS / Android）表现不一致。这里自己读一次系统偏好兜底。
+ * 系统级「减少动效」偏好兜底（layout 里没给 ToastProvider 传 reduceMotion，
+ * 所以必须自己读一次，否则页面其它动画停了、气泡还在弹）。
  */
 function useSystemReduceMotion(): boolean {
   const [reduce, setReduce] = useState(false);
@@ -243,51 +206,55 @@ function useSystemReduceMotion(): boolean {
   return reduce;
 }
 
-export function ToastProvider({
-  children,
-  reduceMotion,
-}: {
-  children: React.ReactNode;
-  /** 不传则跟随系统偏好；显式传入（通常是配置里的 a11y.reducedMotion）优先 */
-  reduceMotion?: boolean;
-}) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const seq = useRef(0);
-  const systemReduce = useSystemReduceMotion();
-  const reduce = reduceMotion ?? systemReduce;
-
-  /**
-   * 把 Toast 抬到底部 Dock 之上。
-   * Dock 的高度随视口变化：桌面一行 56px，390px 手机折成两行 110px，
-   * 横屏又回到一行。写死一个 bottom 值必然在某个端上压住图标，
-   * 所以实测 .dock-shell 的高度（含它自己的内边距与安全区），再留 8px 间隙。
-   * 没有 Dock 的页面（组件测试 / 独立弹窗）保持 CSS 里的 92px 兜底。
-   */
-  const [toastBottom, setToastBottom] = useState(0);
-
+/** 气泡与 Dock 之间的动态间距：桌面一行 56px、窄屏两行 110px，写死会压住图标 */
+function useDockOffset(): number {
+  const [offset, setOffset] = useState(0);
   useEffect(() => {
     const dock = document.querySelector(".dock-shell");
     if (!dock || typeof ResizeObserver === "undefined") return;
-    const apply = () => setToastBottom(Math.round(dock.getBoundingClientRect().height) + 8);
+    const apply = () => setOffset(Math.round(dock.getBoundingClientRect().height) + 8);
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(dock);
     return () => ro.disconnect();
   }, []);
+  return offset;
+}
 
-  const push = useCallback((text: string, tone: Toast["tone"] = "info") => {
-    const id = (seq.current += 1);
-    setToasts((prev) => [...prev.slice(-2), { id, text, tone }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 2600);
-  }, []);
+export function ToastProvider({
+  children,
+  reduceMotion,
+}: {
+  children: React.ReactNode;
+  reduceMotion?: boolean;
+}) {
+  const systemReduce = useSystemReduceMotion();
+  const reduce = reduceMotion ?? systemReduce;
+  const dockOffset = useDockOffset();
 
-  /**
-   * 配置写盘失败的提示。
-   * ConfigProvider 在 `saveConfig()` 返回 false 时广播事件（它自己拿不到 UI），
-   * 这里接住并显示 —— 否则「改了设置、刷新就回退」会变成一个无法解释的 bug。
-   */
+  const push = useCallback((text: string, tone: ToastTone = "info") => {
+    const dot = tone === "error" ? "#f87171" : tone === "success" ? "#34d399" : "var(--accent)";
+    toast.custom(
+      () => (
+        <div
+          className="glass-strong pointer-events-auto max-w-[90vw] rounded-full px-4 py-2 text-xs shadow-lg"
+          data-testid="toast"
+          data-reduce-motion={reduce ? "true" : undefined}
+          role="status"
+        >
+          <span
+            aria-hidden="true"
+            className="mr-1.5 inline-block size-1.5 rounded-full align-middle"
+            style={{ background: dot }}
+          />
+          {text}
+        </div>
+      ),
+      { duration: 2600, unstyled: true },
+    );
+  }, [reduce]);
+
+  /** 配置写盘失败的提示：ConfigProvider 自己拿不到 UI，只广播事件 */
   useEffect(() => {
     const onPersistError = () => {
       push("本地存储写入失败，设置可能无法保存：请清理浏览器存储，或改用图片地址而非本地上传", "error");
@@ -296,38 +263,28 @@ export function ToastProvider({
     return () => window.removeEventListener(PERSIST_ERROR_EVENT, onPersistError);
   }, [push]);
 
+  /*
+   * sonner 的 toast 队列是模块级全局状态，不会随组件卸载清空。
+   * 原先 ToastProvider 用局部 state，组件一卸载气泡自然消失；换成官方方案后
+   * 不清会在下一次挂载（尤其是组件测试之间）把上一轮的提示重新渲染出来。
+   */
+  useEffect(
+    () => () => {
+      toast.dismiss();
+    },
+    [],
+  );
+
   return (
     <ToastContext.Provider value={{ push }}>
       {children}
-      <div
-        className="toast-stack pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2"
-        style={toastBottom ? ({ "--toast-bottom": `${toastBottom}px` } as React.CSSProperties) : undefined}
-        role="status"
-        aria-live="polite"
-      >
-        <AnimatePresence>
-          {toasts.map((t) => (
-            <motion.div
-              key={t.id}
-              initial={{ opacity: 0, y: reduce ? 0 : 10, scale: reduce ? 1 : 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: reduce ? 0 : 6 }}
-              transition={{ duration: reduce ? 0 : 0.18 }}
-              className="glass-strong pointer-events-auto max-w-[90vw] rounded-full px-4 py-2 text-xs shadow-lg"
-              data-testid="toast"
-            >
-              <span
-                aria-hidden="true"
-                className="mr-1.5 inline-block size-1.5 rounded-full align-middle"
-                style={{
-                  background: t.tone === "error" ? "#f87171" : t.tone === "success" ? "#34d399" : "var(--accent)",
-                }}
-              />
-              {t.text}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      <Toaster
+        position="bottom-center"
+        visibleToasts={3}
+        duration={2600}
+        offset={dockOffset || 92}
+        gap={8}
+      />
     </ToastContext.Provider>
   );
 }
@@ -342,18 +299,7 @@ export function useToast(): ToastContextValue {
    基础控件
    ========================================================================== */
 
-/**
- * 开关本体（不含文字说明）。
- *
- * 拆出来是因为设置里有两处用法：带标题与描述的整行开关（`Switch`），
- * 以及引擎列表里那种只有 32×18 的一行内小开关。原来后者在 `search-tab.tsx`
- * 里被复制了一份（MiniSwitch），两边改一处忘一处 —— 现在共用同一个组件。
- *
- * 关于尺寸：原先是 h-5 w-9 + 1px 边框 + size-4 滑块，轨道内宽只有 34px、
- * 滑块 16px，打开态两侧各剩 1px，深色背景下那圈 border 透出来像「滑块被卡在灰框里」。
- * 现在不用边框，用「底色深浅」表达开/关：md 34×20 / 滑块 16 / 位移 14，
- * sm 32×18 / 滑块 14 / 位移 14。
- */
+/** 开关本体：shadcn Switch（Radix），尺寸与配色由 .sp-switch 系列 CSS 锁回原样 */
 export function SwitchButton({
   checked,
   onChange,
@@ -369,40 +315,20 @@ export function SwitchButton({
   size?: "md" | "sm";
   disabled?: boolean;
 }) {
-  const small = size === "sm";
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
+    <ShadcnSwitch
+      checked={checked}
+      onCheckedChange={onChange}
       aria-label={label}
       disabled={disabled}
-      onClick={() => onChange(!checked)}
       data-testid={testId}
       data-state={checked ? "on" : "off"}
-      className={`relative shrink-0 rounded-full transition-colors duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
-        small ? "h-[18px] w-8" : "mt-0.5 h-5 w-[34px]"
-      } ${checked ? "" : "bg-[color-mix(in_srgb,var(--fg)_16%,transparent)]"}`}
-      style={
-        checked
-          ? {
-              background: "var(--accent)",
-              boxShadow: `0 0 0 ${small ? "2.5px" : "3px"} color-mix(in srgb, var(--accent) 16%, transparent)`,
-            }
-          : undefined
-      }
-    >
-      <span
-        className={`absolute rounded-full bg-white transition-transform duration-200 ease-out ${
-          small ? "top-[2px] left-[2px] size-3.5" : "top-0.5 left-0.5 size-4"
-        } ${checked ? "translate-x-[14px]" : "translate-x-0"}`}
-        style={{ boxShadow: small ? "0 1px 2px rgba(0,0,0,0.35)" : "0 1px 3px rgba(0,0,0,0.35)" }}
-      />
-    </button>
+      className={cn("sp-switch shrink-0", size === "sm" ? "sp-switch--sm" : "sp-switch--md")}
+    />
   );
 }
 
-/** 带标题与描述的整行开关（点标题文字也能切换 —— label 里只有这一个可标注控件） */
+/** 带标题与描述的整行开关：用 shadcn Label + htmlFor 保留「点文字也能切换」 */
 export function Switch({
   checked,
   onChange,
@@ -419,7 +345,7 @@ export function Switch({
   testId?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 py-2">
+    <Label className="flex cursor-pointer items-start justify-between gap-4 gap-0 py-2 text-inherit font-normal leading-normal">
       <span className="min-w-0">
         <span className="block text-[13px] font-medium leading-5">{label}</span>
         {description ? (
@@ -427,7 +353,7 @@ export function Switch({
         ) : null}
       </span>
       <SwitchButton checked={checked} onChange={onChange} label={label} disabled={disabled} testId={testId} />
-    </label>
+    </Label>
   );
 }
 
@@ -449,27 +375,22 @@ export function ChevronDown({ className = "weather-select-chevron" }: { classNam
   );
 }
 
-/**
- * 单控件字段：用 <label> 包住，点标题文字 = 聚焦/切换那个控件。
- * 只能用在「里面确实只有一个可标注控件」的场景（TextInput / Range）。
- */
+/** 单控件字段：shadcn Label 包住，点标题 = 聚焦/切换那个控件 */
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <label className="block py-2">
+    <Label className="block gap-0 py-2 text-inherit font-normal leading-normal">
       <span className="mb-1.5 block text-[13px] font-medium leading-5">{label}</span>
       {children}
       {hint ? <span className="mt-1 block text-[11px] text-[var(--fg-subtle)]">{hint}</span> : null}
-    </label>
+    </Label>
   );
 }
 
 /**
  * 多控件字段：视觉与 Field 一致，但**不用 <label>**。
- *
- * <label> 的激活行为会转发给「第一个可标注后代」。里面放 Segmented（一排按钮）
- * 或色板时，点标题文字等于点了第一个选项 —— 实测：点「往前回溯」会把壁纸
- * 重置回「今天」，点「图标来源」会把自定义图标重置成自动图标，且没有任何提示。
- * 这类容器只能用 role="group" + aria-labelledby。
+ * <label> 会把点击转发给第一个可标注后代：里面放 Segmented / 色板时，点标题
+ * 等于点了第一个选项（实测把壁纸重置回「今天」）。只能用 role="group"。
+ * shadcn 没有对应组件，这里用语义容器 + shadcn Label 呈现标题。
  */
 export function FieldGroup({
   label,
@@ -483,9 +404,11 @@ export function FieldGroup({
   const id = useId();
   return (
     <div role="group" aria-labelledby={id} className="block py-2">
-      <span id={id} className="mb-1.5 block text-[13px] font-medium leading-5">
-        {label}
-      </span>
+      <Label asChild>
+        <span id={id} className="mb-1.5 block gap-0 py-0 text-[13px] font-medium leading-5 text-inherit">
+          {label}
+        </span>
+      </Label>
       {children}
       {hint ? <span className="mt-1 block text-[11px] text-[var(--fg-subtle)]">{hint}</span> : null}
     </div>
@@ -512,10 +435,9 @@ export function TextInput({
   invalid?: boolean;
 }) {
   return (
-    /* 外层 .glow-field 提供 Magic UI Glow Effect：聚焦时渐变描边 + 柔光，
-       原生 input 上无法画 ::after，故用一层 span 承载 */
+    /* 外层 .glow-field 提供 Magic UI Glow Effect：聚焦时渐变描边 + 柔光 */
     <span className="glow-field block">
-      <input
+      <Input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -524,7 +446,11 @@ export function TextInput({
         aria-label={ariaLabel ?? placeholder ?? "输入框"}
         aria-invalid={invalid || undefined}
         data-testid={testId}
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--glass-border)] bg-[var(--input-bg)] px-3 py-2 text-[13px] outline-none transition-colors placeholder:text-[var(--fg-subtle)] focus:border-transparent"
+        className={cn(
+          "h-auto w-full rounded-[var(--radius-sm)] border border-[var(--glass-border)] bg-[var(--input-bg)] px-3 py-2 text-[13px] shadow-none outline-none transition-colors",
+          "placeholder:text-[var(--fg-subtle)] selection:bg-transparent",
+          "focus:border-transparent focus-visible:border-transparent focus-visible:ring-0",
+        )}
       />
     </span>
   );
@@ -550,27 +476,29 @@ export function Button({
   ariaLabel?: string;
 }) {
   const base =
-    "inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-45";
+    "inline-flex shrink items-center justify-center gap-1.5 rounded-[var(--radius-sm)] font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-45 h-auto focus-visible:ring-0 focus-visible:border-transparent";
   const sizes = size === "sm" ? "px-2.5 py-1.5 text-[12px]" : "px-3.5 py-2 text-[13px]";
   const variants: Record<string, string> = {
-    primary: "text-white hover:brightness-110 active:brightness-95",
+    primary: "text-white hover:brightness-110 active:brightness-95 hover:bg-transparent",
     secondary:
       "border border-[var(--glass-border)] bg-[var(--input-bg)] text-[var(--fg)] hover:bg-[var(--hover-bg)]",
     ghost: "text-[var(--fg-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)]",
     danger: "border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20",
   };
   return (
-    <button
+    <ShadcnButton
       type={type}
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
       data-testid={testId}
-      className={`${base} ${sizes} ${variants[variant]}`}
+      variant="ghost"
+      size="sm"
+      className={cn("bg-transparent whitespace-normal", base, sizes, variants[variant])}
       style={variant === "primary" ? { background: "var(--accent)" } : undefined}
     >
       {children}
-    </button>
+    </ShadcnButton>
   );
 }
 
@@ -588,31 +516,29 @@ export function Segmented<T extends string>({
   testId?: string;
 }) {
   return (
-    <div
-      role="radiogroup"
+    <RadioGroup
+      value={value}
+      onValueChange={(v) => onChange(v as T)}
       aria-label={label}
       data-testid={testId}
-      className="inline-flex rounded-[var(--radius-sm)] border border-[var(--glass-border)] bg-[var(--input-bg)] p-0.5"
+      className="sp-segmented inline-flex flex-row gap-0 rounded-[var(--radius-sm)] border border-[var(--glass-border)] bg-[var(--input-bg)] p-0.5"
     >
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(opt.value)}
-            className={`rounded-[var(--radius-xs)] px-2.5 py-1 text-[12px] transition-colors ${
-              active ? "text-white" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
-            }`}
-            style={active ? { background: "var(--accent)" } : undefined}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
+      {options.map((opt) => (
+        <RadioGroupItem
+          key={opt.value}
+          value={opt.value}
+          className={cn(
+            "sp-segmented-item aspect-auto size-auto shrink-0 rounded-[var(--radius-xs)] border-0 px-2.5 py-1 text-[12px] shadow-none transition-colors",
+            "focus-visible:ring-0 focus-visible:border-transparent",
+            opt.value === value ? "text-white" : "text-[var(--fg-muted)] hover:text-[var(--fg)]",
+            "[&_[data-slot='radio-group-indicator']]:hidden",
+          )}
+          style={opt.value === value ? { background: "var(--accent)" } : undefined}
+        >
+          {opt.label}
+        </RadioGroupItem>
+      ))}
+    </RadioGroup>
   );
 }
 
@@ -636,27 +562,25 @@ export function Range({
   testId?: string;
 }) {
   return (
-    <label className="block py-2">
-      <span className="mb-1 flex items-center justify-between text-[13px] font-medium leading-5">
-        {label}
+    <div className="block py-2">
+      <div className="mb-1 flex items-center justify-between text-[13px] font-medium leading-5">
+        <span>{label}</span>
         <span className="font-mono text-[11px] text-[var(--fg-subtle)]">
           {value}
           {suffix}
         </span>
-      </span>
-      <input
-        type="range"
+      </div>
+      <Slider
+        value={[value]}
         min={min}
         max={max}
         step={step}
-        value={value}
-        aria-label={label}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onValueChange={(next) => onChange(next[0] ?? value)}
+        thumbLabel={label}
         data-testid={testId}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--input-bg)] accent-[var(--accent)]"
-        style={{ accentColor: "var(--accent)" }}
+        className="sp-slider h-1.5 w-full cursor-pointer"
       />
-    </label>
+    </div>
   );
 }
 
@@ -681,28 +605,34 @@ export function ConfirmDialog({
   onCancel: () => void;
   reduceMotion?: boolean;
 }) {
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
   return (
-    <Modal
-      open={open}
-      onClose={onCancel}
-      title={title}
-      description={description}
-      size="sm"
-      reduceMotion={reduceMotion}
-      footer={
-        <>
-          <Button onClick={onCancel} testId="confirm-cancel">
-            {cancelText}
-          </Button>
-          <Button onClick={onConfirm} variant={danger ? "danger" : "primary"} testId="confirm-ok">
-            {confirmText}
-          </Button>
-        </>
-      }
-    >
-      {/* 描述只由 Modal 的 header 渲染一次：原先这里又抄了一遍 <p>{description}</p>，
-          同一句话在弹窗里出现两次，视觉重复、读屏也会被 aria-describedby + 正文念两遍 */}
-    </Modal>
+    <AlertDialog open={open} onOpenChange={(next) => { if (!next) onCancelRef.current(); }}>
+      <AlertDialogContent
+        size="sm"
+        data-reduce-motion={reduceMotion ? "true" : undefined}
+        className={cn(DIALOG_PANEL_CLASS, "max-w-sm w-full")}
+      >
+        <AlertDialogHeader className="flex shrink-0 flex-col gap-0 border-b border-[var(--glass-border)] px-5 py-4 text-left">
+          <AlertDialogTitle className="text-[15px] font-semibold leading-normal tracking-tight">{title}</AlertDialogTitle>
+          <AlertDialogDescription className="mt-1 text-xs leading-relaxed text-[var(--fg-subtle)]">
+            {description}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex shrink-0 flex-row items-center justify-end gap-2 border-t border-[var(--glass-border)] px-5 py-3 sm:flex-row sm:justify-end">
+          <AlertDialogCancel asChild>
+            <Button testId="confirm-cancel">{cancelText}</Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button onClick={onConfirm} variant={danger ? "danger" : "primary"} testId="confirm-ok">
+              {confirmText}
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

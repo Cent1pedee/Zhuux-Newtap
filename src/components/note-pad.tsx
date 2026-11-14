@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { EASE_OUT_CUBIC, ENTRANCE_DELAY, fadeUp } from "@/lib/motion";
+import { Textarea } from "@/components/ui/textarea";
 
 const MAX_LEN = 2000;
 
@@ -141,7 +142,7 @@ export function NotePad() {
       </div>
 
       {/* 输入区：铺在卡片上，聚焦时浮出一圈内发光 */}
-      <textarea
+      <Textarea
         ref={areaRef}
         value={draft}
         onChange={(e) => onChange(e.target.value)}

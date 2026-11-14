@@ -631,7 +631,12 @@ test.describe("背景与主题", () => {
     await page.getByTestId("background-edge").click();
     await expect(page.getByTestId("background-edge")).toHaveAttribute("aria-checked", "false");
 
-    await page.getByTestId("wallpaper-dim").fill("60");
+    // shadcn/ui Slider 是 Radix thumb（role=slider），没有原生 input 可 fill；
+    // End → 70，再左移 10 格 = 60，等价地验证滑杆真的写回配置。
+    const dimThumb = page.getByTestId("wallpaper-dim").getByRole("slider");
+    await dimThumb.focus();
+    await dimThumb.press("End");
+    for (let i = 0; i < 10; i += 1) await dimThumb.press("ArrowLeft");
     await page.getByTestId("settings-done").click();
 
     const scrim = await page.evaluate(

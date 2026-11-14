@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import { ACCENTS } from "@/config/site";
 import { Segmented, Switch } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
@@ -44,7 +45,7 @@ export function AppearanceTab({ s }: { s: SettingsController }) {
           ))}
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <input
+          <Input
             type="color"
             value={customAccent}
             onChange={(e) => pickAccent(e.target.value)}

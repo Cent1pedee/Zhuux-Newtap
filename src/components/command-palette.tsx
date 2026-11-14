@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ENGINES } from "@/config/site";
@@ -275,7 +276,7 @@ export function CommandPalette({
                   <path d="m20 20-3.5-3.5" strokeLinecap="round" />
                 </svg>
               </span>
-              <input
+              <Input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

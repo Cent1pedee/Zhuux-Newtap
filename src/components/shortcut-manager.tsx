@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ACCENTS, LIMITS, type Shortcut } from "@/config/site";
@@ -452,7 +453,7 @@ function ShortcutEditor({
             <Button onClick={() => fileRef.current?.click()} size="sm" testId="shortcut-upload">
               选择图片
             </Button>
-            <input
+            <Input
               ref={fileRef}
               type="file"
               accept="image/*"

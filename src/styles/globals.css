@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+/* shadcn/ui 的 dark: 变体：本项目用 [data-theme] 而非 .dark，两条都挂上以防官方组件里出现 dark: 类 */
+@custom-variant dark (&:is(.dark *));
 
 /* ============================================================
    设计 token（统一栅格 / 圆角 / 阴影 / 模糊 / 动效）
@@ -161,6 +164,29 @@
     "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei",
     "Inter", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- shadcn/ui 语义 token 桥 ----
+     官方组件默认读 bg-background / text-foreground / border-border 这类语义变量。
+     这里全部别名到项目已有的调色板，组件因此自动继承当前设计语言，而不是带来第二套颜色。
+     注意：--accent **不能重新定义** —— 它在本项目是品牌强调色（#2F6FED），
+     shadcn 的 --accent 是「弱交互底色」，覆盖它等于把整站强调色改掉。
+     兼容层里给出的具名类名优先级更高，这些只是官方组件的兜底值。 */
+  --color-background: var(--bg-base);
+  --color-foreground: var(--fg);
+  --color-card: var(--glass-bg);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--board-bg);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--input-bg);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--input-bg);
+  --color-muted-foreground: var(--fg-muted);
+  --color-destructive: #ef4444;
+  --color-border: var(--glass-border);
+  --color-input: var(--glass-border);
+  --color-ring: var(--accent);
 }
 
 /* ============================================================ */
@@ -2123,9 +2149,8 @@ input[type="color"]::-moz-color-swatch {
    （56px → 110px），所以偏移由 ToastProvider 实测 .dock-shell 高度后
    写进 --toast-bottom；变量缺失时退回 92px。
    ------------------------------------------------------------ */
-.toast-stack {
-  bottom: var(--toast-bottom, 92px);
-}
+/* Toast 的垂直偏移现在由 shadcn/sonner 的 <Toaster offset={...}> 控制，
+   ToastProvider 依旧实测 .dock-shell 的高度再传进来（见 compat 层）。 */
 
 /* ------------------------------------------------------------
    10) 横屏矮视口（手机横放，高度 320~460）
@@ -2306,4 +2331,207 @@ input[type="color"]::-moz-color-swatch {
 
 .skip-link:focus-visible {
   transform: translateY(0);
+}
+
+/* ============================================================
+   shadcn/ui 兼容层：把官方组件默认外观拉回本项目的设计语言
+   这些规则带 [data-slot] / .sp-* 前缀，优先级高于 @layer utilities，
+   确保替换控件后页面视觉与替换前完全一致。
+   ============================================================ */
+
+/* Dialog / AlertDialog：官方 Content 自带 border / bg / shadow，
+   这里把 .glass-strong 的三件套重新钉死，避免工具类把它冲掉。 */
+[data-slot="dialog-content"].glass-strong,
+[data-slot="alert-dialog-content"].glass-strong {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-3), inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(150%);
+  backdrop-filter: blur(var(--blur-3)) saturate(150%);
+}
+
+/* 减少动效：官方组件用 data-[state] CSS 动画，统一在此关掉 */
+[data-motion="reduce"] [data-slot="dialog-overlay"],
+[data-motion="reduce"] [data-slot="dialog-content"],
+[data-motion="reduce"] [data-slot="alert-dialog-overlay"],
+[data-motion="reduce"] [data-slot="alert-dialog-content"],
+[data-reduce-motion="true"],
+[data-reduce-motion="true"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Switch：官方默认 18.4×32 / 14px 滑块，这里还原成原来的 34×20 / 16px 滑块 */
+.sp-switch {
+  /* 官方根节点没有 relative，absolute 的 Thumb 会跑到最近的定位祖先（弹窗）左上角 */
+  position: relative;
+  margin-top: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--fg) 16%, transparent) !important;
+}
+.sp-switch--md {
+  height: 20px !important;
+  width: 34px !important;
+  margin-top: 2px !important;
+}
+.sp-switch--sm {
+  height: 18px !important;
+  width: 32px !important;
+}
+.sp-switch[data-state="checked"] {
+  background: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent) !important;
+}
+.sp-switch--sm[data-state="checked"] {
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 16%, transparent) !important;
+}
+.sp-switch [data-slot="switch-thumb"] {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: 16px;
+  width: 16px;
+  background: #fff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transform: translateX(0);
+  transition: transform 200ms ease-out;
+}
+.sp-switch--sm [data-slot="switch-thumb"] {
+  height: 14px;
+  width: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.sp-switch[data-state="checked"] [data-slot="switch-thumb"] {
+  transform: translateX(14px);
+}
+.sp-switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Segmented：官方 RadioGroupItem 是圆点单选，这里还原成分段胶囊 */
+.sp-segmented [data-slot="radio-group-item"] {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  aspect-ratio: auto;
+}
+.sp-segmented [data-slot="radio-group-item"][data-state="checked"] {
+  color: #fff;
+}
+.sp-segmented [data-slot="radio-group-indicator"] {
+  display: none;
+}
+.sp-segmented [data-slot="radio-group-item"]:hover:not([data-state="checked"]) {
+  background: transparent;
+}
+
+/* Slider：官方是 4px 轨道 + 16px 白圆钮 + 彩色进度条；
+   原生 range 原来是 6px 轨道、无进度条、accent 小圆钮 —— 按原样还原 */
+.sp-slider [data-slot="slider-track"] {
+  height: 6px;
+  background: var(--input-bg);
+}
+.sp-slider [data-slot="slider-range"] {
+  background: transparent;
+}
+.sp-slider [data-slot="slider-thumb"] {
+  height: 12px;
+  width: 12px;
+  border: 0;
+  background: var(--accent);
+  box-shadow: none;
+}
+.sp-slider [data-slot="slider-thumb"]:hover,
+.sp-slider [data-slot="slider-thumb"]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* sonner：所有提示都用 toast.custom 自绘，去掉官方卡片那层底与内距 */
+[data-sonner-toaster] [data-sonner-toast][data-styled="false"] {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  width: auto;
+  min-height: 0;
+}
+[data-sonner-toaster][data-sonner-toaster] {
+  z-index: 60;
+}
+
+/* ---- 组件 1：shadcn Textarea（便签输入区） ----
+   官方默认带 display:flex / field-sizing:content / shadow-xs。其中
+   field-sizing:content 会改变 scrollHeight：便签靠 areaRef 读它来自动长高，
+   实测高度会从 55px 掉到 46px。这里只复位这三项，其余样式继续完全由
+   .note-input 接管（项目 CSS 在无 layer 区域，优先级本就高于 Tailwind utilities）。 */
+[data-slot="textarea"].note-input {
+  display: inline-block;
+  field-sizing: fixed;
+  box-shadow: none;
+}
+
+/* 上面的 box-shadow 权重高于 .note-input:focus，把聚焦内发光补回来 */
+[data-slot="textarea"].note-input:focus,
+[data-slot="textarea"].note-input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* ---- shadcn Input 兼容兜底（本轮逐项替换） ----
+   隐藏的 file 触发器是 display:none，官方那套 h-9 / w-full / border / px-3 /
+   rounded-md / shadow-xs / transition 对不可见元素毫无意义，但会改变 computed
+   style。这里复位到替换前的浏览器默认值，保证 DOM 与样式逐项一致。 */
+[data-slot="input"].hidden {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border-width: 0;
+  border-radius: 0;
+  font-size: 16px;
+  line-height: 24px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+
+/* 取色器：官方 Input 的 min-w-0 / md:text-sm / shadow-xs / transition 会改变
+   32px 圆形取色块的排印与投影，复位到替换前。尺寸与圆角已由 twMerge 处理。 */
+[data-slot="input"][type="color"] {
+  min-width: auto;
+  font-size: 16px;
+  line-height: 24px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+
+/* 主搜索输入：官方 Input 的 px-3 / py-1 / border / rounded-md / md:text-sm /
+   shadow-xs / transition 会覆盖 .search-input 的既有排印，复位到替换前。 */
+[data-slot="input"].search-input {
+  padding: 0;
+  border-width: 0;
+  border-radius: 0;
+  font-size: 15px;
+  line-height: 22.5px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+
+/* 命令面板输入：打开即聚焦，官方 focus-visible 的 ring 会叠一层蓝色 box-shadow，
+   连同默认 padding / border / min-w / md:text-sm / transition 一起复位。 */
+[data-slot="input"][data-testid="palette-input"] {
+  min-width: auto;
+  padding: 0;
+  border-width: 0;
+  font-size: 13.5px;
+  line-height: 20.25px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+[data-slot="input"][data-testid="palette-input"]:focus-visible {
+  box-shadow: none;
 }

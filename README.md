@@ -4,7 +4,7 @@
 左上角天气胶囊、时钟、搜索框、便签卡、一言、底部 Dock **各自独立成层**，没有 Bento 板 —— 整体按青柠起始页（limestart.cn）的版式重做。
 **接口请求只走白名单（壁纸 / 一言 / 天气 / 搜索建议），图片请求只用于站点 favicon**，全部数据只存本机（localStorage + IndexedDB）。
 
-- 技术栈：Next.js 15.5（App Router）+ React 19 + TypeScript strict + Tailwind CSS v4.3 + Motion 13 + Magic UI 风格组件（全部自绘，无额外运行时依赖）
+- 技术栈：Next.js 15.5（App Router）+ React 19 + TypeScript strict + Tailwind CSS v4.3 + Motion 13 + **shadcn/ui（Radix + sonner，官方组件经兼容层接入）** + Magic UI 风格组件（全部自绘，零额外运行时依赖）
 - 部署形态：纯静态产物（`next build` 全静态预渲染），可直接托管到 Vercel / 任意静态服务器
 - 无后端、无账号、无埋点
 
@@ -120,6 +120,76 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 
 ---
 
+### 3.1 shadcn/ui 接入方式
+
+组件由 `pnpm dlx shadcn@latest add ...` 生成到 `src/components/ui/`，配置在 `components.json`，
+`cn()` 在 `src/lib/utils.ts`。接入分两类：
+
+- **基础控件**走 `ui/primitives.tsx` 兼容层 —— 它保留原有全部导出名、props、
+  `data-testid` 与类名，内部再委托给官方组件，业务代码不直接 import 官方组件；
+- **同标签控件**（`Textarea` / `NativeSelect`）由业务代码直接 import：项目原本用的就是
+  原生 `<textarea>` / `<select>`，没有需要兼容的旧 API，保留原有 className 与全部 props
+  即可，DOM 标签不变。
+
+| 原 API | shadcn/ui 官方组件 | 说明 |
+|---|---|---|
+| `Modal` / `ConfirmDialog` | `Dialog` / `AlertDialog` | Radix 提供焦点陷阱、Esc 层叠、滚动锁定；兼容层补回「无 DialogTrigger 时的焦点还原」 |
+| `ToastProvider` / `useToast` | `Toaster`（sonner） | `toast.custom()` 自绘气泡，Dock 上方偏移仍由 ResizeObserver 实测 |
+| `SwitchButton` / `Switch` | `Switch` | 尺寸/滑块位置由 `.sp-switch` CSS 锁回原样 |
+| `Segmented` | `RadioGroup` / `RadioGroupItem` | 官方 Item 默认渲染圆点，扩展为支持 children（分段胶囊文字） |
+| `Range` | `Slider` | DOM 由 `<input type=range>` 变为 `role="slider"`，测试交互改用方向键 |
+| `TextInput` / `Button` / `Field` | `Input` / `Button` / `Label` | 官方默认样式经 `cn()` 由项目原有类名覆盖 |
+| `FieldGroup` | `Label`（+ `role="group"`） | 保留「多控件字段不能用 label」的无障碍语义 |
+| 原生 `<textarea>`（便签） | `Textarea` | 标签不变；官方的 `field-sizing:content` / `display:flex` / `shadow-xs` 会让便签按 `scrollHeight` 自动长高算错，由兼容层 CSS 复位 |
+| 原生 `<select>`（天气浮层 ×2、模块页签 ×2） | `NativeSelect` | 见下；`withWrapper={false}` 保留原有 DOM 与自绘箭头 |
+
+**为什么是 `NativeSelect` 而不是 `Select`**：官方 `Select` 基于 Radix，DOM 会变成
+`role="combobox"` + portal 浮层，`value=""` 的占位 `<option>` 无法表达，`fireEvent.change`
+/ `selectOption` / `toHaveValue` 也全部失效。`NativeSelect` 渲染的就是原生 `<select>` + `<option>`，
+因此页面结构、键盘操作、占位项、禁用态、选项由系统渲染的外观，以及全部单测/E2E 选择器都原样保留。
+官方默认带的 `wrapper <div>` 和 `ChevronDownIcon` 通过 `withWrapper={false}` 关掉 —— 项目早有
+`.weather-select-wrap` + 自绘 `ChevronDown`，再套一层会多出 DOM 节点、`w-fit` 让宽度塌掉、
+并出现两个箭头。
+
+`globals.css` 里有一组 **token 桥**：把 `--background` / `--foreground` / `--border` 等 shadcn 语义
+变量别名到项目自有的 `--bg-base` / `--fg` / `--glass-border`，官方组件因此继承现有设计语言；
+`--accent` **刻意不重定义**（它是品牌蓝，与 shadcn 的「弱交互底色」语义不同）。
+末尾的「shadcn/ui 兼容层」CSS 段把玻璃面板、开关、分段、滑块、toast 的默认外观锁回替换前的样子，
+并复位 `Textarea` 的三项默认样式。`NativeSelect` 无需额外 CSS —— 项目 `.weather-select` 自己就设了
+`box-shadow` 与 `:focus-visible`，无层规则天然压过 Tailwind utilities。
+
+对官方源码的最小改动（都在文件内注明原因）：
+- `sonner.tsx` 去掉 `next-themes`（项目主题唯一数据源是 `ConfigProvider`）；
+- `dialog.tsx` 的 `DialogContent` 增加 `overlayProps`（保留遮罩 testid 与毛玻璃）；
+- `radio-group.tsx` / `slider.tsx` 支持 `children` / `thumbLabel`（分段文字与滑块可访问名）；
+- `native-select.tsx` 增加 `withWrapper`（默认 `true`，官方行为不变；`false` 时只渲染
+  `<select>`，让项目原有的容器与箭头继续负责外观）。
+
+体积代价：`/` 页 First Load JS 由 177 kB 增至 237 kB（Radix + sonner，约 +60 kB）。
+这是「用官方组件」的必然成本，不是优化回归。
+
+### 3.2 逐项替换的选型边界
+
+组件选型原则是「**magicui 优先，不适用时再 shadcn**」，实际落地结果：
+
+- **表单 / 按钮类控件 magicui 不适用**：官方 registry 无 `input` / `button`（实测 404），
+  因此 4 类原生输入（隐藏 `type=file` ×3、`type=color`、主搜索、命令面板）统一由
+  shadcn `Input` 替换。`globals.css` 末尾的「shadcn Input 兼容兜底」段把官方默认的
+  `h-9 / w-full / border / px-3 / rounded-md / md:text-sm / shadow-xs / focus-visible ring`
+  复位回各控件原有排印 —— 采集 12 个控件的 DOM 骨架 + 30 项 computed style，逐项比对 0 差异。
+- **magicui 官方源码已接入一处**：`BlurIn` 内部委托官方 `blur-fade`
+  （`src/components/magicui/blur-fade.official.tsx`），保留原导出名与 `motion.span` DOM。
+  对官方源码做了两处最小扩展（`as` 允许渲染 span、`variant` 放宽为 `Variants`），
+  适配层再用 `variant` + `transition` 精确复现原有 blur 10px / y 8 / 自定义 ease 参数。
+- **未替换项及原因**（均已实测，非待办）：
+  - 业务侧原生 `<button>`：官方 `Button` 默认 `bg-primary` / `inline-flex` / `rounded-md` /
+    `h-9 px-4` 与这些按钮的透明底、`grid|block`、`999px` 圆角冲突，逐类复位等于抵消官方价值；
+  - `TextAnimate`：官方版默认 `as="p"`、容器加 `whitespace-pre-wrap`、额外插 `sr-only` span、
+    `startOnView` 门控、stagger 按 `duration/segments.length` 平分，与逐字 `inline-block` 结构不兼容；
+  - `useAnimatedThemeToggle`：官方是组件、项目导出的是 hook（按钮由 `BarButton` 承载）；
+  - `AnimatedDigits` / `Spotlight`：registry 无语义对应项（`number-ticker` 是数值滚动计数，
+    `magic-card` 是边框高亮）。
+
 ## 四、目录结构
 
 ```text
@@ -137,12 +207,17 @@ src/
     wallpaper.tsx              # Edge 每日壁纸层（预解码后淡入）+ 可选自定义图片叠加
     weather.tsx  settings-panel.tsx  command-palette.tsx  theme-sync.tsx  note-pad.tsx
     engine-glyph.tsx           # EngineBadge：优先取站点 favicon，失败退回内联 SVG（四色 G / Bing / 百度）
-    ui/primitives.tsx          # Modal / Toast / Switch / Field / TextInput / Button / Segmented / Range
+    ui/                        # shadcn/ui 官方组件（CLI 生成，见 components.json）
+      dialog.tsx  alert-dialog.tsx  switch.tsx  radio-group.tsx  slider.tsx
+      label.tsx  input.tsx  button.tsx  sonner.tsx
+      textarea.tsx  native-select.tsx   # 同标签官方组件（便签 / 省市下拉）
+      primitives.tsx          # 兼容层：把官方组件包装成项目原有 API（签名/testid 不变）
     settings/                  # 设置面板的页签与控制器（壳留在 settings-panel.tsx）
       controller.ts            # 草稿状态 + 引擎排序 / 指令 / 背景 / 白名单 / 导入导出 / 定位
       search-tab.tsx  appearance-tab.tsx  shortcuts-tab.tsx  modules-tab.tsx
       background-tab.tsx  privacy-tab.tsx  about-tab.tsx  tab-icons.tsx
-    magicui/                   # Magic UI 等价实现（全部自绘，零额外依赖；只保留真正在用的 5 个）
+    magicui/                   # Magic UI 等价实现（零额外依赖，只保留真正在用的 5 个）
+      blur-fade.official.tsx  # 官方 registry 源码（BlurIn 适配层委托，含 2 处最小扩展）
       animated-digits.tsx  blur-in.tsx  text-animate.tsx        # 文本 / 数字动效
       spotlight.tsx                                             # 鼠标跟随光斑
       animated-theme-toggler.tsx                                # View Transitions 主题切换

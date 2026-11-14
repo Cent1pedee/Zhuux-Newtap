@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { fetchWeather, weatherLabel, type WeatherNow } from "@/lib/services";
 import { ChevronDown, useToast } from "@/components/ui/primitives";
+import { NativeSelect } from "@/components/ui/native-select";
 import { EASE_OUT_CUBIC } from "@/lib/motion";
 import { PROVINCES, citiesOf, findCity, nearestCity } from "@/config/cities";
 
@@ -316,7 +317,8 @@ export function Weather() {
               <label className="weather-field">
                 <span className="weather-field-label">省份</span>
                 <div className="weather-select-wrap">
-                  <select
+                  <NativeSelect
+                    withWrapper={false}
                     id="weather-province"
                     data-testid="weather-province"
                     value={provinceDraft || province}
@@ -329,7 +331,7 @@ export function Weather() {
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                   <ChevronDown />
                 </div>
               </label>
@@ -337,7 +339,8 @@ export function Weather() {
               <label className="weather-field">
                 <span className="weather-field-label">城市</span>
                 <div className="weather-select-wrap">
-                  <select
+                  <NativeSelect
+                    withWrapper={false}
                     id="weather-city-select"
                     data-testid="weather-city-select"
                     value={cities.some((c) => c.name === city) ? city : ""}
@@ -353,7 +356,7 @@ export function Weather() {
                         {c.name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                   <ChevronDown />
                 </div>
               </label>

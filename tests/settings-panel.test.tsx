@@ -340,12 +340,22 @@ describe("设置面板：背景", () => {
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
     await openTab("background");
 
-    const dim = screen.getByTestId("wallpaper-dim") as HTMLInputElement;
-    fireEvent.change(dim, { target: { value: "60" } });
+    // shadcn/ui 的 Slider 基于 Radix：DOM 是 role="slider" 的 thumb，
+    // 不再是 <input type="range">，因此用方向键而不是 fireEvent.change 设值。
+    const setSlider = (testId: string, target: number) => {
+      const root = screen.getByTestId(testId);
+      let current = Number(within(root).getByRole("slider").getAttribute("aria-valuenow") ?? "0");
+      while (current !== target) {
+        const key = current < target ? "ArrowRight" : "ArrowLeft";
+        fireEvent.keyDown(within(root).getByRole("slider"), { key });
+        current += current < target ? 1 : -1;
+      }
+    };
+
+    setSlider("wallpaper-dim", 60);
     await waitFor(() => expect(readConfig().background.dim).toBe(60));
 
-    const blur = screen.getByTestId("wallpaper-blur") as HTMLInputElement;
-    fireEvent.change(blur, { target: { value: "8" } });
+    setSlider("wallpaper-blur", 8);
     await waitFor(() => expect(readConfig().background.blur).toBe(8));
   });
 });
