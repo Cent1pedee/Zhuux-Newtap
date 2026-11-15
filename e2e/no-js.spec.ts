@@ -19,23 +19,31 @@ test.describe("无 JS 环境", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    // 五个 P0 模块的静态骨架都在（时钟此刻为 --:--，由 JS 接管后才走秒）
+    // 简洁布局的静态骨架：时间 / 搜索 / 一言 / Dock（时钟由 JS 接管后才走秒）
+    await expect(page.getByTestId("clock")).toBeVisible();
+    await expect(page.getByTestId("clock-text")).toHaveText("--:--");
     await expect(page.getByTestId("search-form")).toBeVisible();
+    await expect(page.getByTestId("shortcut-dock")).toBeVisible();
     await expect(page.getByTestId("shortcut-total")).toHaveText("12");
     await expect(page.getByTestId("quote-card")).toBeVisible();
     await expect(page.getByTestId("wallpaper")).toBeAttached();
+    // 展开态依赖 JS（点时间），无 JS 时不该出现方块与设置入口
+    await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
+    await expect(page.getByTestId("settings-trigger")).toHaveCount(0);
+    // 天气与便签仍收在经典布局里
+    await expect(page.getByTestId("note-card-panel")).toHaveCount(0);
 
     // 表单具备原生提交所需的 action / method / name
     await expect(page.getByTestId("search-form")).toHaveAttribute("method", "get");
-    await expect(page.getByTestId("search-form")).toHaveAttribute("action", /google\.com/);
+    await expect(page.getByTestId("search-form")).toHaveAttribute("action", /bing\.com/);
     await expect(page.getByTestId("search-input")).toHaveAttribute("name", "q");
 
     await page.getByTestId("search-input").fill("no js test");
     await page.getByTestId("search-submit").click();
-    await page.waitForURL(/google\.com/, { timeout: 15_000 });
+    await page.waitForURL(/bing\.com/, { timeout: 15_000 });
 
     // 页面里的 favicon / 头像之类也会产生外部请求，这里只认导航到搜索页那一条
     const search = external.find((url) => url.includes("/search?"));
-    expect(search).toBe("https://www.google.com/search?q=no+js+test");
+    expect(search).toBe("https://www.bing.com/search?q=no+js+test");
   });
 });

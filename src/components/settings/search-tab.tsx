@@ -15,7 +15,7 @@ export function SearchTab({ s }: { s: SettingsController }) {
       <section className="settings-section">
         <h3 className="settings-h3">搜索引擎</h3>
         <p className="mb-2 text-[11px] text-[var(--fg-subtle)]">
-          点击引擎图标循环切换，右键打开列表。至少保留一个。
+          点击引擎图标打开列表，选定即生效。至少保留一个。
         </p>
         <ul className="space-y-1">
           {ENGINES.map((engine) => {

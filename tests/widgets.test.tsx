@@ -15,6 +15,8 @@ describe("时钟与问候", () => {
   });
 
   it("渲染时钟、问候与日期", async () => {
+    // 简洁首页默认不显示问候语；组件本身的问候能力仍需覆盖
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ greeting: { show: true } }));
     renderWithProviders(<Clock />);
     await waitFor(() => expect(screen.getByTestId("clock-text").textContent).toMatch(/\d{2}:\d{2}/));
     await waitFor(() => expect(screen.getByTestId("greeting").textContent?.length).toBeGreaterThan(0));
@@ -22,6 +24,7 @@ describe("时钟与问候", () => {
   });
 
   it("问候语与当前时段一致", async () => {
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ greeting: { show: true } }));
     renderWithProviders(<Clock />);
     await waitFor(() => expect(screen.getByTestId("greeting").textContent).toBe(greetingAt(new Date())));
   });
@@ -39,6 +42,26 @@ describe("时钟与问候", () => {
     window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ clock: { show: false } }));
     renderWithProviders(<Clock />);
     await waitFor(() => expect(screen.queryByTestId("clock-text")).toBeNull());
+  });
+
+  it("点击时间触发展开，并反映展开状态", () => {
+    const onActivate = vi.fn();
+    renderWithProviders(<Clock onActivate={onActivate} active />);
+    const clock = screen.getByTestId("clock");
+    const trigger = clock.closest("button");
+    expect(trigger).not.toBeNull();
+    expect(trigger?.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger?.getAttribute("aria-controls")).toBe("home-reveal");
+    fireEvent.click(clock);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it("右键时间同样触发展开（与左键同一个开关）", () => {
+    const onActivate = vi.fn();
+    renderWithProviders(<Clock onActivate={onActivate} />);
+    const clock = screen.getByTestId("clock");
+    fireEvent.contextMenu(clock);
+    expect(onActivate).toHaveBeenCalledTimes(1);
   });
 
   it("开启秒后时钟包含秒位", async () => {
@@ -130,14 +153,15 @@ describe("天气", () => {
   });
 
   it("显式关闭时不渲染", async () => {
-    // 天气现在默认开启（天气是首屏信息的一部分，不该让人先进设置才看到）
     window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ weather: { enabled: false } }));
     const { Weather } = await import("@/components/weather");
     const { container } = renderWithProviders(<Weather />);
     await waitFor(() => expect(container.querySelector('[data-testid="weather"]')).toBeNull());
   });
 
-  it("默认开启：没有坐标时自动尝试定位，并给出定位入口", async () => {
+  it("开启后没有坐标时自动尝试定位，并给出定位入口", async () => {
+    // 简洁首页默认关闭天气；这里显式开启，验证组件自身行为
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ weather: { enabled: true } }));
     const { Weather } = await import("@/components/weather");
     renderWithProviders(<Weather />);
     await waitFor(() => expect(screen.getByTestId("weather-locate")).toBeTruthy());
@@ -153,6 +177,7 @@ describe("天气", () => {
         }),
       ),
     );
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ weather: { enabled: true } }));
     const { Weather } = await import("@/components/weather");
     renderWithProviders(<Weather />);
     fireEvent.click(await screen.findByTestId("weather-pick-open"));

@@ -1,10 +1,4 @@
-/**
- * Magic UI 官方组件源码（由 `shadcn view @magicui/blur-fade` 拉取）。
- * 仅做两处最小扩展，官方默认行为（as="div"）不变：
- *  1. `as` 允许渲染 span —— 本项目调用点外层是 motion.span，div 会被浏览器重写 DOM；
- *  2. `variant` 类型放宽为 Variants —— 便于适配层传入 filter/opacity 精确复现原动画。
- * 其余（useInView、AnimatePresence、variants 合成、filter 过渡判定）全部保持官方实现。
- */
+/* 取自 @magicui/blur-fade。改动：as 可选 span；variant 放宽为 Variants。 */
 "use client"
 
 import { useRef } from "react"
@@ -22,9 +16,9 @@ type MarginType = UseInViewOptions["margin"]
 interface BlurFadeProps extends MotionProps {
   children: React.ReactNode
   className?: string
-  /** 项目适配：官方固定渲染 div；本项目调用点外层是 motion.span，需要 span 才不破坏 DOM 结构 */
+  /** 默认 div；嵌在 motion.span 里时用 span */
   as?: "div" | "span"
-  /** 项目适配：放宽为 Variants，允许传入 filter / opacity 精确复现原有动画 */
+  /** 允许传入自定义 variants */
   variant?: Variants
   duration?: number
   delay?: number

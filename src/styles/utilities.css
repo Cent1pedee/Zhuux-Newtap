@@ -1,0 +1,56 @@
+/* 工具类 */
+
+/* ============================================================
+   工具类
+   ============================================================ */
+
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  background: var(--input-bg);
+  color: var(--fg-subtle);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    border-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  transform: translateY(-200%);
+  transition: transform var(--dur-fast) var(--ease-out-cubic);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* 设置搜索命中：只加一圈极淡的强调色轮廓，不改变尺寸 */
+[data-search-hit="true"] {
+  border-radius: var(--radius-sm);
+  outline: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  outline-offset: 4px;
+}

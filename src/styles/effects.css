@@ -1,0 +1,286 @@
+/* 主题过渡、壁纸层、焦点、滚动条、时钟数字、动效降级 */
+
+/* ============================================================
+   主题切换：全局颜色过渡
+   首选 View Transitions（圆形揭示，见 animated-theme-toggler.tsx）；
+   不支持时由 .theme-animating 给所有元素补一段颜色过渡，避免跳变
+   ============================================================ */
+
+html.theme-animating,
+html.theme-animating *,
+html.theme-animating *::before,
+html.theme-animating *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow, opacity !important;
+  transition-duration: var(--dur-theme) !important;
+  transition-timing-function: var(--ease-out-cubic) !important;
+  transition-delay: 0ms !important;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* ============================================================
+   背景层（Magic UI Backgrounds）
+   ============================================================ */
+
+.wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0b1220, #05070c 60%, #0a0f1c);
+}
+
+[data-theme="light"] .wallpaper-layer {
+  background: linear-gradient(135deg, #e8eefb, #f5f8ff 55%, #e6edf9);
+}
+
+.wallpaper-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  will-change: transform, filter;
+}
+
+/*
+ * 暗角：中心透明、四周压暗，把视线收到内容列上。
+ * 与 scrim 分开两层 —— scrim 是「整体曝光」，暗角是「构图」，
+ * 用户在设置里可以单独关掉暗角而不影响可读性补偿。
+ */
+.wallpaper-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 92% 86% at 50% 48%,
+    transparent 42%,
+    rgba(2, 4, 10, 0.26) 76%,
+    rgba(2, 4, 10, 0.52) 100%
+  );
+}
+
+[data-theme="light"] .wallpaper-vignette {
+  background: radial-gradient(
+    ellipse 92% 86% at 50% 48%,
+    transparent 46%,
+    rgba(8, 14, 28, 0.14) 78%,
+    rgba(8, 14, 28, 0.32) 100%
+  );
+}
+
+.wallpaper-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  pointer-events: none;
+  transition: background-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+.wallpaper-scrim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* 只在上下边缘轻微压暗，给顶栏/页脚文字兜底；中间完全放开，
+     否则背景图案会被整层灰色蒙住（用户反馈「太淡看不出」的元凶之一） */
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0%, transparent 18%, transparent 74%, rgba(0, 0, 0, 0.3) 100%);
+  opacity: 0.75;
+}
+
+/* 亮色只在最底部留一小段白，给页脚那行 10.5px 小字兜底。
+   原来这里是「上 40% + 下 50%」的双向白渐变，等于又给整张图盖了一层雾 —— 正是它
+   把照片压成粉彩的元凶之一。中间大面积的柔光已经交给 .wallpaper-scrim 的径向层。 */
+[data-theme="light"] .wallpaper-scrim::after {
+  background: linear-gradient(to bottom, transparent 84%, rgba(255, 255, 255, 0.42) 100%);
+}
+
+/* ============================================================
+   玻璃层
+   ============================================================ */
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 transparent;
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(140%);
+  backdrop-filter: blur(var(--blur-2)) saturate(140%);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    border-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-3), inset 0 1px 0 transparent;
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(150%);
+  backdrop-filter: blur(var(--blur-3)) saturate(150%);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    border-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+/* ============================================================
+   焦点可见
+   ============================================================ */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* 搜索框自身用光晕替代 outline，避免双重描边 */
+.search-input:focus-visible {
+  outline: none;
+}
+
+/* ============================================================
+   滚动条（仅面板内容区）
+   ============================================================ */
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg) 24%, transparent) transparent;
+  overscroll-behavior: contain;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--fg) 22%, transparent);
+  border-radius: 999px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 页面主体不需要滚动条痕迹 */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================
+   时钟数字
+   ============================================================ */
+
+/*
+ * 时钟只用实心色，不用 background-clip 渐变文字。
+ *
+ * 曾经的写法是 `background-clip: text` + `color/-webkit-text-fill-color: transparent`，
+ * 靠一层横向渐变给字形上色。这在部分渲染环境（Safari、某些 Chromium 变体、
+ * 关掉 GPU 合成的环境）里 background-clip:text 不生效，而填充色已经是 transparent，
+ * 结果就是「DOM 在、布局正常、字号 96px，但一个字也看不见」。
+ * 这里改为实色 text-[var(--fg)]，字体层级交给字号与明暗对比。
+ */
+.clock-digits {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  /* 视口高度也参与决定字号：矮屏（600~700 高）自动收小，避免把下方网格挤出首屏 */
+  font-size: clamp(44px, min(8vw, 10vh), 78px);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* ============================================================
+   输入框 focus 渐变描边（Border Beam / Glow Effect）
+   ============================================================ */
+
+.glow-field {
+  position: relative;
+  border-radius: var(--radius-sm);
+  transition: box-shadow var(--dur-base) var(--ease-out-cubic);
+}
+
+.glow-field::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 30%, #ffffff), var(--accent));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+  pointer-events: none;
+}
+
+.glow-field:focus-within::after {
+  opacity: 1;
+}
+
+.glow-field:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* ============================================================
+   动效降级
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .ripple-ring,
+  .particle-dot,
+  .sparkle-dot,
+  .shimmer-sweep,
+  .moving-border-ring,
+  .border-beam-dot {
+    animation: none !important;
+  }
+}
+
+[data-motion="reduce"] .ripple-ring,
+[data-motion="reduce"] .particle-dot,
+[data-motion="reduce"] .sparkle-dot,
+[data-motion="reduce"] .shimmer-sweep,
+[data-motion="reduce"] .moving-border-ring,
+[data-motion="reduce"] .border-beam-dot {
+  animation: none !important;
+}
+
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}

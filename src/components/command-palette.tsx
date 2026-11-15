@@ -10,6 +10,8 @@ import { EASE_OUT_CUBIC } from "@/lib/motion";
 import { lockBodyScroll } from "@/lib/scroll-lock";
 import { resolveSearchUrl } from "@/lib/commands";
 import { useToast } from "@/components/ui/primitives";
+import type { SettingsTab } from "@/components/settings-panel";
+import { clearSearchHistory } from "@/lib/search-history";
 
 type Item =
   | { id: string; kind: "search"; label: string; hint: string; run: () => void }
@@ -32,10 +34,12 @@ export function CommandPalette({
   open,
   onOpenChange,
   onOpenSettings,
+  onOpenHelp,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: SettingsTab) => void;
+  onOpenHelp?: () => void;
 }) {
   const { config, set, update } = useConfig();
   const reduce = useReducedMotionPref();
@@ -152,6 +156,38 @@ export function CommandPalette({
             document.querySelector<HTMLInputElement>('[data-testid="search-input"]')?.focus();
           },
         },
+        {
+          id: "toggle-note",
+          kind: "action",
+          label: config.note.enabled ? "隐藏待办便签" : "显示待办便签",
+          hint: "模块",
+          run: () => update("note", { enabled: !config.note.enabled }),
+        },
+        {
+          id: "import-bookmarks",
+          kind: "action",
+          label: "导入浏览器书签",
+          hint: "快捷跳转",
+          run: () => onOpenSettings("shortcuts"),
+        },
+        {
+          id: "clear-history",
+          kind: "action",
+          label: "清除搜索历史",
+          hint: "隐私",
+          run: () => clearSearchHistory(),
+        },
+        ...(onOpenHelp
+          ? [
+              {
+                id: "shortcut-help",
+                kind: "action" as const,
+                label: "查看快捷键",
+                hint: "帮助",
+                run: () => onOpenHelp(),
+              },
+            ]
+          : []),
       ];
       for (const item of commands) {
         if (q && !`${item.label} ${item.hint}`.toLowerCase().includes(q.toLowerCase())) continue;
@@ -186,7 +222,7 @@ export function CommandPalette({
     }
 
     return list.slice(0, 14);
-  }, [query, config, update, set, onOpenSettings]);
+  }, [query, config, update, set, onOpenSettings, onOpenHelp]);
 
   useEffect(() => {
     setActive(0);
@@ -288,7 +324,7 @@ export function CommandPalette({
                 aria-controls="palette-list"
                 aria-activedescendant={items[active] ? `palette-item-${active}` : undefined}
                 data-testid="palette-input"
-                className="h-8 flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-[var(--fg-subtle)]"
+                className="h-8 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--fg-subtle)]"
               />
             </div>
 
@@ -315,15 +351,15 @@ export function CommandPalette({
                     onMouseEnter={() => setActive(index)}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => runItem(item)}
-                    className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12.5px] transition-colors ${
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] transition-colors ${
                       index === active ? "bg-[var(--hover-bg)] text-[var(--fg)]" : "text-[var(--fg-muted)]"
                     }`}
                   >
-                    <span className="w-14 shrink-0 text-[10px] uppercase tracking-wider text-[var(--fg-subtle)]">
+                    <span className="w-14 shrink-0 text-[11px] text-[var(--fg-subtle)]">
                       {KIND_LABEL[item.kind]}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    <span className="shrink-0 text-[10px] text-[var(--fg-subtle)]">{item.hint}</span>
+                    <span className="shrink-0 text-[11px] text-[var(--fg-subtle)]">{item.hint}</span>
                   </li>
                 ))
               )}

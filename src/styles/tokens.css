@@ -1,0 +1,178 @@
+/* 设计 token：颜色 / 圆角 / 阴影 / 模糊 / 动效，以及 shadcn 语义变量映射 */
+
+/* ============================================================
+   设计 token（统一栅格 / 圆角 / 阴影 / 模糊 / 动效）
+   所有组件只消费这些变量，不写裸值，保证明暗两套主题一致
+   ============================================================ */
+
+:root {
+  /* —— 品牌色 —— */
+  --accent: #2f6fed;
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 34%, transparent);
+
+  /* —— 前景 / 背景 —— */
+  --bg-base: #05070c;
+  --fg: #f4f7fc;
+  --fg-muted: rgba(244, 247, 252, 0.72);
+  --fg-subtle: rgba(244, 247, 252, 0.52);
+
+  /* —— 玻璃层 —— */
+  --glass-bg: rgba(20, 22, 28, 0.5);
+  --glass-bg-strong: rgba(16, 18, 24, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.32);
+
+  --scrim: rgba(4, 6, 12, 0.45);
+  --scrim-2: rgba(4, 6, 12, 0.7);
+  --input-bg: rgba(255, 255, 255, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.1);
+
+  /* 小元件用的实心底（悬停小工具条等），避免背景格纹穿透 */
+  --board-bg: rgba(8, 11, 17, 0.97);
+  --board-ring: color-mix(in srgb, var(--fg) 10%, transparent);
+
+  /*
+   * 毛玻璃面板材质（便当板 / 底部 Dock / 一言卡共用同一套配方）
+   * 关键不是「加模糊」，而是三层叠加：
+   *   1) 半透明底 —— 让背景的光与颜色透上来
+   *   2) backdrop-filter blur + saturate —— 把透上来的东西揉成柔光，而不是噪点
+   *   3) 顶部 1px 内高光 + 一圈极淡描边 —— 玻璃的「厚度」
+   * 之前板子用 0.97 的近实色，是因为背景格纹会从板子里透出来变成噪点；
+   * 那其实是 saturate 不足 + 缺高光导致的，靠拉满不透明度掩盖是错的解法。
+   */
+  --panel-bg: rgba(30, 37, 52, 0.44);
+  --panel-bg-strong: rgba(26, 33, 47, 0.6);
+  --panel-ring: rgba(255, 255, 255, 0.22);
+  --panel-highlight: rgba(255, 255, 255, 0.38);
+  /* 底边的「折射」：玻璃下沿会反射一点环境光，只有上高光会显得像塑料片 */
+  --panel-refract: rgba(255, 255, 255, 0.06);
+  --panel-blur: 32px;
+  /* 毛玻璃的投影比普通卡片更「散」：玻璃是浮在背景上的，边缘不该有硬阴影 */
+  --panel-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.8), 0 2px 10px -4px rgba(0, 0, 0, 0.35);
+  /*
+   * 搜索胶囊的三态色板不放这里：它按「静止 / 悬停 / 聚焦 × 亮色 / 暗色」
+   * 共六组值就地定义在 .search-panel 内部（见 chrome.css），
+   * 一旦抽成全局 token，两个主题的覆盖关系会变成谁也说不清的四层。
+   */
+
+  /* —— 间距栅格（4px 基准）—— */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* —— 圆角阶梯 —— */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-pill: 10px;
+
+  /* 兼容旧命名（组件里已大量使用） */
+  --radius-icon: var(--radius-md);
+  --radius-search: var(--radius-lg);
+  --radius-card: var(--radius-xl);
+
+  /* —— 阴影层级 —— */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.24), 0 4px 12px -6px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 18px 48px -18px rgba(0, 0, 0, 0.75);
+  --shadow-3: 0 32px 80px -28px rgba(0, 0, 0, 0.85);
+  --glass-shadow: var(--shadow-2);
+
+  /* —— 模糊层级 —— */
+  --blur-1: 12px;
+  --blur-2: 20px;
+  --blur-3: 24px;
+
+  /* —— 版式与布局 —— */
+  --content-width: 720px;
+  --gutter: 16px;
+  --stack-gap: 18px;
+
+  /* —— 动效 —— */
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 260ms;
+  --dur-theme: 320ms;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-base: #eef2f8;
+  --fg: #101828;
+  --fg-muted: rgba(16, 24, 40, 0.78);
+  --fg-subtle: rgba(16, 24, 40, 0.62);
+
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(16, 24, 40, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+
+  --scrim: rgba(250, 251, 253, 0.5);
+  --scrim-2: rgba(250, 251, 253, 0.74);
+  --input-bg: rgba(255, 255, 255, 0.62);
+  --hover-bg: rgba(16, 24, 40, 0.06);
+
+  --board-bg: rgba(255, 255, 255, 0.94);
+  --board-ring: color-mix(in srgb, var(--fg) 9%, transparent);
+
+  /* 亮色玻璃：底色偏白但保留透光，描边用深色而非白色，否则在浅背景上看不见 */
+  --panel-bg: rgba(255, 255, 255, 0.55);
+  --panel-bg-strong: rgba(255, 255, 255, 0.72);
+  --panel-ring: rgba(16, 24, 40, 0.13);
+  --panel-highlight: rgba(255, 255, 255, 0.98);
+  --panel-refract: rgba(16, 24, 40, 0.05);
+  --panel-shadow: 0 20px 48px -26px rgba(16, 24, 40, 0.42), 0 2px 8px -4px rgba(16, 24, 40, 0.16);
+
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px -6px rgba(16, 24, 40, 0.18);
+  --shadow-2: 0 18px 44px -22px rgba(16, 24, 40, 0.45);
+  --shadow-3: 0 32px 72px -30px rgba(16, 24, 40, 0.5);
+  --glass-shadow: var(--shadow-2);
+
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-glass: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+  --font-sans:
+    "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei",
+    "Inter", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- shadcn/ui 语义 token 桥 ----
+     官方组件默认读 bg-background / text-foreground / border-border 这类语义变量。
+     这里全部别名到项目已有的调色板，组件因此自动继承当前设计语言，而不是带来第二套颜色。
+     注意：--accent **不能重新定义** —— 它在本项目是品牌强调色（#2F6FED），
+     shadcn 的 --accent 是「弱交互底色」，覆盖它等于把整站强调色改掉。
+     兼容层里给出的具名类名优先级更高，这些只是官方组件的兜底值。 */
+  --color-background: var(--bg-base);
+  --color-foreground: var(--fg);
+  --color-card: var(--glass-bg);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--board-bg);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--input-bg);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--input-bg);
+  --color-muted-foreground: var(--fg-muted);
+  --color-destructive: #ef4444;
+  --color-border: var(--glass-border);
+  --color-input: var(--glass-border);
+  --color-ring: var(--accent);
+}

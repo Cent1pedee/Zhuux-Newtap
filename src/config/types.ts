@@ -5,6 +5,10 @@ export type WallpaperSource = "none" | "url" | "local";
 
 export type AppConfig = {
   version: 1;
+  /** 首页形态：simple = 只有时间/搜索/Dock；classic = 保留天气、便签、一言与顶栏 */
+  home: {
+    simple: boolean;
+  };
   engineId: string;
   /** 引擎顺序（设置内可排序） */
   engineOrder: string[];
@@ -37,6 +41,8 @@ export type AppConfig = {
     dim: number;
     /** 模糊 0-20px */
     blur: number;
+    /** 四角压暗的暗角滤镜 */
+    vignette: boolean;
     /** 缓慢缩放（Ken Burns） */
     kenBurns: boolean;
   };

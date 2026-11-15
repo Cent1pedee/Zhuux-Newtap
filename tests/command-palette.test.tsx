@@ -129,3 +129,48 @@ describe("命令面板", () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });
+
+describe("命令面板：新增动作", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("导入浏览器书签深链到「快捷跳转」页签", async () => {
+    const onOpenSettings = vi.fn();
+    renderWithProviders(<CommandPalette open onOpenChange={() => {}} onOpenSettings={onOpenSettings} />);
+    const target = await waitFor(() => {
+      const node = items().find((el) => el.textContent?.includes("导入浏览器书签"));
+      expect(node).toBeTruthy();
+      return node!;
+    });
+    fireEvent.click(target);
+    await waitFor(() => expect(onOpenSettings).toHaveBeenCalledWith("shortcuts"), { timeout: 1500 });
+  });
+
+  it("切换便签写回配置", async () => {
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ note: { enabled: true } }));
+    renderWithProviders(<CommandPalette open onOpenChange={() => {}} onOpenSettings={() => {}} />);
+    const target = await waitFor(() => {
+      const node = items().find((el) => el.textContent?.includes("隐藏待办便签"));
+      expect(node).toBeTruthy();
+      return node!;
+    });
+    fireEvent.click(target);
+    await waitFor(() => expect(readConfig().note.enabled).toBe(false), { timeout: 1500 });
+  });
+
+  it("清除搜索历史", async () => {
+    window.localStorage.setItem("startpage.search-history.v1", JSON.stringify(["react"]));
+    renderWithProviders(<CommandPalette open onOpenChange={() => {}} onOpenSettings={() => {}} />);
+    const target = await waitFor(() => {
+      const node = items().find((el) => el.textContent?.includes("清除搜索历史"));
+      expect(node).toBeTruthy();
+      return node!;
+    });
+    fireEvent.click(target);
+    await waitFor(
+      () => expect(window.localStorage.getItem("startpage.search-history.v1")).toBe("[]"),
+      { timeout: 1500 },
+    );
+  });
+});

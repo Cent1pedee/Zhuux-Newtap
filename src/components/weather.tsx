@@ -362,6 +362,20 @@ export function Weather() {
               </label>
             </div>
 
+            {state.status === "ready" && state.data.daily.length > 0 ? (
+              <div className="weather-forecast" data-testid="weather-forecast">
+                {state.data.daily.map((day) => (
+                  <div key={day.date} className="weather-forecast-day">
+                    <span className="weather-forecast-label">{day.label}</span>
+                    <WeatherGlyph code={day.code} size={14} />
+                    <span className="weather-forecast-temp tabular-nums">
+                      {day.max}°<span className="weather-forecast-min"> / {day.min}°</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <p className="weather-picker-hint">
               {source === "geo" ? "当前来自定位" : source === "manual" ? "当前为手动选择" : "尚未选择城市"}
             </p>

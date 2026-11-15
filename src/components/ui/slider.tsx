@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 import { Slider as SliderPrimitive } from "radix-ui"
 
 function Slider({
@@ -13,7 +13,7 @@ function Slider({
   thumbLabel,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root> & {
-  /** 项目适配：Radix 的 role="slider" 在 Thumb 上，可访问名必须给 Thumb 而不是 Root */
+  /** role="slider" 在 Thumb 上，label 要给它 */
   thumbLabel?: string
 }) {
   const _values = React.useMemo(

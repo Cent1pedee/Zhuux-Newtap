@@ -4,6 +4,7 @@ import {
   effectiveWhitelist,
   fetchSuggestions,
   fetchUserImage,
+  fetchWeather,
   hostOf,
   isAllowed,
   normalizeHost,
@@ -251,5 +252,45 @@ describe("fetchUserImage（自定义壁纸）", () => {
     await expect(fetchUserImage("https://img.example.com/a.png", { timeoutMs: 20 })).rejects.toMatchObject({
       name: "TimeoutError",
     });
+  });
+});
+
+describe("天气：未来三天", () => {
+  const payload = {
+    current: { temperature_2m: 17.4, weather_code: 1, is_day: 1 },
+    daily: {
+      time: ["2026-11-14", "2026-11-15", "2026-11-16", "2026-11-17"],
+      weather_code: [0, 1, 2, 3],
+      temperature_2m_max: [20.4, 18.2, 16.6, 14.1],
+      temperature_2m_min: [10.2, 8.4, 6.1, 5.0],
+    },
+  };
+
+  it("跳过今天，给出明天 / 后天 / 周几", async () => {
+    const spy = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => payload }));
+    vi.stubGlobal("fetch", spy);
+
+    const weather = await fetchWeather(30.27, 120.15, "c", ["api.open-meteo.com"]);
+    expect(weather.temperature).toBe(17);
+    expect(weather.daily.map((d) => d.label)).toEqual(["明天", "后天", "周二"]);
+    expect(weather.daily[0]).toMatchObject({ max: 18, min: 8, code: 1 });
+  });
+
+  it("请求带 daily 与 forecast_days 参数", async () => {
+    const spy = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => payload }));
+    vi.stubGlobal("fetch", spy);
+    await fetchWeather(30.27, 120.15, "c", ["api.open-meteo.com"]);
+    const url = String(spy.mock.calls[0][0]);
+    expect(url).toContain("daily=weather_code");
+    expect(url).toContain("forecast_days=4");
+  });
+
+  it("没有 daily 字段时只返回当前天气", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ current: payload.current }) })),
+    );
+    const weather = await fetchWeather(30.27, 120.15, "c", ["api.open-meteo.com"]);
+    expect(weather.daily).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 import { ChevronDownIcon } from "lucide-react"
 
 function NativeSelect({
@@ -9,15 +9,8 @@ function NativeSelect({
   ...props
 }: Omit<React.ComponentProps<"select">, "size"> & {
   size?: "sm" | "default"
-  /**
-   * 项目适配（默认 true，官方行为不变）：为 false 时只渲染原生 <select>，
-   * 不包 wrapper <div>、也不画官方的 ChevronDownIcon。
-   *
-   * 本项目早已用 .weather-select-wrap（position:relative）+ 自绘的 ChevronDown
-   * 把原生下拉的外观完整接管了。若再套官方 wrapper 会：多出一层 DOM 节点、
-   * w-fit 让「width:100%」塌掉、并且并排出现两个下拉箭头。
-   * 关掉这一层后，DOM 结构与替换前逐标签一致，视觉继续由 globals.css 接管。
-   */
+  /** false 只输出 <select>：外层已有 .weather-select-wrap 和自绘箭头。
+      官方 wrapper 的 w-fit 会压掉宽度，还会多出一个箭头。 */
   withWrapper?: boolean
 }) {
   const select = (

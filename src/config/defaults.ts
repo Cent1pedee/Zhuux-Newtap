@@ -14,33 +14,36 @@ export const CONFIG_VERSION = 1 as const;
 export function createDefaultConfig(): AppConfig {
   return {
     version: CONFIG_VERSION,
+    // 默认简洁布局：时间、搜索、快捷方块、一言与底部 Dock
+    home: { simple: true },
     engineId: DEFAULT_ENGINE_ID,
     engineOrder: ENGINES.map((e) => e.id),
     quickCommands: QUICK_COMMANDS.map((c) => ({ ...c })),
     groups: DEFAULT_GROUPS.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i })) })),
     theme: { mode: "dark", accent: DEFAULT_ACCENT },
     clock: { show: true, showSeconds: false },
-    greeting: { show: true, custom: "" },
-    // 一言默认走远程 API（hitokoto），失败时自动回退本地 36 条语录
+    greeting: { show: false, custom: "" },
+    // 一言默认走远程 API（hitokoto），失败时自动回退本地 36 条语录；首页默认展示
     quote: { show: true, source: "remote", category: "all" },
     background: {
       source: "edge",
       offset: 0,
       dim: 18,
       blur: 0,
+      vignette: true,
       kenBurns: true,
     },
     wallpaper: { source: "none", value: "" },
     suggest: { enabled: false },
     // 天气默认开启，但坐标留空 —— 首屏看到的是「选择城市 / 使用定位」两个入口，
     // 选过一次就记住（localStorage），此后开箱即显示。
-    weather: { enabled: true, unit: "c", province: "", city: "", lat: null, lon: null, source: "none" },
+    weather: { enabled: false, unit: "c", province: "", city: "", lat: null, lon: null, source: "none" },
     // 站点 favicon 默认开启：Dock 与引擎徽标都靠它显示真实图标，
     // 关掉就全部退回首字母（见 site.ts 里关于白名单模型的说明）
     icons: { autoFetch: true },
     // 便签是「中段便当板」里唯一开箱可用的模块；默认开启，
     // 否则搜索框与一言之间会是一段空白，看不到那块板子
-    note: { enabled: true, content: "" },
+    note: { enabled: false, content: "" },
     privacy: { whitelist: [...DEFAULT_WHITELIST] },
     a11y: { reducedMotion: null },
   };

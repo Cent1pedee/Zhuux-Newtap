@@ -7,7 +7,7 @@ import { faviconUrl } from "@/lib/favicon";
 import { useStoredImage } from "@/lib/use-stored-image";
 
 /**
- * 图标降级链（v2）：用户自定义 > 站点 favicon > 首字母
+ * 图标降级链：用户自定义 > 站点 favicon > 首字母
  *
  * 早期顺序是「自定义 > 首字母」，favicon 排在最末且要过白名单 ——
  * 结果一排图标全是首字母方块，用户要的是「每个站点用自己的图标」。
@@ -17,59 +17,42 @@ import { useStoredImage } from "@/lib/use-stored-image";
  *   3. 站点 /favicon.ico    —— 默认（icons.autoFetch=true），失败自动降级
  *   4. 首字母               —— 最终兜底（内网地址、无 favicon 的站点）
  *
- * 外观统一走 `tileStyle()`：favicon 有白底圆片、emoji 与字母是品牌色实心片，
- * 两者都套同样的投影与内高光，一排看过去才是同一套图标。
- *
- * 形状统一成「正圆」：Dock 那颗胶囊的圆角是 999px，图标却是 12px 圆角方块时，
- * 一排方块塞进一颗大胶囊里，两种圆角语言互相打架。全部正圆后，
- * 胶囊 + 圆图标 + 悬停时那圈圆形柔光才对得上。
+ * 视觉上只有一种「片」：
+ *   中性片（白 / 暗色主题的 #2b2f38）+ 图形。
+ *   favicon 直接落在片上；没有 favicon 的站点用「品牌色字形」顶上，
+ *   而不是整块刷成品牌色 —— 参考站的应用抽屉里，所有图标都躺在同一色号的
+ *   方块里，靠图形本身区分，一片彩色底会把整排切成「色块拼贴」。
+ * Dock（42px / 12px 圆角）与快捷网格（52px / 14px 圆角）只是同一枚片的两个尺寸。
  */
-function tileShadow(): string {
-  return "inset 0 1px 0 rgba(255,255,255,0.28), inset 0 0 0 1px rgba(255,255,255,0.10), 0 2px 6px -1px rgba(0,0,0,0.35)";
+
+/** 品牌色字形：往前景色里掺，暗色主题下自动提亮，浅色主题下自动压深 */
+function glyphColor(bg: string): string {
+  return `color-mix(in srgb, ${bg} 55%, var(--fg))`;
 }
 
-function tileStyle(bg: string, size: number): React.CSSProperties {
-  return {
-    width: size,
-    height: size,
-    /*
-     * 纯色打底 + 渐变叠层，分两条声明写。
-     * `color-mix()` 在 Safari < 16.2 / Chrome < 111 上不受支持，整条 background 会被判无效；
-     * 若只写 background: linear-gradient(color-mix(...)) 的简写，底色会一起消失 ——
-     * 图标变成透明圆片，白色首字母直接看不见。拆成 background + backgroundImage 之后，
-     * 渐变失效时仍留着品牌色实心底。
-     */
-    background: bg,
-    backgroundImage: `linear-gradient(160deg, color-mix(in srgb, ${bg} 88%, #ffffff 12%), ${bg} 58%, color-mix(in srgb, ${bg} 82%, #000000 18%))`,
-    boxShadow: tileShadow(),
-  };
-}
-
-/**
- * favicon 圆片：白底托住彩色图形。
- * 纯白会和旁边那些品牌色实心片（首字母 / Emoji）拉出两套质感，
- * 所以掺一成左右的自有品牌色 —— 远看是同一排圆片，近看仍能认出各自的主色。
- */
-function faviconPlateStyle(bg: string, size: number): React.CSSProperties {
-  return {
-    width: size,
-    height: size,
-    /* 同 tileStyle：白底用纯色兜底，渐变（含 color-mix）单独叠加，旧引擎退化后仍是白片 */
-    background: "#f4f6fa",
-    backgroundImage: `linear-gradient(170deg, color-mix(in srgb, ${bg} 8%, #ffffff), color-mix(in srgb, ${bg} 16%, #f4f6fa))`,
-    boxShadow: tileShadow(),
-  };
-}
-
-export function ShortcutIcon({ item, size = 40 }: { item: Shortcut; size?: number }) {
+export function ShortcutIcon({
+  item,
+  size = 40,
+  variant = "dock",
+}: {
+  item: Shortcut;
+  size?: number;
+  /**
+   * dock：底部 Dock 与设置列表里的 42px 片（12px 圆角）。
+   * tile：首页快捷网格里的 52px 片（14px 圆角）。
+   */
+  variant?: "dock" | "tile";
+}) {
   const { config, ready } = useConfig();
   const [imageFailed, setImageFailed] = useState(false);
   const [faviconFailed, setFaviconFailed] = useState(false);
+  const [faviconLoaded, setFaviconLoaded] = useState(false);
 
   // 换了图标或链接就重新给一次机会（否则一次失败会永久钉死成首字母）
   useEffect(() => {
     setImageFailed(false);
     setFaviconFailed(false);
+    setFaviconLoaded(false);
   }, [item.iconValue, item.iconKind, item.url]);
 
   const letter = (item.title || "?").trim().charAt(0).toUpperCase() || "?";
@@ -88,10 +71,14 @@ export function ShortcutIcon({ item, size = 40 }: { item: Shortcut; size?: numbe
   const remote =
     ready && config.icons.autoFetch ? faviconUrl(item.url, Math.max(32, Math.round(size * 2))) : "";
 
-  // 1) 用户自定义图片
+  const isTile = variant === "tile";
+  const plateClass = `shortcut-plate ${isTile ? "shortcut-tile-icon" : "shortcut-dock-icon"}`;
+  const plate = { width: size, height: size };
+
+  // 1) 自定义图片：铺满整片，图片本身就是图标
   if (resolvedImage && item.iconKind === "image" && !imageFailed) {
     return (
-      <span className="grid shrink-0 place-items-center overflow-hidden rounded-full" style={tileStyle(bg, size)}>
+      <span className={`${plateClass} overflow-hidden`} style={plate}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={resolvedImage}
@@ -106,12 +93,12 @@ export function ShortcutIcon({ item, size = 40 }: { item: Shortcut; size?: numbe
     );
   }
 
-  // 2) 用户自定义 emoji（与字母共用品牌色实心片，只把字形换掉）
+  // 2) 自定义 emoji：中性片 + emoji 字形（emoji 自带颜色，不再叠品牌底）
   if (customEmoji) {
     return (
       <span
-        className="grid shrink-0 place-items-center rounded-full leading-none"
-        style={{ ...tileStyle(bg, size), fontSize: size * 0.6 }}
+        className={`${plateClass} leading-none`}
+        style={{ ...plate, fontSize: size * 0.48 }}
         aria-hidden="true"
       >
         {item.iconValue}
@@ -119,20 +106,28 @@ export function ShortcutIcon({ item, size = 40 }: { item: Shortcut; size?: numbe
     );
   }
 
-  // 3) 站点自带 favicon（默认路径；失败则落到首字母）
+  // 3) 站点 favicon：中性片 + 图形；加载期间先显示首字母，避免空白方块
   if (remote && !faviconFailed) {
     return (
-      <span
-        className="grid shrink-0 place-items-center overflow-hidden rounded-full"
-        style={faviconPlateStyle(bg, size)}
-      >
+      <span className={plateClass} style={plate}>
+        {!faviconLoaded ? (
+          <span
+            className="shortcut-tile-letter"
+            style={{ color: glyphColor(bg), fontSize: size * 0.4 }}
+            aria-hidden="true"
+          >
+            {letter}
+          </span>
+        ) : null}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={remote}
           alt=""
-          width={size}
-          height={size}
-          className="size-full object-contain p-[15%]"
+          width={Math.round(size * 0.54)}
+          height={Math.round(size * 0.54)}
+          className="shortcut-icon-img"
+          data-loaded={faviconLoaded ? "true" : "false"}
+          onLoad={() => setFaviconLoaded(true)}
           onError={() => setFaviconFailed(true)}
           referrerPolicy="no-referrer"
           loading="lazy"
@@ -142,11 +137,11 @@ export function ShortcutIcon({ item, size = 40 }: { item: Shortcut; size?: numbe
     );
   }
 
-  // 4) 首字母占位（内网站点 / 无 favicon / 用户关掉了自动抓取）
+  // 4) 首字母：中性片 + 品牌色字形（与 emoji 同一套片）
   return (
     <span
-      className="grid shrink-0 place-items-center rounded-full font-semibold text-white"
-      style={{ ...tileStyle(bg, size), fontSize: size * 0.42 }}
+      className={`${plateClass} font-semibold`}
+      style={{ ...plate, color: glyphColor(bg), fontSize: size * 0.42 }}
       aria-hidden="true"
       data-testid="icon-fallback"
     >

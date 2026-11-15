@@ -66,10 +66,12 @@ export function EngineGlyph({ id, size = 18 }: { id: string; size?: number }) {
 }
 
 /**
- * 引擎图标底：白色圆片 + 一层极淡内描边与投影。
+ * 引擎标识：能拿到 favicon 就盖在品牌字形上，拿不到 / 还没加载完就露出字形。
  *
- * 传了 `url` 且站点可抓 favicon 就显示真实图标，否则用内联品牌标识兜底。
- * 右侧圆形搜索按钮与它是「白圆里一个图形」的统一语言。
+ * 字形是**常驻底图**而不是「失败兜底」—— favicon 是网络请求，
+ * 菜单刚展开那一瞬它还没回来，只渲染 <img> 的话会留一个空格子，
+ * 看起来像「这个引擎没有图标」。垫一层内置 SVG 之后，
+ * 无论网络快慢、断网还是站点改版，三行永远是三枚完整图标。
  */
 export function EngineBadge({
   id,
@@ -84,9 +86,11 @@ export function EngineBadge({
 }) {
   const remote = autoFetch && url ? faviconUrl(url, Math.max(32, Math.round(size * 2))) : "";
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     setFailed(false);
+    setLoaded(false);
   }, [remote]);
 
   const glyph = Math.round(size * 0.56);
@@ -96,8 +100,9 @@ export function EngineBadge({
       style={{ width: size, height: size }}
       data-testid="engine-badge"
       data-engine={id}
-      data-icon={remote && !failed ? "favicon" : "glyph"}
+      data-icon={remote && !failed ? (loaded ? "favicon" : "glyph") : "glyph"}
     >
+      <EngineGlyph id={id} size={glyph} />
       {remote && !failed ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
@@ -105,14 +110,14 @@ export function EngineBadge({
           alt=""
           width={size}
           height={size}
-          className="size-full object-contain p-[22%]"
+          className="engine-badge-img absolute inset-0 size-full object-contain p-[22%]"
+          data-loaded={loaded ? "true" : "false"}
+          onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
           referrerPolicy="no-referrer"
-          loading="lazy"
+          loading="eager"
         />
-      ) : (
-        <EngineGlyph id={id} size={glyph} />
-      )}
+      ) : null}
     </span>
   );
 }

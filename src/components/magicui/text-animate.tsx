@@ -49,8 +49,8 @@ export function TextAnimate({
           key={`${piece}-${index}`}
           aria-hidden="true"
           className="inline-block whitespace-pre"
-          initial={{ opacity: 0, y: 6, filter: "blur(3px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.26, delay: delay + index * stagger, ease: EASE_OUT_CUBIC }}
         >
           {piece}

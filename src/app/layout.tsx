@@ -90,6 +90,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN" data-theme="dark" suppressHydrationWarning>
       <head>
+        {/* 首屏要连的三个外部域名：壁纸元数据（fetch）、天气（fetch）、壁纸图片（img）。
+            提前建连能省掉 DNS + TCP + TLS 的一次往返；带 crossOrigin 的两条是 CORS 请求，
+            与 safeFetch 的 credentials:"omit" 对应，连接可复用。 */}
+        <link rel="preconnect" href="https://bing.biturl.top" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://api.open-meteo.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://www.bing.com" />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
         <script
           type="application/ld+json"

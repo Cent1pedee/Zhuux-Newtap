@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { openSettings } from "./helpers";
 
 /**
  * 无障碍扫描（PRD 6.2 / 6.4）：axe-core 在真实浏览器里扫首页与三个浮层，
@@ -77,7 +78,7 @@ test.describe("无障碍扫描", () => {
     // 并行时被 CPU 抢占会超时），这里单独放宽
     test.setTimeout(90_000);
     await fresh(page);
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await expect(page.getByTestId("settings-done")).toBeVisible();
     await page.waitForTimeout(400);
     for (const tab of ["search", "appearance", "modules", "background", "privacy", "about"]) {
@@ -98,7 +99,7 @@ test.describe("无障碍扫描", () => {
   test("快捷项编辑弹窗无 serious/critical 问题", async ({ page }) => {
     await fresh(page);
     // 快捷项编辑入口已在「设置 → 快捷跳转」里
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await page.getByTestId("settings-tab-shortcuts").click();
     await page.getByTestId("add-shortcut").click();
     await expect(page.getByTestId("shortcut-title")).toBeVisible();

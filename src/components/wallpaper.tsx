@@ -56,7 +56,7 @@ function scrimBackground(isLight: boolean, dim: number): string {
  * 加载。用户可以叠加一张自定义图片（优先级更高）；
  * 任何一步失败都回落到纯渐变，页面永远有底，不会出现白屏。
  */
-export function Wallpaper() {
+export function Wallpaper({ blurred = false }: { blurred?: boolean } = {}) {
   const { config, ready } = useConfig();
   const reduce = useReducedMotionPref();
   const { background, wallpaper, theme } = config;
@@ -194,8 +194,14 @@ export function Wallpaper() {
   }, []);
 
   const src = customSrc ? (cachedSrc ?? customSrc) : (daily?.url ?? "");
-  const blur = Math.max(0, background.blur) + (focus ? FOCUS_BLUR : 0);
-  const brightness = focus ? 0.72 : 1;
+  /*
+   * 点击时间进入展开态时，壁纸额外高斯模糊一档：
+   * 18px 足以把细节压成色块、让快捷方块与文字浮起来，又保留照片的明暗与色调。
+   * 这是交互态，不写入配置；用户设的 background.blur 始终叠加在最外层。
+   */
+  const revealBlur = blurred ? 18 : 0;
+  const blur = Math.max(0, background.blur) + (focus ? FOCUS_BLUR : 0) + revealBlur;
+  const brightness = blurred ? 0.82 : focus ? 0.72 : 1;
   const sourceTag = customSrc ? "custom" : daily ? "edge" : "none";
 
   const onImageError = useCallback(() => setFailed(true), []);
@@ -245,6 +251,7 @@ export function Wallpaper() {
       data-testid="wallpaper"
       data-bg-source={sourceTag}
       data-bg-date={daily?.date ?? ""}
+      data-blurred={blurred ? "true" : "false"}
     >
       {/* 每日壁纸 / 自定义图片：交叉淡入 + Ken Burns 缓慢缩放 */}
       <AnimatePresence initial={false} mode="sync">
@@ -265,7 +272,7 @@ export function Wallpaper() {
             transition={{
               opacity: { duration: 0.7, ease: [0.215, 0.61, 0.355, 1] },
               scale: { duration: 12, ease: "linear" },
-              filter: { duration: 0.25 },
+              filter: { duration: blurred ? 0.32 : 0.25 },
             }}
             onError={onImageError}
             data-testid="wallpaper-image"
@@ -281,6 +288,11 @@ export function Wallpaper() {
           style={{ background: FALLBACK_GRADIENT }}
           data-testid="wallpaper-fallback"
         />
+      ) : null}
+
+      {/* 暗角：四角压暗、中心留亮，让视线落在内容列上（可在「常规设置」关闭） */}
+      {background.vignette ? (
+        <div className="wallpaper-vignette" data-testid="wallpaper-vignette" />
       ) : null}
 
       {/* 遮罩层：暗色压黑、亮色分层柔光，见 scrimBackground 的说明 */}

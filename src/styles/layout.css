@@ -1,0 +1,800 @@
+/* 一屏布局、交互表面、快捷项 Dock 与顶栏动作组 */
+
+/* ------------------------------------------------------------
+   竖向排布：时钟 → 搜索框 → 便当板 → 一言 → Dock
+   间距走变量，矮视口自动收紧
+   ------------------------------------------------------------ */
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--stack-gap);
+  width: 100%;
+}
+
+/* ------------------------------------------------------------
+   交互表面：搜索框 / 输入框这类「需要看起来可输入」的区域，
+   在板内只用一个极淡的内描边，不再套整块玻璃
+   ------------------------------------------------------------ */
+
+.field-surface {
+  background: var(--input-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 7%, transparent);
+}
+
+/* ------------------------------------------------------------
+   快捷项 Dock：一排图标，无分组、无卡片、无方框。
+   参考青柠起始页底部的思路 —— 悬停只作用于图标本身：
+   图标上浮放大、背后浮出一团柔光，指针所在的位置不会出现
+   「一大片卡片底色」，因为这里根本没有卡片。
+   ------------------------------------------------------------ */
+
+.shortcut-dock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.shortcut-item {
+  position: relative;
+  display: flex;
+  width: 46px;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 2px 0;
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+/* 只有图标自身参与悬停视觉，item 容器完全透明 —— 没有卡片底色 */
+.shortcut-icon-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* 位移与缩放由 motion 的 spring 驱动（相邻图标一起轻轻抬起来），
+     这里不能再挂 transition，否则 CSS 过渡会和 spring 互相拉扯、出现二次回弹。 */
+  will-change: transform;
+}
+
+/*
+ * 图标背后的柔光：只包住图标，不是整个格子。
+ * 青柠起始页的 Dock 悬停时不铺底色，只在图标下面垫一小团光 —— 照做。
+ */
+.shortcut-icon-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  /* 图标本身是 12px 圆角的一片，柔光跟着这个形状走，不再是一个圆 */
+  border-radius: 16px;
+  background: var(--hover-bg);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+  pointer-events: none;
+}
+
+/* 悬停与聚焦的位移/缩放统一交给 motion 内联样式（见 shortcut-dock.tsx 的
+   hovered state：指针悬停和键盘聚焦都会置同一个值），CSS 这边不再写
+   transform —— 内联样式优先级更高，两边都写只会互相打架。 */
+
+.shortcut-item:hover .shortcut-icon-wrap::before,
+.shortcut-item:focus-within .shortcut-icon-wrap::before {
+  opacity: 1;
+}
+
+/* 按下的回弹交给 motion 的 whileTap（见 shortcut-dock.tsx）——
+   这里如果也写 transform，会和 layout 动画抢同一个属性。 */
+
+.shortcut-item-label {
+  max-width: 100%;
+  /*
+   * 图标下方不常驻文字 —— 青柠起始页底部那排就是纯图标。
+   * 名称做成 macOS Dock 式的小气泡，指针划上去才浮出来（同时在 DOM 里保留文本，
+   * 屏幕阅读器与自动化测试仍拿得到可访问名）。
+   */
+  position: absolute;
+  z-index: 6;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  /* 气泡会盖在一言上方，必须把底下的字彻底糊掉 —— 否则两层文字会读成一团 */
+  background: var(--board-bg);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    var(--shadow-1),
+    inset 0 0 0 1px var(--board-ring);
+  color: var(--fg);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-cubic),
+    transform var(--dur-base) var(--ease-spring);
+  pointer-events: none;
+}
+
+.shortcut-item:hover .shortcut-item-label,
+.shortcut-item:focus-within .shortcut-item-label {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* 空态：整条 dock 没有快捷项时的引导 */
+.shortcut-dock-empty {
+  width: 100%;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-subtle);
+}
+
+/* ------------------------------------------------------------
+   顶栏动作组：一个整体的胶囊，而不是三个各自为政的方块。
+   悬停时高光从左到右扫过（见 bar-action::after）。
+   ------------------------------------------------------------ */
+
+.bar-dock {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--board-bg);
+  box-shadow:
+    var(--shadow-1),
+    inset 0 0 0 1px var(--board-ring);
+  backdrop-filter: blur(var(--blur-2)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.3);
+}
+
+.bar-action {
+  position: relative;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  transition:
+    color var(--dur-fast) var(--ease-out-cubic),
+    background-color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.bar-action::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--hover-bg);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+}
+
+/* 悬停时一道斜向高光扫过按钮，Magic UI Shimmer 的极简版 */
+.bar-action::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -140%;
+  width: 90%;
+  height: 200%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    color-mix(in srgb, var(--fg) 18%, transparent),
+    transparent
+  );
+  transform: skewX(-18deg);
+  transition: left 520ms var(--ease-out-cubic);
+  pointer-events: none;
+}
+
+.bar-action:hover::before,
+.bar-action:focus-visible::before {
+  opacity: 1;
+}
+
+.bar-action:hover::after,
+.bar-action:focus-visible::after {
+  left: 140%;
+}
+
+.bar-action:hover,
+.bar-action:focus-visible {
+  color: var(--fg);
+}
+
+.bar-action svg {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   简洁首页：右上角设置 / 时间 / 搜索 / 快捷方块 / 一言 / Dock
+   ============================================================ */
+
+/* 右上角唯一入口：一枚悬浮的玻璃圆钮，不与内容抢层级 */
+.home-settings {
+  position: absolute;
+  top: clamp(12px, 2.2vh, 22px);
+  right: clamp(14px, 2.4vw, 28px);
+  z-index: 30;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(16, 20, 28, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 10px 24px -14px rgba(0, 0, 0, 0.72);
+  color: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  backdrop-filter: blur(12px) saturate(1.3);
+  transition:
+    background-color var(--dur-base) var(--ease-out-cubic),
+    color var(--dur-base) var(--ease-out-cubic);
+}
+
+.home-settings:hover,
+.home-settings:focus-visible {
+  background: rgba(26, 32, 44, 0.62);
+  color: #fff;
+}
+
+.home-settings:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 3px;
+}
+
+.home-settings svg {
+  width: 18px;
+  height: 18px;
+}
+
+[data-theme="light"] .home-settings {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.16),
+    0 10px 24px -16px rgba(15, 23, 42, 0.45);
+  color: rgba(15, 23, 42, 0.88);
+}
+
+[data-theme="light"] .home-settings:hover,
+[data-theme="light"] .home-settings:focus-visible {
+  background: rgba(255, 255, 255, 0.78);
+  color: #0f172a;
+}
+
+/* ------------------------------------------------------------
+   内容区柔光：只压暗中轴，四角保持壁纸原样
+   ------------------------------------------------------------ */
+
+.home-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /*
+   * 默认态壁纸保持清晰，只在中轴压一层很淡的暗，托住时间与一言。
+   * 真正的「高斯模糊」交给点击后的 Wallpaper blurred 态：
+   * 那一下要让用户明确感到「进入了另一层」，不能靠常驻柔焦冒充。
+   */
+  background: radial-gradient(
+    ellipse 68% 62% at 50% 42%,
+    rgba(3, 6, 12, 0.4) 0%,
+    rgba(3, 6, 12, 0.17) 56%,
+    rgba(3, 6, 12, 0) 82%
+  );
+}
+
+[data-theme="light"] .home-scrim {
+  background: radial-gradient(
+    ellipse 68% 62% at 50% 42%,
+    rgba(3, 6, 12, 0.36) 0%,
+    rgba(3, 6, 12, 0.15) 56%,
+    rgba(3, 6, 12, 0) 82%
+  );
+}
+
+.home-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 上下只留安全边距：真正的垂直居中交给 .home-center 的 auto 外边距 */
+  padding: clamp(16px, 2.4vh, 28px) var(--gutter);
+}
+
+.home-center {
+  /* 时钟 ↔ 搜索、搜索 ↔ 方块的间距；方块展开时由内层 padding 参与高度动画 */
+  --home-gap: clamp(16px, 2.6vh, 30px);
+
+  display: flex;
+  width: 100%;
+  max-width: 620px;
+  flex-direction: column;
+  align-items: center;
+  /*
+   * 居中用 auto 外边距而不是 justify-content:center ——
+   * 内容比可视区高时（矮屏展开方块），auto 外边距会自动归零，
+   * 内容从顶部开始、可以正常滚动；justify-content 居中则是上下同时溢出，
+   * 顶部被裁掉且滚不到。
+   */
+  margin-block: auto;
+}
+
+/* 首页时钟比经典布局小一档：展开后下方还要容纳搜索框与三行方块 */
+.home-clock .clock-digits {
+  font-size: clamp(38px, min(5.4vw, 7.4vh), 54px);
+  font-weight: 300;
+  letter-spacing: 0.02em;
+}
+
+/* 时间本身就是入口：保持时间的排版，只加一点可点的暗示 */
+.home-clock {
+  position: relative;
+}
+
+/*
+ * 悬停/聚焦时在时间背后点一团极淡的光：告诉指针「这里可以按」，
+ * 又不给时间加任何底板。径向渐变从中心向外淡出，边缘没有可辨认的边界。
+ */
+.home-clock::before {
+  content: "";
+  position: absolute;
+  inset: -28px -40px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.16), transparent 72%);
+  opacity: 0;
+  transition: opacity 360ms var(--ease-out-cubic);
+  pointer-events: none;
+}
+
+[data-theme="light"] .home-clock::before {
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.68), transparent 72%);
+}
+
+.home-clock:hover::before,
+.home-clock:focus-within::before {
+  opacity: 1;
+}
+
+[data-motion="reduce"] .home-clock::before {
+  transition: none;
+}
+
+.home-clock .clock-trigger {
+  position: relative;
+  margin: -6px -12px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: opacity var(--dur-base) var(--ease-out-cubic);
+}
+
+.home-clock .clock-trigger:hover {
+  opacity: 0.92;
+}
+
+.home-clock .clock-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 4px;
+}
+
+/* 展开后时间退半步：视线该落在方块上了 */
+[data-revealed="true"] .home-clock .clock-trigger {
+  opacity: 0.88;
+}
+
+[data-revealed="true"] .home-clock .clock-trigger:hover {
+  opacity: 0.96;
+}
+
+/* 时钟被关掉时的等价入口：不留下「点哪里都没反应」的空位 */
+.home-reveal-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(13, 17, 25, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 10px 24px -14px rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 13px;
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  transition: background-color var(--dur-base) var(--ease-out-cubic);
+}
+
+.home-reveal-trigger:hover {
+  background: rgba(26, 32, 44, 0.62);
+}
+
+.home-reveal-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 4px;
+}
+
+[data-theme="light"] .home-reveal-trigger {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.16),
+    0 10px 24px -16px rgba(15, 23, 42, 0.45);
+  color: #0f172a;
+}
+
+[data-theme="light"] .home-reveal-trigger:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.home-search {
+  width: 100%;
+  max-width: 560px;
+  margin-top: var(--home-gap);
+}
+
+/*
+ * 展开区：高度从 0 动画到 auto（见 page.tsx 的 motion.div）。
+ * 间距放在内层 padding 里而不是外层 margin —— margin 会瞬间生效，
+ * 动画一开始就先跳 30px；padding 是高度的一部分，跟着一起长出来。
+ */
+.home-reveal {
+  width: 100%;
+  overflow: hidden;
+}
+
+.home-reveal-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: var(--home-gap);
+}
+
+/*
+ * 搜索胶囊的配色与三态已收进 chrome.css 的 .search-panel：
+ * 那里按主题定义了一整套 --search-* 变量，简洁布局不再单独覆盖，
+ * 经典布局因此也自动拿到同一套材质。
+ */
+
+/* ------------------------------------------------------------
+   快捷面板：点击时间后浮出的快捷方块
+   没有托板、没有标题栏 —— 方块直接落在模糊后的壁纸上，
+   与参考站的应用抽屉一致：背景是虚的，图标是实心的。
+   ------------------------------------------------------------ */
+
+/*
+ * 网格不套托板：参考站的应用抽屉就是「模糊壁纸 + 一排排实心方块」，
+ * 中间再垫一层玻璃，会变成「卡片里再放卡片」，和已经去容器的时钟/一言不同源。
+ */
+.shortcut-grid {
+  display: grid;
+  width: 100%;
+  max-width: 392px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px 4px;
+}
+
+.shortcut-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  justify-self: center;
+  outline: none;
+  transition: transform 220ms var(--ease-out-cubic);
+}
+
+.shortcut-tile:hover {
+  transform: translateY(-3px);
+}
+
+.shortcut-tile:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.shortcut-tile:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 4px;
+}
+
+/*
+ * 图标片：Dock 与快捷网格共用。
+ * 参考站的 Dock / 应用抽屉都是「白方块 + 深色 logo」，暗色主题换成 #2b2f38，
+ * 而不是透明玻璃 —— 玻璃片在模糊壁纸上会糊成一团，图标边缘先消失。
+ */
+.shortcut-plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  box-shadow:
+    0 2px 8px rgba(15, 23, 42, 0.14),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+  transition:
+    box-shadow 220ms var(--ease-out-cubic),
+    background-color 220ms var(--ease-out-cubic);
+}
+
+[data-theme="dark"] .shortcut-plate {
+  background: #2b2f38;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.shortcut-tile-icon {
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+
+/* Dock 里的片小一档，圆角也跟着收：42px / 12px */
+.shortcut-dock-icon {
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.shortcut-tile:hover .shortcut-tile-icon,
+.shortcut-tile:focus-visible .shortcut-tile-icon {
+  box-shadow:
+    0 10px 22px -8px rgba(15, 23, 42, 0.42),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme="dark"] .shortcut-tile:hover .shortcut-tile-icon,
+[data-theme="dark"] .shortcut-tile:focus-visible .shortcut-tile-icon {
+  box-shadow:
+    0 10px 22px -8px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/*
+ * favicon 直接落在方块上：白片（亮色）本身就托得住深色 logo；
+ * 深色主题的片是 #2b2f38，黑色标识需要一圈极淡的白色描边勾出轮廓。
+ */
+.shortcut-icon-img {
+  width: 54%;
+  height: 54%;
+  object-fit: contain;
+  transition: opacity var(--dur-fast) var(--ease-out-cubic);
+}
+
+.shortcut-tile-icon .shortcut-icon-img {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+[data-theme="dark"] .shortcut-icon-img {
+  /* 深色片上的黑色标识（GitHub / Vercel）靠两圈极细白边勾出轮廓：
+     单圈 1px 太虚，叠到 1.2px 才看得出是「一只猫」而不是一块空片 */
+  filter:
+    drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.9))
+    drop-shadow(0 0 1.2px rgba(255, 255, 255, 0.5))
+    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.shortcut-icon-img[data-loaded="false"] {
+  opacity: 0;
+}
+
+.shortcut-tile-letter {
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* 「添加」：虚线留白，明确告诉用户这里可以继续长 */
+.shortcut-tile-add-icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px dashed rgba(15, 23, 42, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.32);
+  color: rgba(15, 23, 42, 0.55);
+  transition:
+    border-color 220ms var(--ease-out-cubic),
+    color 220ms var(--ease-out-cubic),
+    background-color 220ms var(--ease-out-cubic);
+}
+
+.shortcut-tile--add:hover .shortcut-tile-add-icon {
+  border-color: rgba(15, 23, 42, 0.42);
+  background: rgba(255, 255, 255, 0.6);
+  color: #0f172a;
+}
+
+[data-theme="dark"] .shortcut-tile-add-icon {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .shortcut-tile--add:hover .shortcut-tile-add-icon {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/* 「添加」的十字在悬停时轻轻放大：比整块跳动克制，但看得出「可以按」 */
+.shortcut-tile-add-icon svg {
+  transition: transform 240ms var(--ease-out-cubic);
+}
+
+.shortcut-tile--add:hover .shortcut-tile-add-icon svg,
+.shortcut-tile--add:focus-visible .shortcut-tile-add-icon svg {
+  transform: scale(1.14);
+}
+
+[data-motion="reduce"] .shortcut-tile-add-icon svg {
+  transition: none;
+}
+
+[data-motion="reduce"] .shortcut-tile--add:hover .shortcut-tile-add-icon svg {
+  transform: none;
+}
+
+.shortcut-tile-label {
+  max-width: 80px;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.62),
+    0 0 8px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme="light"] .shortcut-tile-label {
+  color: rgba(15, 23, 42, 0.88);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.75);
+}
+
+/*
+ * 照片上的时间用白色，靠投影立住。
+ * 快捷名称已在上面的 .shortcut-tile-label 里按主题给了底色与投影，
+ * 这里不再重复一套覆盖。
+ */
+[data-layout="simple"] .home-clock .clock-digits {
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 2px 22px rgba(0, 0, 0, 0.45);
+}
+
+[data-layout="simple"] .home-clock [data-testid="date-label"] {
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.72),
+    0 0 8px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="light"] [data-layout="simple"] .home-clock [data-testid="date-label"] {
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.78),
+    0 0 10px rgba(0, 0, 0, 0.55);
+}
+
+/* ------------------------------------------------------------
+   一言：紧贴 Dock 上方，只有文字，没有容器
+   ------------------------------------------------------------ */
+
+.home-quote {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 0 var(--gutter);
+}
+
+/* 一言与搜索框共用一条中轴与同一个宽度：长句不会再横穿整屏 */
+.home-quote .quote-shell {
+  max-width: 560px;
+  margin-inline: auto;
+}
+
+.home-quote .text-quote {
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.62),
+    0 0 12px rgba(0, 0, 0, 0.5);
+}
+
+.home-quote .quote-from {
+  color: rgba(255, 255, 255, 0.66);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.62),
+    0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+/* 亮色主题的一言落在照片下缘，白字在亮叶子上读不出来，翻成深色 + 白色柔光 */
+[data-theme="light"] .home-quote .text-quote {
+  color: rgba(16, 24, 40, 0.95);
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.92),
+    0 0 10px rgba(255, 255, 255, 0.78);
+}
+
+[data-theme="light"] .home-quote .quote-from {
+  color: rgba(16, 24, 40, 0.68);
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.92),
+    0 0 8px rgba(255, 255, 255, 0.72);
+}
+
+/* 矮屏：方块行距收一档，保证展开后仍能在首屏里放下 */
+@media (max-height: 840px) {
+  .home-center {
+    --home-gap: clamp(12px, 1.8vh, 20px);
+  }
+
+  .shortcut-grid {
+    gap: 10px 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .shortcut-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px 4px;
+  }
+
+  .shortcut-tile-label {
+    max-width: 70px;
+  }
+}
+
+[data-motion="reduce"] .shortcut-tile,
+[data-motion="reduce"] .home-settings,
+[data-motion="reduce"] .shortcut-tile-icon {
+  transition: none;
+}
+
+[data-motion="reduce"] .shortcut-tile:hover {
+  transform: none;
+}
+
+/* 矮屏（横屏手机 / 小笔记本）：顶部留白继续收，但保留一点下移的观感 */
+@media (max-height: 640px) {
+  .home-center {
+    --home-gap: 10px;
+  }
+
+  /* 横屏手机：时间收一档，展开方块时才有余量 */
+  .home-clock .clock-digits {
+    font-size: clamp(32px, min(5vw, 6.4vh), 44px);
+  }
+}

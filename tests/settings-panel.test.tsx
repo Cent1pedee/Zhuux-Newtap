@@ -172,6 +172,15 @@ describe("设置面板：外观", () => {
     fireEvent.click(screen.getByTestId("reduce-motion"));
     await waitFor(() => expect(readConfig().a11y.reducedMotion).toBe(true));
   });
+
+  it("暗角滤镜开关写入 background.vignette", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    await openTab("appearance");
+    const toggle = screen.getByTestId("background-vignette");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(readConfig().background.vignette).toBe(false));
+  });
 });
 
 describe("设置面板：模块", () => {
@@ -195,7 +204,8 @@ describe("设置面板：模块", () => {
     await waitFor(() => expect(readConfig().greeting.custom).toBe("欢迎回来"));
   });
 
-  it("天气：默认开启，展示单位与省市下拉（不再暴露经纬度输入）", async () => {
+  it("天气：开启后展示单位与省市下拉（不再暴露经纬度输入）", async () => {
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ weather: { enabled: true } }));
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
     await openTab("modules");
     await waitFor(() => expect(screen.getByTestId("weather-unit")).toBeTruthy());
@@ -207,6 +217,7 @@ describe("设置面板：模块", () => {
   });
 
   it("天气：选省份与城市后把坐标一并写进配置", async () => {
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ weather: { enabled: true } }));
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
     await openTab("modules");
     fireEvent.change(screen.getByTestId("weather-province"), { target: { value: "浙江省" } });
@@ -340,8 +351,7 @@ describe("设置面板：背景", () => {
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
     await openTab("background");
 
-    // shadcn/ui 的 Slider 基于 Radix：DOM 是 role="slider" 的 thumb，
-    // 不再是 <input type="range">，因此用方向键而不是 fireEvent.change 设值。
+    // Radix Slider 没有 input，用方向键设值。
     const setSlider = (testId: string, target: number) => {
       const root = screen.getByTestId(testId);
       let current = Number(within(root).getByRole("slider").getAttribute("aria-valuenow") ?? "0");
@@ -458,5 +468,44 @@ describe("设置面板：隐私与数据", () => {
     await waitFor(() => expect(screen.getByTestId("confirm-ok")).toBeTruthy());
     fireEvent.click(screen.getByTestId("confirm-ok"));
     await waitFor(() => expect(readConfig().clock.showSeconds).toBe(false));
+  });
+});
+
+describe("设置面板：搜索设置项", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("跨页签跳转，只保留命中的分区", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+
+    fireEvent.change(screen.getByTestId("settings-search"), { target: { value: "模糊" } });
+
+    // 初始在「外观」，关键词只在「背景」里 → 自动切页签
+    await waitFor(() =>
+      expect(screen.getByTestId("settings-tab-background").getAttribute("aria-current")).toBe("page"),
+    );
+    await waitFor(() => expect(screen.getByTestId("wallpaper-blur")).toBeTruthy());
+
+    const sections = Array.from(document.querySelectorAll<HTMLElement>(".settings-section"));
+    const visible = sections.filter((el) => el.style.display !== "none");
+    expect(visible).toHaveLength(1);
+    expect(visible[0].textContent).toContain("模糊");
+    expect(screen.getByTestId("settings-search-count").textContent).toBe("1 项");
+  });
+
+  it("清空搜索后恢复全部分区", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+
+    fireEvent.change(screen.getByTestId("settings-search"), { target: { value: "模糊" } });
+    await waitFor(() => expect(screen.getByTestId("wallpaper-blur")).toBeTruthy());
+
+    fireEvent.change(screen.getByTestId("settings-search"), { target: { value: "" } });
+    await waitFor(() => {
+      const hidden = Array.from(document.querySelectorAll<HTMLElement>(".settings-section")).filter(
+        (el) => el.style.display === "none",
+      );
+      expect(hidden).toHaveLength(0);
+    });
   });
 });

@@ -60,7 +60,12 @@ export const ENGINES: Engine[] = [
  * 默认引擎（PRD 4.1 修订）：仅保留 Google / Bing / 百度 三个主流引擎。
  * 选 Google 作为全球默认；中文环境可在设置里一键切到百度 / Bing。
  */
-export const DEFAULT_ENGINE_ID = "google";
+/**
+ * 默认搜索引擎：Bing。
+ * 这里改的只是「首次打开」的默认值 —— 用户一旦在菜单里选过，
+ * 选择会写进 localStorage 的 engineId，不会被默认值覆盖。
+ */
+export const DEFAULT_ENGINE_ID = "bing";
 
 export type QuickCommand = {
   id: string;
@@ -124,20 +129,27 @@ export const DEFAULT_GROUPS: ShortcutGroup[] = [
     id: "grp-main",
     name: "快捷跳转",
     items: [
-      // 公网站点一律留空 iconValue —— 交给 favicon 自动抓取（见 shortcut-icon.tsx 的降级链），
-      // 抓不到才退回首字母。内网服务没有可抓的图标，直接给 Emoji，免得永远显示灰字。
-      { id: "sc-nas", title: "NAS", url: "http://192.168.1.10:5000", iconKind: "emoji", iconValue: "🗄️", color: "#2F6FED" },
-      { id: "sc-grafana", title: "Grafana", url: "http://192.168.1.10:3000", iconKind: "letter", iconValue: "", color: "#F46800" },
-      { id: "sc-uptime", title: "Uptime", url: "http://192.168.1.10:3001", iconKind: "letter", iconValue: "", color: "#5CDD8B" },
-      { id: "sc-jellyfin", title: "Jellyfin", url: "http://192.168.1.10:8096", iconKind: "emoji", iconValue: "🎬", color: "#AA5CC3" },
+      /*
+       * 默认全部是公网站点：新用户第一次打开时，每个图标都应该能打开。
+       * 早先这里有 4 项指向 192.168.1.10（NAS / Grafana / Uptime / Jellyfin），
+       * 对绝大多数人是 4 个打不开的图标 + 4 条必然失败的 favicon 请求。
+       * 内网服务的配置方式见 README「把 NAS 等内网服务放进来」。
+       *
+       * 公网站点一律留空 iconValue，交给 favicon 自动抓取（shortcut-icon.tsx 的降级链），
+       * 抓不到才退回首字母。
+       */
       { id: "sc-github", title: "GitHub", url: "https://github.com", iconKind: "letter", iconValue: "", color: "#24292F" },
+      { id: "sc-mdn", title: "MDN", url: "https://developer.mozilla.org", iconKind: "letter", iconValue: "", color: "#000000" },
+      { id: "sc-npm", title: "npm", url: "https://www.npmjs.com", iconKind: "letter", iconValue: "", color: "#CB3837" },
+      { id: "sc-stackoverflow", title: "Stack Overflow", url: "https://stackoverflow.com", iconKind: "letter", iconValue: "", color: "#F48024" },
+      { id: "sc-canIuse", title: "Can I use", url: "https://caniuse.com", iconKind: "letter", iconValue: "", color: "#1F7A3F" },
+      { id: "sc-figma", title: "Figma", url: "https://www.figma.com/files", iconKind: "letter", iconValue: "", color: "#F24E1E" },
+      { id: "sc-juejin", title: "掘金", url: "https://juejin.cn", iconKind: "letter", iconValue: "", color: "#1E80FF" },
       { id: "sc-bili", title: "哔哩哔哩", url: "https://www.bilibili.com", iconKind: "letter", iconValue: "", color: "#FB7299" },
       { id: "sc-zhihu", title: "知乎", url: "https://www.zhihu.com", iconKind: "letter", iconValue: "", color: "#0084FF" },
       { id: "sc-weibo", title: "微博", url: "https://weibo.com", iconKind: "letter", iconValue: "", color: "#E6162D" },
-      { id: "sc-mdn", title: "MDN", url: "https://developer.mozilla.org", iconKind: "letter", iconValue: "", color: "#000000" },
-      { id: "sc-npm", title: "npm", url: "https://www.npmjs.com", iconKind: "letter", iconValue: "", color: "#CB3837" },
+      { id: "sc-douban", title: "豆瓣", url: "https://www.douban.com", iconKind: "letter", iconValue: "", color: "#2E963D" },
       { id: "sc-vercel", title: "Vercel", url: "https://vercel.com/dashboard", iconKind: "letter", iconValue: "", color: "#000000" },
-      { id: "sc-canIuse", title: "Can I use", url: "https://caniuse.com", iconKind: "letter", iconValue: "", color: "#1F7A3F" },
     ],
   },
 ];

@@ -1,0 +1,500 @@
+/* 搜索框、设置面板、引擎徽标、底部 Dock */
+
+/* ------------------------------------------------------------
+   搜索框：对齐 newtab.anheyu.com 的三态玻璃胶囊
+   参考站那颗搜索框没有描边、没有卡片感，三种状态是一条连续的动线：
+     静止  25% 白 + 一圈 10px 柔光，文字半隐在白底里
+     悬停  60% 白 + 更深一圈柔光，文字转深灰 —— 指针靠近就「醒」过来
+     聚焦  90% 白 + 4/24 的下沉投影，文字近黑，变成一块安静的实心胶囊
+   颜色 / 阴影 / 文字色共用 250ms cubic-bezier(.4,0,.2,1)，
+   读起来是「同一颗胶囊在变色」，而不是三个不同控件在切换。
+   ------------------------------------------------------------ */
+
+.search-panel {
+  /* 静止态：几乎只是一层雾 */
+  --search-bg: rgba(255, 255, 255, 0.25);
+  --search-bg-hover: rgba(255, 255, 255, 0.6);
+  --search-bg-focus: rgba(255, 255, 255, 0.9);
+  --search-text: rgba(255, 255, 255, 0.96);
+  --search-text-hover: #646464;
+  --search-text-focus: rgba(0, 0, 0, 0.9);
+  --search-placeholder: rgba(255, 255, 255, 0.8);
+  --search-placeholder-hover: #686868;
+  --search-placeholder-focus: rgba(0, 0, 0, 0.36);
+  --search-icon: #7f7f7f;
+  --search-tint: rgba(0, 0, 0, 0.2);
+
+  position: relative;
+  width: 100%;
+  /* 参考站 560px：比内容列窄一档，左右留白让它读成「一条」而不是「一块」 */
+  max-width: 560px;
+  min-height: 44px;
+  margin-inline: auto;
+  border-radius: 999px;
+  background-color: var(--search-bg);
+  box-shadow: 0 0 10px var(--search-tint);
+  -webkit-backdrop-filter: blur(10px) saturate(1.5);
+  backdrop-filter: blur(10px) saturate(1.5);
+  transition:
+    background-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-panel:hover {
+  background-color: var(--search-bg-hover);
+  --search-tint: rgba(0, 0, 0, 0.3);
+}
+
+.search-panel[data-focused="true"] {
+  background-color: var(--search-bg-focus);
+  /* 聚焦后不再饱和整个背景：实心白上再叠一层彩色会发脏 */
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* 暗色主题：参考站是一块 45 灰的半透明底，聚焦后压到 95% */
+[data-theme="dark"] .search-panel {
+  --search-bg: rgba(45, 45, 45, 0.4);
+  --search-bg-hover: rgba(45, 45, 45, 0.6);
+  --search-bg-focus: rgba(45, 45, 45, 0.95);
+  --search-text: rgba(255, 255, 255, 0.86);
+  --search-text-hover: rgba(255, 255, 255, 0.92);
+  --search-text-focus: rgba(255, 255, 255, 0.96);
+  --search-placeholder: rgba(255, 255, 255, 0.66);
+  --search-placeholder-hover: rgba(255, 255, 255, 0.8);
+  --search-placeholder-focus: rgba(255, 255, 255, 0.4);
+  --search-icon: rgba(255, 255, 255, 0.66);
+  --search-tint: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .search-panel:hover {
+  --search-tint: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .search-panel[data-focused="true"] {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+/*
+ * 亮色主题不照搬「白字压白底」：参考站的浅色模式本身就是深色壁纸，
+ * 而这里是浅色界面 + 浅色壁纸，白字会直接消失。
+ * 保留同一套动线（底越来越实、字越来越深），只把起点换成深灰。
+ */
+[data-theme="light"] .search-panel {
+  --search-bg: rgba(255, 255, 255, 0.55);
+  --search-bg-hover: rgba(255, 255, 255, 0.78);
+  --search-bg-focus: rgba(255, 255, 255, 0.95);
+  --search-text: rgba(15, 23, 42, 0.72);
+  --search-text-hover: #475569;
+  --search-text-focus: rgba(15, 23, 42, 0.92);
+  --search-placeholder: rgba(15, 23, 42, 0.5);
+  --search-placeholder-hover: #64748b;
+  --search-placeholder-focus: rgba(15, 23, 42, 0.34);
+  --search-icon: #64748b;
+  --search-tint: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme="light"] .search-panel:hover {
+  --search-tint: rgba(15, 23, 42, 0.2);
+}
+
+[data-theme="light"] .search-panel[data-focused="true"] {
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.16);
+}
+
+/* 输入区：文字色跟着胶囊走，空态居中、开始输入后回到左对齐 */
+.search-input {
+  height: 44px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 44px;
+  color: var(--search-text);
+  text-align: left;
+  transition: color 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-panel:hover .search-input {
+  color: var(--search-text-hover);
+}
+
+.search-panel[data-focused="true"] .search-input {
+  color: var(--search-text-focus);
+}
+
+.search-panel[data-empty="true"] .search-input {
+  text-align: center;
+}
+
+.search-input::placeholder {
+  color: var(--search-placeholder);
+  transition: color 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-panel:hover .search-input::placeholder {
+  color: var(--search-placeholder-hover);
+}
+
+.search-panel[data-focused="true"] .search-input::placeholder {
+  color: var(--search-placeholder-focus);
+}
+
+/* 清空键：只在有内容时出现，跟着胶囊的灰阶走 */
+.search-clear {
+  color: var(--search-icon);
+  opacity: 0.75;
+}
+
+.search-clear:hover {
+  opacity: 1;
+  background-color: rgba(127, 127, 127, 0.16);
+}
+
+[data-theme="light"] .search-clear:hover {
+  background-color: rgba(100, 116, 139, 0.14);
+}
+
+/* ------------------------------------------------------------
+   设置面板：分类导航 + 内容分组
+   这是上一版的样式：左侧窄导航 + 滑动胶囊底 + 卡片式分组。
+   ------------------------------------------------------------ */
+
+.settings-nav {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.settings-nav::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .settings-nav {
+    width: 132px;
+    flex-direction: column;
+    gap: 1px;
+    overflow-x: visible;
+    padding: 0 8px 0 0;
+    border-bottom: 0;
+    border-right: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+}
+
+.settings-tab {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  /* 左右内边距对称，胶囊底与文字始终居中对齐 —— 不会再出现「边线漂在左边」 */
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  color: var(--fg-muted);
+  transition: color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.settings-tab:hover {
+  color: var(--fg);
+}
+
+.settings-tab--active {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.settings-tab-icon {
+  display: grid;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  opacity: 0.8;
+  transition: opacity var(--dur-fast) var(--ease-out-cubic);
+}
+
+.settings-tab--active .settings-tab-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* 会滑动的胶囊底：layoutId 让这颗底在页签之间平移，而不是各画各的 */
+.settings-tab-pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  background: var(--hover-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.settings-section {
+  padding: 11px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--fg) 3.5%, transparent);
+}
+
+.settings-h3 {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------
+   右上角设置的二级菜单：齿轮 → 分类菜单 → 完整设置
+   视觉参考图：一整块圆角玻璃、图标 + 文案的行、主次两组之间一条细线。
+   ------------------------------------------------------------ */
+
+.settings-menu {
+  z-index: 70;
+  min-width: 214px;
+  padding: 6px;
+  border-radius: 16px;
+  background: rgba(12, 15, 21, 0.92);
+  box-shadow:
+    0 26px 64px -24px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  color: var(--fg);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(24px) saturate(1.3);
+  transform-origin: top right;
+  animation: settings-menu-in 160ms var(--ease-out-cubic);
+}
+
+[data-theme="light"] .settings-menu {
+  background: rgba(250, 251, 253, 0.96);
+  box-shadow:
+    0 24px 56px -26px rgba(15, 23, 42, 0.4),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+@keyframes settings-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.settings-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-out-cubic),
+    color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.settings-menu-item[data-highlighted],
+.settings-menu-item:hover {
+  background: var(--hover-bg);
+  color: var(--fg);
+}
+
+.settings-menu-icon {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  place-items: center;
+  opacity: 0.8;
+}
+
+.settings-menu-item[data-highlighted] .settings-menu-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.settings-menu-sep {
+  height: 1px;
+  margin: 5px 8px;
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+.settings-menu-arrow {
+  width: 11px;
+  height: 5px;
+  fill: rgba(12, 15, 21, 0.92);
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1px;
+}
+
+[data-theme="light"] .settings-menu-arrow {
+  fill: rgba(250, 251, 253, 0.96);
+  stroke: rgba(15, 23, 42, 0.08);
+}
+
+[data-motion="reduce"] .settings-menu {
+  animation: none;
+}
+
+/* ------------------------------------------------------------
+   引擎徽标与搜索键：胶囊左右各一格，都是「图形 + 空白」
+   参考站这两格各占 56px，里面没有圆片、没有底色、没有描边，
+   只有一枚 ~20px 的灰色图形。这里照做 —— 它们不该比搜索文字更抢眼。
+   ------------------------------------------------------------ */
+
+.engine-btn,
+.search-submit {
+  display: grid;
+  height: 44px;
+  width: 52px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--search-icon);
+  transition:
+    opacity 150ms ease,
+    color 150ms ease;
+}
+
+.engine-btn:hover,
+.search-submit:hover {
+  opacity: 0.72;
+}
+
+.engine-btn:active,
+.search-submit:active {
+  opacity: 0.55;
+}
+
+.engine-btn:focus-visible,
+.search-submit:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--search-icon) 70%, transparent);
+  outline-offset: -6px;
+}
+
+/* 徽标不再垫白圆片：白底 + 白胶囊叠在一起会多出一圈「片感」。
+   内置字形常驻底层，favicon 盖在上面加载完再淡入（见 engine-glyph.tsx） */
+.engine-badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.engine-badge-img {
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out-cubic);
+}
+
+.engine-badge-img[data-loaded="true"] {
+  opacity: 1;
+}
+
+/* 引擎菜单：一列可选引擎，当前项带勾；悬停与键盘聚焦共用同一层底色 */
+.engine-menu-item:hover,
+.engine-menu-item:focus-visible {
+  background: var(--hover-bg);
+  color: var(--fg);
+  outline: none;
+}
+
+.engine-menu-item[aria-checked="true"] {
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------
+   底部 Dock：悬浮在页面底部的玻璃胶囊，装着一排快捷图标
+   ------------------------------------------------------------ */
+
+.dock-shell {
+  display: flex;
+  justify-content: center;
+  /*
+   * 顶部留一指宽的空档：图标名称气泡是浮在 Dock 上方的，
+   * 没有这段空隙它会直接压到一言的出处行上（两层文字叠成一团）。
+   * 32px = 气泡高 22px + 8px 间距 + 2px 余量。
+   */
+  padding: 32px var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+}
+
+.dock-pill {
+  /* 图标名称气泡要浮到一言那一层之上，否则会和一言的出处行叠在一起 */
+  position: relative;
+  z-index: 20;
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background-color: var(--panel-bg);
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, #fff 9%, transparent),
+    transparent 48%
+  );
+  box-shadow:
+    var(--panel-shadow),
+    inset 0 0 0 1px var(--panel-ring),
+    inset 0 1px 0 transparent,
+    inset 0 -1px 0 var(--panel-refract);
+  -webkit-backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  backdrop-filter: blur(var(--panel-blur)) saturate(1.6);
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-theme) var(--ease-out-cubic);
+}
+
+/* 悬停时胶囊自身轻轻上浮一点，像 Dock 被指针「吸」起来 */
+.dock-pill {
+  transition:
+    background-color var(--dur-theme) var(--ease-out-cubic),
+    box-shadow var(--dur-base) var(--ease-out-cubic),
+    transform var(--dur-base) var(--ease-spring);
+}
+
+.dock-pill:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 30px 68px -26px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 1px var(--panel-ring),
+    inset 0 1px 0 transparent;
+}
+
+[data-theme="light"] .dock-pill:hover {
+  box-shadow:
+    0 26px 56px -26px rgba(16, 24, 40, 0.45),
+    inset 0 0 0 1px var(--panel-ring),
+    inset 0 1px 0 transparent;
+}

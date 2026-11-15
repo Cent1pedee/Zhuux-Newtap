@@ -10,7 +10,7 @@ describe("配置读写", () => {
   it("无存储时返回默认配置", () => {
     const config = loadConfig();
     expect(config.version).toBe(1);
-    expect(config.engineId).toBe("google");
+    expect(config.engineId).toBe("bing");
     expect(config.theme.accent).toBe("#2F6FED");
   });
 
@@ -27,7 +27,7 @@ describe("配置读写", () => {
   it("损坏的 JSON 回退默认值且不抛错", () => {
     window.localStorage.setItem(CONFIG_KEY, "{ not json");
     expect(() => loadConfig()).not.toThrow();
-    expect(loadConfig().engineId).toBe("google");
+    expect(loadConfig().engineId).toBe("bing");
   });
 
   it("部分字段缺失时用默认值补齐", () => {

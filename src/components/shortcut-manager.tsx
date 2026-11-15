@@ -16,6 +16,7 @@ import {
   useToast,
 } from "@/components/ui/primitives";
 import { ShortcutIcon } from "@/components/shortcut-icon";
+import { parseBookmarksHtml, toShortcuts } from "@/lib/bookmarks";
 import { faviconCapability } from "@/lib/favicon";
 import { putStoredImage } from "@/lib/image-store";
 import { hostOf } from "@/lib/services";
@@ -62,9 +63,20 @@ export function ShortcutManager() {
     open: false,
     itemId: "",
   });
+  const [bookmarkPreview, setBookmarkPreview] = useState<{
+    open: boolean;
+    name: string;
+    total: number;
+    skipped: number;
+    items: Shortcut[];
+  }>({ open: false, name: "", total: 0, skipped: 0, items: [] });
+  const bookmarkRef = useRef<HTMLInputElement>(null);
 
   const items = useMemo(() => config.groups.flatMap((g) => g.items), [config.groups]);
   const groupId = config.groups[0]?.id ?? "grp-main";
+  // 撤销发生在若干秒之后，闭包里的 items 已经过期；这里始终指向最新一次渲染的列表
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   /**
    * 写回配置：始终收敛成「一个分组」。
@@ -91,9 +103,24 @@ export function ShortcutManager() {
   };
 
   const deleteItem = (itemId: string) => {
+    const index = items.findIndex((i) => i.id === itemId);
+    const removed = items[index];
+    if (!removed) {
+      setConfirm({ open: false, itemId: "" });
+      return;
+    }
     commitItems(items.filter((i) => i.id !== itemId));
-    push("已删除快捷项", "success");
     setConfirm({ open: false, itemId: "" });
+    push("已删除快捷项", "success", {
+      label: "撤销",
+      onClick: () => {
+        const current = itemsRef.current;
+        if (current.some((i) => i.id === removed.id)) return;
+        const next = [...current];
+        next.splice(Math.min(index, next.length), 0, removed);
+        commitItems(next);
+      },
+    });
   };
 
   const move = (itemId: string, delta: number) => {
@@ -109,25 +136,75 @@ export function ShortcutManager() {
     push("已调整顺序", "success");
   };
 
+  /**
+   * 书签文件先解析成预览，确认后才写配置。
+   * 不在选择文件时直接落库：浏览器导出动辄上百条，直接写会一次塞满 Dock，
+   * 用户连「跳过了哪些」都看不到。
+   */
+  const onBookmarkFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      push("书签文件需小于 5MB", "error");
+      return;
+    }
+    try {
+      const html = await file.text();
+      const parsed = parseBookmarksHtml(html);
+      if (parsed.items.length === 0) {
+        push("没有找到可导入的书签（仅支持 http/https）", "error");
+        return;
+      }
+      const { items: next, skipped } = toShortcuts(parsed.items, items);
+      if (next.length === 0) {
+        push(`没有可新增的书签，跳过 ${skipped} 条（重复或超出上限）`, "info");
+        return;
+      }
+      setBookmarkPreview({ open: true, name: file.name, total: parsed.items.length, skipped, items: next });
+    } catch {
+      push("书签文件读取失败", "error");
+    } finally {
+      if (bookmarkRef.current) bookmarkRef.current.value = "";
+    }
+  };
+
+  const confirmBookmarkImport = () => {
+    commitItems([...items, ...bookmarkPreview.items]);
+    push(`已导入 ${bookmarkPreview.items.length} 个书签`, "success");
+    setBookmarkPreview({ open: false, name: "", total: 0, skipped: 0, items: [] });
+  };
+
   return (
     <div data-testid="shortcut-manager">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-[11px] leading-relaxed text-[var(--fg-subtle)]">
           首页底部图标条的顺序即此列表顺序。共 {items.length} / {LIMITS.maxShortcuts} 个。
         </p>
-        <Button
-          onClick={() => setEditor({ open: true, item: null })}
-          size="sm"
-          variant="primary"
-          testId="add-shortcut"
-        >
-          添加
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button onClick={() => bookmarkRef.current?.click()} size="sm" variant="secondary" testId="import-bookmarks">
+            导入书签
+          </Button>
+          <Button
+            onClick={() => setEditor({ open: true, item: null })}
+            size="sm"
+            variant="primary"
+            testId="add-shortcut"
+          >
+            添加
+          </Button>
+          <input
+            ref={bookmarkRef}
+            type="file"
+            accept="text/html,.html,.htm"
+            className="hidden"
+            data-testid="bookmarks-file"
+            onChange={(e) => void onBookmarkFile(e.target.files?.[0])}
+          />
+        </div>
       </div>
 
       {items.length === 0 ? (
         <p
-          className="rounded-[var(--radius-sm)] border border-dashed border-[var(--glass-border)] px-3 py-6 text-center text-[11.5px] text-[var(--fg-subtle)]"
+          className="rounded-[var(--radius-sm)] border border-dashed border-[var(--glass-border)] px-3 py-6 text-center text-[12px] text-[var(--fg-subtle)]"
           data-testid="shortcut-empty"
         >
           还没有快捷项，点右上角「添加」新建第一个
@@ -144,7 +221,7 @@ export function ShortcutManager() {
               <ShortcutIcon item={item} size={26} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12px] text-[var(--fg)]">{item.title}</span>
-                <span className="block truncate text-[10.5px] text-[var(--fg-subtle)]">{item.url}</span>
+                <span className="block truncate text-[11px] text-[var(--fg-subtle)]">{item.url}</span>
               </span>
               <span className="flex shrink-0 items-center gap-0.5">
                 <button
@@ -201,10 +278,51 @@ export function ShortcutManager() {
         onSave={saveItem}
       />
 
+      <Modal
+        open={bookmarkPreview.open}
+        onClose={() => setBookmarkPreview({ open: false, name: "", total: 0, skipped: 0, items: [] })}
+        title="导入浏览器书签"
+        description={
+          `从 ${bookmarkPreview.name} 读到 ${bookmarkPreview.total} 条，可新增 ` +
+          `${bookmarkPreview.items.length} 条` +
+          (bookmarkPreview.skipped > 0 ? `，跳过 ${bookmarkPreview.skipped} 条（重复或超出上限）` : "")
+        }
+        size="md"
+        reduceMotion={reduce}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setBookmarkPreview({ open: false, name: "", total: 0, skipped: 0, items: [] })}
+            >
+              取消
+            </Button>
+            <Button variant="primary" onClick={confirmBookmarkImport} testId="confirm-bookmark-import">
+              导入 {bookmarkPreview.items.length} 个
+            </Button>
+          </>
+        }
+      >
+        <ul className="thin-scroll max-h-52 space-y-1 overflow-y-auto" data-testid="bookmark-preview-list">
+          {bookmarkPreview.items.slice(0, 30).map((item) => (
+            <li key={item.id} className="flex items-center gap-2 text-[12px]">
+              <ShortcutIcon item={item} size={20} />
+              <span className="min-w-0 flex-1 truncate text-[var(--fg)]">{item.title}</span>
+              <span className="max-w-[45%] truncate text-[11px] text-[var(--fg-subtle)]">{item.url}</span>
+            </li>
+          ))}
+        </ul>
+        {bookmarkPreview.items.length > 30 ? (
+          <p className="mt-2 text-[11px] text-[var(--fg-subtle)]">
+            还有 {bookmarkPreview.items.length - 30} 个，确认后一并导入。
+          </p>
+        ) : null}
+      </Modal>
+
       <ConfirmDialog
         open={confirm.open}
         title="删除快捷项"
-        description="该快捷项将从列表中移除，此操作不可撤销。"
+        description="该快捷项将从列表中移除，可在底部提示里撤销。"
         confirmText="删除"
         danger
         reduceMotion={reduce}
@@ -478,7 +596,7 @@ function ShortcutEditor({
               aria-label={`选择颜色 ${c}`}
               aria-pressed={color === c}
               data-testid={`shortcut-color-${c.replace("#", "")}`}
-              className={`size-6 rounded-full transition-transform hover:scale-110 ${
+              className={`size-6 rounded-full transition-opacity hover:opacity-80 ${
                 color === c ? "ring-2 ring-white ring-offset-1 ring-offset-transparent" : ""
               }`}
               style={{ background: c }}
@@ -489,7 +607,7 @@ function ShortcutEditor({
 
       {error ? (
         <p
-          className="mt-1 rounded-lg bg-red-500/10 px-2 py-1.5 text-[11.5px] text-red-400"
+          className="mt-1 rounded-lg bg-red-500/10 px-2 py-1.5 text-[12px] text-red-400"
           role="alert"
           data-testid="shortcut-error"
         >

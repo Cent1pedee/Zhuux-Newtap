@@ -1,9 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { openSettings } from "./helpers";
 
 /**
- * 待办便签（PRD P2）：默认开启（它是中段便当板里开箱可用的模块），
- * 可在设置里关闭；开启后可输入、自动保存、刷新后仍在，并可一键清空。
- * 数据只落 localStorage，不发任何请求。
+ * 待办便签（PRD P2）。
+ *
+ * 首页默认是简洁模式，便签不再出现在首屏；这里显式切到经典布局并开启便签，
+ * 验证模块自身可输入、自动保存、刷新后仍在，并可一键清空。
  */
 test.describe("待办便签", () => {
   test.beforeEach(async ({ page }) => {
@@ -14,6 +16,10 @@ test.describe("待办便签", () => {
         if (window.sessionStorage.getItem("__note_e2e__")) return;
         window.sessionStorage.setItem("__note_e2e__", "1");
         window.localStorage.clear();
+        window.localStorage.setItem(
+          "startpage.config.v1",
+          JSON.stringify({ home: { simple: false }, note: { enabled: true } }),
+        );
       } catch {
         /* ignore */
       }
@@ -22,7 +28,7 @@ test.describe("待办便签", () => {
     await expect(page.getByTestId("clock")).toBeVisible();
   });
 
-  test("默认可见，可输入并持久化到刷新后", async ({ page }) => {
+  test("经典布局下可见，可输入并持久化到刷新后", async ({ page }) => {
     await expect(page.getByTestId("note-card")).toBeVisible();
 
     const input = page.getByTestId("note-input");
@@ -39,7 +45,7 @@ test.describe("待办便签", () => {
   test("关闭后便签卡整体退场，不留空盒子", async ({ page }) => {
     await expect(page.getByTestId("note-card")).toBeVisible();
     await expect(page.getByTestId("note-card-panel")).toBeVisible();
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await page.getByTestId("settings-tab-modules").click();
     await page.getByTestId("note-enable").click();
     await page.getByTestId("settings-done").click();

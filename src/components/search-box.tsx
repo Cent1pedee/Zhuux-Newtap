@@ -8,11 +8,17 @@ import { asDirectUrl, commandSuggestions, parseCommand, resolveCommandUrl, resol
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { EASE_OUT_CUBIC, ENTRANCE_DELAY, fadeUp } from "@/lib/motion";
 import { fetchSuggestions } from "@/lib/services";
+import {
+  clearSearchHistory,
+  loadSearchHistory,
+  pushSearchHistory,
+  removeSearchHistory,
+  subscribeSearchHistory,
+} from "@/lib/search-history";
 import { useToast } from "@/components/ui/primitives";
-import { Spotlight } from "@/components/magicui/spotlight";
 import { EngineBadge } from "@/components/engine-glyph";
 
-type Suggestion = { id: string; text: string; kind: "suggest" | "command" | "direct" };
+type Suggestion = { id: string; text: string; kind: "suggest" | "command" | "direct" | "history" };
 
 export function SearchBox() {
   const { config, ready, set } = useConfig();
@@ -26,6 +32,7 @@ export function SearchBox() {
   const [engineMenuOpen, setEngineMenuOpen] = useState(false);
   const [loadingSuggest, setLoadingSuggest] = useState(false);
   const [focusedMode, setFocusedMode] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const engineBtnRef = useRef<HTMLButtonElement>(null);
@@ -76,6 +83,12 @@ export function SearchBox() {
     };
   }, [query, config.suggest.enabled, config.privacy.whitelist, engine.suggestUrl, engine.id, focused]);
 
+  // 搜索历史：独立存储，跨标签页/命令面板清除时同步刷新
+  useEffect(() => {
+    setHistory(loadSearchHistory());
+    return subscribeSearchHistory(() => setHistory(loadSearchHistory()));
+  }, []);
+
   const suggestions: Suggestion[] = useMemo(() => {
     const list: Suggestion[] = [];
     if (commandHit) {
@@ -102,6 +115,8 @@ export function SearchBox() {
   }, [commandHit, directUrl, cmdHints, remoteSuggestions]);
 
   const openList = focused && suggestions.length > 0;
+  // 输入为空且聚焦时才展示历史；一旦开始输入就交给建议列表
+  const historyOpen = focused && query.trim() === "" && history.length > 0;
 
   useEffect(() => {
     setActiveIndex(-1);
@@ -152,6 +167,9 @@ export function SearchBox() {
         target = directUrl;
       } else if (override?.kind === "suggest") {
         target = resolveSearchUrl(engine.searchUrl, override.text);
+      } else if (override?.kind === "history") {
+        // 历史里可能存着域名或关键词，按输入框同样的规则判定
+        target = asDirectUrl(override.text) ?? resolveSearchUrl(engine.searchUrl, override.text);
       } else {
         const hit = parseCommand(input, config.quickCommands);
         if (hit) {
@@ -163,6 +181,10 @@ export function SearchBox() {
       }
 
       if (!target) return;
+
+      // 只记「真的发生了一次搜索/直达」的输入：指令与网址不入历史
+      const remember = override?.kind === "history" ? override.text : input;
+      if (remember) setHistory(pushSearchHistory(remember));
 
       // 隐私：跳转前不附加任何参数；新标签打开一律带 noopener,noreferrer
       window.open(target, "_blank", "noopener,noreferrer");
@@ -193,6 +215,9 @@ export function SearchBox() {
         event.preventDefault();
         setQuery("");
         setActiveIndex(-1);
+      } else if (historyOpen) {
+        event.preventDefault();
+        inputRef.current?.blur();
       }
       return;
     }
@@ -201,17 +226,6 @@ export function SearchBox() {
       const picked = activeIndex >= 0 ? suggestions[activeIndex] : undefined;
       execute(query, picked);
     }
-  };
-
-  const cycleEngine = () => {
-    if (engines.length <= 1) {
-      push("仅有一个引擎，请在设置中添加", "info");
-      return;
-    }
-    const idx = engines.findIndex((e) => e.id === config.engineId);
-    const next = engines[(idx + 1) % engines.length];
-    set("engineId", next.id);
-    push(`已切换到 ${next.name}`, "success");
   };
 
   const selectEngine = (id: string) => {
@@ -240,28 +254,47 @@ export function SearchBox() {
         aria-label="搜索引擎"
         data-testid="search-form"
       >
-        <motion.div
-          className="search-panel relative flex items-center gap-1.5 overflow-hidden pl-1.5 pr-1.5"
+        {/*
+          胶囊本身不做缩放/位移动画：参考站的三态变化全在
+          背景色 / 阴影 / 文字色上（250ms 同一条缓动），
+          尺寸一动，聚焦时整行会轻微抖动，反而破坏「一颗胶囊在变色」的观感。
+        */}
+        {/*
+          胶囊不再 overflow:hidden：引擎菜单是它的子节点，
+          一旦裁切，下拉列表会被 44px 高的胶囊整个切掉（点了像没反应）。
+          内部没有需要裁切的内容 —— 扫光早已移除，圆角靠自身背景维持。
+        */}
+        <div
+          className="search-panel relative flex items-center"
           data-focused={focusedMode ? "true" : "false"}
-          animate={{ scale: focusedMode && !reduce ? 1.012 : 1 }}
-          transition={{ duration: reduce ? 0 : 0.18, ease: EASE_OUT_CUBIC }}
+          data-empty={query.length === 0 ? "true" : "false"}
           data-testid="search-shell"
         >
-          {/* Magic UI Spotlight：鼠标跟随光斑（PRD 8.4） */}
-          {reduce ? null : <Spotlight size={260} opacity={0.22} />}
-          {/* 引擎切换按钮：点击循环切换（PRD 4.1） */}
+          {/*
+            引擎按钮：点一下弹菜单，由用户自己选，不再「点一下换一个」。
+            循环切换看着省一次点击，实际上没法预判下一次是哪个引擎 ——
+            想找百度得先猜几步。菜单一次列全，当前项带勾。
+          */}
           <div className="relative shrink-0">
             <button
               ref={engineBtnRef}
               type="button"
-              onClick={cycleEngine}
+              onClick={() => setEngineMenuOpen((v) => !v)}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setEngineMenuOpen((v) => !v);
+                setEngineMenuOpen(true);
               }}
-              aria-label={`当前引擎 ${engine.name}，点击切换，右键选择引擎`}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && engineMenuOpen) {
+                  e.preventDefault();
+                  setEngineMenuOpen(false);
+                }
+              }}
+              aria-label={`当前搜索引擎 ${engine.name}，点击选择其他引擎`}
+              title="选择搜索引擎"
               aria-haspopup="menu"
               aria-expanded={engineMenuOpen}
+              aria-controls={engineMenuOpen ? "engine-menu" : undefined}
               data-testid="engine-button"
               className="engine-btn"
             >
@@ -275,7 +308,7 @@ export function SearchBox() {
               >
                 <EngineBadge
                   id={engine.id}
-                  size={34}
+                  size={20}
                   url={engine.homeUrl}
                   autoFetch={ready && config.icons.autoFetch}
                 />
@@ -286,32 +319,44 @@ export function SearchBox() {
               {engineMenuOpen ? (
                 <motion.div
                   ref={menuRef}
+                  id="engine-menu"
                   role="menu"
                   aria-label="选择搜索引擎"
                   data-testid="engine-menu"
-                  className="glass-strong absolute left-0 top-11 z-30 w-48 overflow-hidden rounded-xl p-1"
+                  className="engine-menu glass-strong absolute left-0 top-[calc(100%+8px)] z-30 w-52 overflow-hidden rounded-xl p-1"
                   initial={{ opacity: 0, y: reduce ? 0 : -6, scale: reduce ? 1 : 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: reduce ? 0 : -4, scale: reduce ? 1 : 0.98 }}
                   transition={{ duration: reduce ? 0 : 0.16 }}
+                  onKeyDown={(e) => {
+                    // 菜单里按 Esc 收起并把焦点还给按钮（不留在已卸载的节点上）
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setEngineMenuOpen(false);
+                      engineBtnRef.current?.focus();
+                    }
+                  }}
                 >
-                  {engines.map((e) => (
-                    <button
-                      key={e.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={e.id === config.engineId}
-                      onClick={() => selectEngine(e.id)}
-                      data-testid={`engine-option-${e.id}`}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-[var(--hover-bg)] ${
-                        e.id === config.engineId ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"
-                      }`}
-                    >
-                      <EngineBadge id={e.id} size={20} url={e.homeUrl} autoFetch={ready && config.icons.autoFetch} />
-                      <span className="flex-1 truncate">{e.name}</span>
-                      {e.id === config.engineId ? <CheckIcon /> : null}
-                    </button>
-                  ))}
+                  {engines.map((e) => {
+                    const active = e.id === config.engineId;
+                    return (
+                      <button
+                        key={e.id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={active}
+                        onClick={() => selectEngine(e.id)}
+                        data-testid={`engine-option-${e.id}`}
+                        className={`engine-menu-item flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
+                          active ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"
+                        }`}
+                      >
+                        <EngineBadge id={e.id} size={20} url={e.homeUrl} autoFetch={ready && config.icons.autoFetch} />
+                        <span className="flex-1 truncate">{e.name}</span>
+                        {active ? <CheckIcon /> : null}
+                      </button>
+                    );
+                  })}
                 </motion.div>
               ) : null}
             </AnimatePresence>
@@ -340,7 +385,7 @@ export function SearchBox() {
              * 看起来像排版坏了。引擎是谁已经由左侧 favicon 和 aria-label 交代，
              * 这里只留最短的可用提示（完整说明放 title）。
              */
-            placeholder="搜索，或输入 / 使用指令"
+            placeholder="搜索"
             title="输入关键词搜索；输入 / 使用快捷指令；输入网址直接打开"
             aria-label="搜索关键词"
             role="combobox"
@@ -354,7 +399,12 @@ export function SearchBox() {
             spellCheck={false}
             maxLength={512}
             data-testid="search-input"
-            className="search-input h-12 min-w-0 flex-1 bg-transparent text-[15px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-subtle)]"
+            /*
+             * 交回胶囊自己的排版：高度占满、左右留白由 CSS 给，
+             * 并且要抹掉 shadcn Input 自带的描边与 focus ring ——
+             * 那圈 ring 画在输入框上，会在胶囊内部多出一层方框。
+             */
+            className="search-input min-w-0 flex-1 border-0 bg-transparent shadow-none outline-none focus-visible:ring-0"
           />
 
           {query ? (
@@ -366,32 +416,29 @@ export function SearchBox() {
               }}
               aria-label="清空搜索框"
               data-testid="search-clear"
-              className="grid size-7 shrink-0 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-subtle)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)]"
+              className="search-clear grid size-6 shrink-0 place-items-center rounded-full transition-colors duration-150"
             >
               <CloseIcon />
             </button>
           ) : null}
 
           {/*
-            搜索按钮：改成与左侧引擎徽标同尺寸的正圆。
-            原来是 Magic UI ShimmerButton 的 icon 形态 —— 它本体是圆角方块，
-            和左边那颗圆徽标放在一个胶囊里，一圆一方怎么调都别扭。
-            这里换成纯圆 + 强调色实心 + 一层同色柔光晕，
-            hover 时圆圈轻微放大、光晕加深，按下回弹。
+            搜索键：参考站里它只是胶囊右侧一格灰色图标，
+            没有实心色块、没有柔光晕 —— 整条胶囊的视觉重心交回给文字。
+            指针压上去只降一点不透明度，与左侧引擎徽标同一套反馈。
           */}
           <motion.button
             type="submit"
             aria-label="搜索"
             title="搜索（在新标签页打开；空输入可直接进入引擎官网）"
             data-testid="search-submit"
-            whileHover={reduce ? undefined : { scale: 1.06 }}
-            whileTap={reduce ? undefined : { scale: 0.94 }}
+            whileTap={reduce ? undefined : { scale: 0.92 }}
             transition={{ duration: 0.16, ease: EASE_OUT_CUBIC }}
             className="search-submit shrink-0"
           >
             <SearchIcon />
           </motion.button>
-        </motion.div>
+        </div>
 
         {/* 建议 / 指令列表
             不再 overflow-hidden：移动端软键盘弹起后列表要能内部滚动，
@@ -419,7 +466,7 @@ export function SearchBox() {
                   onMouseEnter={() => setActiveIndex(index)}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => execute(query, item)}
-                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] transition-colors ${
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] transition-colors ${
                     index === activeIndex ? "bg-[var(--hover-bg)] text-[var(--fg)]" : "text-[var(--fg-muted)]"
                   }`}
                 >
@@ -427,10 +474,67 @@ export function SearchBox() {
                     {item.kind === "command" ? <CommandIcon /> : item.kind === "direct" ? <LinkIcon /> : <SearchIcon />}
                   </span>
                   <span className="flex-1 truncate">{item.text}</span>
-                  {index === activeIndex ? <span className="text-[10px] text-[var(--fg-subtle)]">Enter</span> : null}
+                  {index === activeIndex ? <span className="text-[11px] text-[var(--fg-subtle)]">Enter</span> : null}
                 </li>
               ))}
             </motion.ul>
+          ) : null}
+        </AnimatePresence>
+
+        {/* 最近搜索：只在输入为空时出现，与建议列表互斥 */}
+        <AnimatePresence>
+          {historyOpen ? (
+            <motion.div
+              data-testid="search-history"
+              className="search-suggestions glass-strong absolute inset-x-0 top-[calc(100%+2px)] z-20 mt-1 rounded-xl p-1"
+              initial={{ opacity: 0, y: reduce ? 0 : -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: reduce ? 0 : -4 }}
+              transition={{ duration: reduce ? 0 : 0.15 }}
+            >
+              <div className="flex items-center justify-between px-2 py-1">
+                <span className="text-[11px] text-[var(--fg-subtle)]">最近搜索</span>
+                <button
+                  type="button"
+                  data-testid="search-history-clear"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setHistory(clearSearchHistory())}
+                  className="rounded-[var(--radius-xs)] px-1 text-[11px] text-[var(--fg-subtle)] transition-colors hover:text-[var(--fg)]"
+                >
+                  清除
+                </button>
+              </div>
+              <ul role="list" className="m-0 list-none p-0">
+                {history.map((text) => (
+                  <li key={text} className="group flex items-center rounded-lg hover:bg-[var(--hover-bg)]">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setQuery(text);
+                        execute(text);
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-[12px] text-[var(--fg-muted)]"
+                    >
+                      <span className="shrink-0 text-[var(--fg-subtle)]" aria-hidden="true">
+                        <HistoryIcon />
+                      </span>
+                      <span className="truncate">{text}</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`删除历史 ${text}`}
+                      data-testid="search-history-remove"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setHistory(removeSearchHistory(text))}
+                      className="mr-1 grid size-6 shrink-0 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-subtle)] opacity-0 transition-opacity hover:text-[var(--fg)] group-hover:opacity-100 focus-visible:opacity-100"
+                    >
+                      <CloseIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
           ) : null}
         </AnimatePresence>
       </form>
@@ -448,7 +552,7 @@ export function SearchBox() {
 
 function SearchIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" strokeLinecap="round" />
     </svg>
@@ -475,6 +579,16 @@ function CommandIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="m4 17 6-6-6-6M12 19h8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.5 4.5v4h4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 8v4.4l2.8 1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -1,7 +1,8 @@
 # 起始页 · Startpage
 
-一个「一屏上网入口」式的个人起始页：多引擎搜索、时间问候、每日一言、快捷跳转、Edge 每日壁纸。
-左上角天气胶囊、时钟、搜索框、便签卡、一言、底部 Dock **各自独立成层**，没有 Bento 板 —— 整体按青柠起始页（limestart.cn）的版式重做。
+一个「一屏上网入口」式的个人起始页：**默认只有时间、搜索、一句话与底部快捷跳转**；点击时间后壁纸高斯模糊，中部浮出快捷方块与右上角设置入口。
+参考 anheyu 新标签页的形态：背景是每日壁纸，控件压在上面，首屏不出现任何卡片与次级模块。
+经典布局（天气胶囊、便签、一言、顶栏）保留为可选模式，在设置 → 外观里切换。
 **接口请求只走白名单（壁纸 / 一言 / 天气 / 搜索建议），图片请求只用于站点 favicon**，全部数据只存本机（localStorage + IndexedDB）。
 
 - 技术栈：Next.js 15.5（App Router）+ React 19 + TypeScript strict + Tailwind CSS v4.3 + Motion 13 + **shadcn/ui（Radix + sonner，官方组件经兼容层接入）** + Magic UI 风格组件（全部自绘，零额外运行时依赖）
@@ -30,25 +31,32 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 
 ## 二、功能清单
 
-### P0（首屏五要素，默认全部开启）
+### P0（简洁布局默认态：时间 / 搜索 / 一言 / Dock）
 
 | 模块 | 行为 |
 |---|---|
-| **搜索引擎框** | 支持 Google / Bing / 百度（**已彻底移除 DuckDuckGo**），**默认 Google**（PRD 4.1 修订）。**点击左侧引擎图标循环切换**，**右键图标打开引擎菜单**。**Enter 与点搜索按钮一律在新标签页打开**（不再劫持当前页）；**输入为空时直接新标签打开当前引擎官网**（如 Google → `google.com`、Bing → `bing.com`）。左侧引擎图标显示**站点真实 favicon**（拿不到才退回内置 SVG），右侧是一颗正圆强调色按钮。输入 `/` 触发快捷指令面板（`/g` GitHub、`/b` 百度、`/bili` 哔哩哔哩），输入完整网址（如 `github.com`）时提示「直接打开」。表单是**原生 `method=get` 提交**，无 JS 也能搜索。聚焦时胶囊右侧扫过一道柔光（720ms 单向，不循环）。 |
-| **时间与问候** | 大字号 `HH:MM`，**纯实心前景色**（不用渐变文字 —— 早期用 `background-clip: text` + 透明填充，在 Safari / 部分 Chromium 变体上不生效，时钟会彻底不可见）。可在设置里开启秒，秒以 0.56em 单独一档呈现，清晰可辨。按 5/9/12/14/18/23 点切换「早安 / 上午好 / 午安 / 下午好 / 晚上好 / 夜深了」，日期显示「周几 · 月日」。**问候与日期分两行居中**（同一行时两段文字长度差太大，视觉重心会被拉偏）。数字变化时只有 Magic UI 风格的**模糊上浮**轻过渡。字号用 `clamp(46px, min(10vw, 12vh), 104px)`，矮屏自动收小。 |
-| **每日一言** | **没有任何容器 / 边框 / 玻璃底**，就是背景上的一行小字（对齐青柠起始页）。**聚焦搜索框时整块渐隐并轻微下沉，失焦后淡回**（`[data-dimmed]` + CSS transition）。**数据源默认走远程 API**（`v1.hitokoto.cn`），**3 秒超时静默回退**内置 36 条语录库（离线兜底）。**页面上只有一行正文与一行出处** —— 没有「远程 / 本地」标签、没有分类下拉、没有刷新按钮；**点正文就换一条**。切换时逐字 reveal（Magic UI TextAnimate）。 |
-| **快捷跳转** | **一条悬浮 Dock**（参考青柠起始页底部）：不分组、不标题、不卡片，全部图标排成一行（窄屏自动折行），**常态只有图标没有文字**，名称是鼠标悬停时浮出的 macOS 式气泡。图标是**正圆**（与 999px 胶囊同一套圆角语言）。悬停时按 macOS Dock 的方式联动：当前项上浮 4px + 放大到 1.12、左右邻放大到 1.06、背后一团柔光，格子本身没有底色 / 阴影 / 描边。**首页不再有任何编辑入口** —— 增删改与排序全部收进「设置 → 快捷跳转」（`ShortcutManager`）。`Ctrl/Cmd + 1~9` 直达前九项。图标降级链：**用户自定义（上传图片 / Emoji）→ 站点自动抓取的 favicon → 名称首字母**；favicon 白底圆片会掺一成自有品牌色，和旁边的品牌色实心片是同一套投影与内高光。默认 12 项里内网服务（NAS / Jellyfin）给 Emoji，公网站点留空走 favicon。 |
+| **搜索引擎框** | 支持 Google / Bing / 百度（**已彻底移除 DuckDuckGo**），**默认 Bing**。**点击左侧引擎图标弹出引擎列表**（当前项带勾，选定即生效，不再「点一次换一个」；右键同样打开）。**Enter 与点搜索按钮一律在新标签页打开**（不再劫持当前页）；**输入为空时直接新标签打开当前引擎官网**（如 Bing → `bing.com`）。左侧引擎图标显示**站点真实 favicon**（拿不到才退回内置 SVG），右侧是一枚灰色放大镜图标（无底色）。输入 `/` 触发快捷指令面板（`/g` GitHub、`/b` 百度、`/bili` 哔哩哔哩），输入完整网址（如 `github.com`）时提示「直接打开」。表单是**原生 `method=get` 提交**，无 JS 也能搜索。**聚焦且输入为空时展示最近 8 条搜索**（单条可删、可全部清除；独立 key，进不了配置也参与不了导出）。 |
+| **时间（展开入口）** | 大字号 `HH:MM`，**纯实心白色前景**（不用渐变文字 —— 早期用 `background-clip: text` + 透明填充，在 Safari / 部分 Chromium 变体上不生效，时钟会彻底不可见）。**整块时间是一个按钮：点击或右键后壁纸 `blur(18px)`、亮度 0.82，时钟与搜索平滑上移、中部浮出快捷方块、右上角浮出设置齿轮**；齿轮先出二级菜单，选分类后才打开完整设置。再次点击 / 右键 / 按 Esc 收起，壁纸回到清晰。悬停时时间背后浮出一团极淡的径向光（没有底板、没有边框），按下回弹 0.985，展开后整体退到 88% 不透明度把注意力让给方块。可在设置里开启秒；日期显示「周几 · 月日」；问候语默认关闭（经典布局可在设置里打开）。数字变化时只有 Magic UI 风格的模糊上浮轻过渡。简洁布局字号 `clamp(38px, min(5.4vw, 7.4vh), 54px)`，经典布局 `clamp(44px, min(8vw, 10vh), 78px)`。 |
+| **每日一言**（默认显示） | **没有任何容器 / 边框 / 玻璃底**，就是背景上的一行小字（对齐青柠起始页）。简洁布局里贴着 Dock 上方，经典布局里同位置；默认开启，可在「模块显示 → 一言」关闭。**聚焦搜索框时整块渐隐并轻微下沉，失焦后淡回**（`[data-dimmed]` + CSS transition）。**数据源默认走远程 API**（`v1.hitokoto.cn`），**3 秒超时静默回退**内置 36 条语录库（离线兜底）。**页面上只有一行正文与一行出处** —— 没有「远程 / 本地」标签、没有分类下拉、没有刷新按钮；**点正文就换一条**。切换时逐字 reveal（Magic UI TextAnimate）。 |
+| **快捷跳转** | 两处入口共用同一份配置：**① 点击时间后中部浮出的方块网格** —— 5 列（窄屏 4 列）、52px 实心片（白 / 暗色 `#2b2f38`）+ 站点图标 + 常驻名称，末尾是虚线「添加」方块（直达「设置 → 快捷跳转」）；**② 底部悬浮 Dock** —— 不分组、不标题、不卡片，全部图标排成一行（窄屏自动折行），常态只有图标，名称是鼠标悬停时浮出的 macOS 式气泡。图标统一是 **42px / 12px 圆角（Dock）与 52px / 14px 圆角（网格）的同一枚实心片**；悬停时按 macOS Dock 的方式联动：当前项上浮 4px + 放大到 1.12、左右邻放大到 1.06、背后一团柔光，格子本身没有底色 / 阴影 / 描边。**首页不提供编辑按钮** —— 增删改与排序全部收进「设置 → 快捷跳转」（`ShortcutManager`）。`Ctrl/Cmd + 1~9` 直达前九项。图标降级链：**用户自定义（上传图片 / Emoji）→ 站点自动抓取的 favicon（加载期间先显示首字母）→ 名称首字母（品牌色字形）**。**默认 12 项全部是公网站点**，保证新用户第一次打开时每个图标都能点开；内网服务（NAS / Grafana / Jellyfin）请自行添加，菜单位置见下方「把内网服务放进来」。设置里可**导入浏览器书签**（Netscape HTML：先预览、按 URL 去重、遵守 200 项上限，确认后才写入）。 |
 | **每日壁纸** | **Edge / Bing 每日一图**（原 Magic UI Backgrounds 四种风格已彻底移除）。元数据取自 `bing.biturl.top`（白名单内，带 CORS），图片直链走 `www.bing.com/th?id=...`；成功后写进 IndexedDB，刷新先读缓存再拉网络，失败保留上一次成功结果。**图片先用 `new Image()` + `decode()` 预解码，解完才淡入** —— 否则大图会「先画出上半截再补下半截」，那半秒正好被淡入放大，看起来像被切成两半。可回溯「今天 / -1 天 / -3 天 / -7 天」，可关闭改为纯渐变兜底；可叠加一张自定义图片（优先级更高，远程 URL 或本地文件，≤8MB）；可调暗化程度与基础模糊；输入框聚焦时自动加深模糊（聚焦模式）。亮色主题的遮罩是**三层**（整体极淡磨砂 + 内容列椭圆柔光 + 上下边缘渐变），而不是整面白雾 —— 早先那种「同等强度白雾」会把照片洗成粉彩（实测纯黑块被抬到 rgb(110,110,110)，黑白亮度差从 235 掉到 143），看着像糊了但其实边缘是锐的。 |
 
 ### P1 / P2（默认关闭，需在设置里显式开启）
 
 | 模块 | 说明 |
 |---|---|
-| **命令面板**（P1） | `Cmd/Ctrl + K` 唤起，统一搜索快捷项、切换主题、换背景、打开设置、聚焦搜索框。方向键 + `Enter` 执行，`Esc` 关闭。 |
-| **天气**（P1） | **默认开启，固定在页面左上角**（状态胶囊：天气图标 + 温度 + 城市，操作钮平时隐藏、悬停/聚焦才浮出）。首屏先尝试一次静默定位（每会话只试一次，失败不弹权限也不打断视线）；**定位成功时会反查最近的已内置城市**并记为 `source: "geo"`，拿不到才展开「省份 + 城市」两个下拉（200 余城市内置在 `src/config/cities.ts`，**不查接口**），或点「使用我的定位」。**选省份只切换城市列表，不写配置也不收起浮层**，必须再选城市才落库。坐标只发给 `api.open-meteo.com`，15 分钟刷新一次。设置里的两个下拉与首页浮层**共用同一套药丸形样式**（无描边、聚焦浮 accent 环），旁边用一枚状态小药丸（「已定位 / 手动选择 / 未选择」+ 指示点）代替原来重复写一遍的「当前：省 · 市」。 |
+| **命令面板**（P1） | `Cmd/Ctrl + K` 唤起，统一搜索快捷项、切换主题、换背景、打开设置、聚焦搜索框。方向键 + `Enter` 执行，`Esc` 关闭。另有「导入浏览器书签」（深链到设置页签）、「清除搜索历史」、「显示/隐藏便签」、「查看快捷键」四个动作。 |
+| **天气**（P1，经典布局） | **默认关闭，固定在页面左上角**（状态胶囊：天气图标 + 温度 + 城市，操作钮平时隐藏、悬停/聚焦才浮出）。首屏先尝试一次静默定位（每会话只试一次，失败不弹权限也不打断视线）；**定位成功时会反查最近的已内置城市**并记为 `source: "geo"`，拿不到才展开「省份 + 城市」两个下拉（200 余城市内置在 `src/config/cities.ts`，**不查接口**），或点「使用我的定位」。**选省份只切换城市列表，不写配置也不收起浮层**，必须再选城市才落库。坐标只发给 `api.open-meteo.com`，15 分钟刷新一次；浮层里另给出**未来三天**的最高/最低与天气图标（接口没返回就不显示，不影响当前天气）。设置里的两个下拉与首页浮层**共用同一套药丸形样式**（无描边、聚焦浮 accent 环），旁边用一枚状态小药丸（「已定位 / 手动选择 / 未选择」+ 指示点）代替原来重复写一遍的「当前：省 · 市」。 |
 | **主题系统**（P1） | 亮 / 暗 / 跟随系统三态；8 个预设强调色 + 取色器，实时显示与底色的对比度并标注是否通过 AA。切换时用 View Transitions 做**圆形揭示**（Magic UI Animated Theme Toggler）；不支持该 API 的浏览器退化为全局颜色过渡，不跳变、不白屏。 |
-| **待办便签**（P2） | 默认开启（一张独立的 `.card-panel` 玻璃卡）。标题栏是**渐变圆徽 + 标题 + 「已保存」小药丸 + 字数胶囊**；卡片左沿有一道 accent 竖线，聚焦时点亮；输入区**没有边框与底色**、直接铺在卡片上（聚焦才浮出一圈 accent 内发光），**按内容自动长高**（超过 8 行才内部滚动）；输入框下沿有一条**字数进度**（按「已写 / 一屏舒适容量 240 字」计，写两行就能看见它长一点）。底部操作栏带图标、内容为空时整条收起，清空按钮悬停才染红。纯文本，输入后 300ms 防抖写入本机配置；字数超过 90% 的字数胶囊变警示色并轻微脉动；内容随配置一起导出/导入，不产生任何网络请求。 |
+| **待办便签**（P2，经典布局） | 默认关闭（一张独立的 `.card-panel` 玻璃卡）。标题栏是**渐变圆徽 + 标题 + 「已保存」小药丸 + 字数胶囊**；卡片左沿有一道 accent 竖线，聚焦时点亮；输入区**没有边框与底色**、直接铺在卡片上（聚焦才浮出一圈 accent 内发光），**按内容自动长高**（超过 8 行才内部滚动）；输入框下沿有一条**字数进度**（按「已写 / 一屏舒适容量 240 字」计，写两行就能看见它长一点）。底部操作栏带图标、内容为空时整条收起，清空按钮悬停才染红。纯文本，输入后 300ms 防抖写入本机配置；字数超过 90% 的字数胶囊变警示色；内容随配置一起导出/导入，不产生任何网络请求。 |
 | **配置导入导出 / 一键清除**（P2） | 导出为 `startpage-config-YYYY-MM-DD.json`；导入做类型防御合并（不认识的字段丢弃、类型不符不覆盖）；一键清除会二次确认，清空 localStorage 与 IndexedDB 后回到出厂配置。 |
+
+#### 把内网服务放进来
+
+默认不留内网地址（`192.168.x.x` 对绝大多数人是打不开的死链）。要加 NAS / Grafana 这类服务：
+设置 → 快捷跳转 → 添加，地址填 `http://192.168.1.10:5000`，图标选「Emoji」或上传图片 ——
+内网地址抓不到 favicon，留空会一直显示首字母。这类请求只发生在 `<img>` 上，不经过 `safeFetch`，
+因此不需要动白名单。
 
 ### 跨端适配（触屏 / 窄屏 / 旧引擎）
 
@@ -75,10 +83,10 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 - 内容高于可用高度时按 `zoom` **等比缩小**（下限 0.6），保证一屏完整呈现；缩到下限仍放不下（手机横屏）或浏览器不支持 `zoom` 时，由 `main` 内部滚动兜底，页面本身仍不滚动。`main` 上写 `data-fit-scale` 便于验收。
 - 只有设置面板内容区、搜索建议列表这类「本应滚动」的区域用 `thin-scroll` 内部滚动。
 - 纵向层次（对齐青柠起始页）：**左上角天气胶囊 → 时钟 → 搜索框 → 便签卡 → 每日一言 → 底部 Dock**。每个模块都是独立组件、各自独立成层，**没有任何 Bento 便当板**（早期把便签与天气并排锁在一块板里，视觉上读成一个「大框」，已拆开）。天气是唯一脱离主列的元素 —— 它属于「常驻状态」，钉在顶栏左侧，不随内容高度浮动。
-- **毛玻璃材质**统一由一组 token 驱动（`--panel-bg` / `--panel-highlight` / `--panel-refract` / `--panel-blur` / `--panel-shadow`）。两个主题下各只有**四处**玻璃、共用同一套配方：搜索胶囊（`.search-panel`）、便签卡（`.card-panel`）、底部 Dock（`.dock-pill`）与设置面板；天气胶囊（`.weather-row`）**不属于这一组**：它和右上角动作组 `.bar-dock` 共用同一套「板」材质（`--board-bg` + `--board-ring` + 38px 同高），因为两者并排在同一行，一个通明一个实心会读成两块不同来源的控件。配方是半透明底 + `backdrop-filter: blur(32px) saturate(1.6)` + 顶部内高光 + 下沿折射 + 外投影，视觉厚度靠层次叠加而不是把不透明度堆到接近实心，**全部不画描边**。
-- **搜索框是两个主题都用的白色胶囊**（`--search-bg` / `--search-highlight` / `--search-bg-focus`），靠「亮」从背景里跳出来，只有下沉投影 + 一道顶部内高光、**没有 1px 描边**；因为底色恒白，`.search-panel` 内部就地改写 `--fg` 系列变量，深色主题下才不会变成白字白底。聚焦时用 CSS `[data-focused="true"]` 叠一圈 accent ring（不用 framer 内联 `boxShadow`，那会把玻璃的高光与投影一起冲掉）。
-- 搜索胶囊与便签卡**统一 `max-width: 560px`**，一言 `520px`，都比内容列窄一档 —— 一列里出现两种宽度会读成「台阶」，统一之后时钟、搜索框、卡片、一言共用同一条中轴。天气胶囊不参与这条中轴（它在左上角，宽度由内容决定）。
-- 快捷跳转沉到页面最底部，做成一颗**悬浮玻璃胶囊**（`.dock-pill`，999px 圆角），整排正圆图标被它托住；悬停时胶囊自身轻轻上浮 2px。`.dock-shell` 顶部留 32px 空档，供名称气泡浮出（否则气泡会压到一言的出处行上）—— 这一档空档在 `≤639px` 会收到 14px，因为手机上的名称已改成常显文字、不再有气泡。
+- **毛玻璃材质**统一由一组 token 驱动（`--panel-bg` / `--panel-highlight` / `--panel-refract` / `--panel-blur` / `--panel-shadow`）。两个主题下各只有**四处**玻璃、共用同一套配方：搜索胶囊（`.search-panel`）、便签卡（`.card-panel`）、底部 Dock（`.dock-pill`）与设置面板；天气胶囊（`.weather-row`）**不属于这一组**：它和右上角动作组 `.bar-dock` 共用同一套「板」材质（`--board-bg` + `--board-ring` + 38px 同高），因为两者并排在同一行，一个通明一个实心会读成两块不同来源的控件。配方是半透明底 + `backdrop-filter: blur(32px) saturate(1.6)` + 顶部内高光 + 下沿折射 + 外投影，视觉厚度靠层次叠加而不是把不透明度堆到接近实心，**全部不画描边**。搜索胶囊例外：它按参考站用 `blur(10px) saturate(1.5)`，聚焦时降到 `blur(10px)`，见下一条。
+- **搜索框对齐 newtab.anheyu.com 的三态玻璃胶囊**（`--search-bg` / `--search-bg-hover` / `--search-bg-focus`）：静止 25% 白 + 一圈 10px 柔光，悬停 60% 白且文字转深灰，聚焦 90% 白 + `0 4px 24px` 下沉投影；底色 / 阴影 / 文字色共用 250ms `cubic-bezier(.4,0,.2,1)`，看起来是同一颗胶囊在变色。**没有描边、没有 accent ring、没有扫光**，左右两端各 52px 空白格，里面只有一枚 20px 引擎图标与一枚灰色放大镜（悬停降到 72% 不透明度）。空输入时占位文字居中，开始输入后回到左对齐。亮色主题把「白字 + 半透明白底」换成「深灰字 + 更实的白底」，保留同一套动线。
+- 搜索胶囊、快捷方块与一言**统一 `max-width: 560px`**（方块网格 392px，比搜索窄一档，对齐参考站的应用抽屉）—— 一列里出现两种宽度会读成「台阶」，统一之后时钟、搜索框、方块、一言共用同一条中轴。天气胶囊不参与这条中轴（它在左上角，宽度由内容决定）。
+- 快捷跳转沉到页面最底部，做成一颗**悬浮玻璃胶囊**（`.dock-pill`，999px 圆角），里面是一排 42px / 12px 圆角的实心图标片；悬停时胶囊自身轻轻上浮 2px。`.dock-shell` 顶部留 32px 空档，供名称气泡浮出（否则气泡会压到一言的出处行上）—— 这一档空档在 `≤639px` 会收到 14px，因为手机上的名称已改成常显文字、不再有气泡。
 - **小屏 Dock 是一行横向滑动，不是两行折行**：每格 58×66（触控热区 54×54，均大于 44px 下限）、间距 6px、名称常显在图标下方；滑到哪一端就在哪一端淡出提示还有内容。此前 12 个 46px 图标在 368px 宽里折成两行、间隙只有 4px，第二行剩余几个居中，整颗胶囊被撑成「药丸套药丸」，既挤又认不出是谁。
 - 时钟没有容器，直接压在大背景上，只靠字号成立。
 - 卡片显隐、增删时用弹簧（stiffness 380 / damping 30）平滑移动，移除的先淡出再让位；悬停时卡片上浮 2px 并加深投影。`md` 以下自动退化为单列。
@@ -92,7 +100,7 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 ```ts
 {
   version: 1,
-  engineId: "google",                  // 当前引擎（默认 Google）
+  engineId: "bing",                    // 当前引擎（默认 Bing，菜单里选定后写回）
   engineOrder: ["google", ...],        // 引擎顺序（设置里可上下移动）
   quickCommands: [{ key: "/g", label: "GitHub", url: "..." }],
   groups: [{ id, name, items: [{ id, title, url, icon, emoji, letter, color }] }],
@@ -125,70 +133,82 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 组件由 `pnpm dlx shadcn@latest add ...` 生成到 `src/components/ui/`，配置在 `components.json`，
 `cn()` 在 `src/lib/utils.ts`。接入分两类：
 
-- **基础控件**走 `ui/primitives.tsx` 兼容层 —— 它保留原有全部导出名、props、
-  `data-testid` 与类名，内部再委托给官方组件，业务代码不直接 import 官方组件；
-- **同标签控件**（`Textarea` / `NativeSelect`）由业务代码直接 import：项目原本用的就是
-  原生 `<textarea>` / `<select>`，没有需要兼容的旧 API，保留原有 className 与全部 props
-  即可，DOM 标签不变。
+- 基础控件走 `ui/primitives.tsx` 兼容层，导出名、props、`data-testid` 和类名不变，业务代码不直接 import 官方组件；
+- 同标签控件（`Textarea` / `NativeSelect`）由业务代码直接 import：原本就是原生 `<textarea>` / `<select>`，DOM 标签不变。
 
 | 原 API | shadcn/ui 官方组件 | 说明 |
 |---|---|---|
-| `Modal` / `ConfirmDialog` | `Dialog` / `AlertDialog` | Radix 提供焦点陷阱、Esc 层叠、滚动锁定；兼容层补回「无 DialogTrigger 时的焦点还原」 |
-| `ToastProvider` / `useToast` | `Toaster`（sonner） | `toast.custom()` 自绘气泡，Dock 上方偏移仍由 ResizeObserver 实测 |
-| `SwitchButton` / `Switch` | `Switch` | 尺寸/滑块位置由 `.sp-switch` CSS 锁回原样 |
-| `Segmented` | `RadioGroup` / `RadioGroupItem` | 官方 Item 默认渲染圆点，扩展为支持 children（分段胶囊文字） |
-| `Range` | `Slider` | DOM 由 `<input type=range>` 变为 `role="slider"`，测试交互改用方向键 |
-| `TextInput` / `Button` / `Field` | `Input` / `Button` / `Label` | 官方默认样式经 `cn()` 由项目原有类名覆盖 |
-| `FieldGroup` | `Label`（+ `role="group"`） | 保留「多控件字段不能用 label」的无障碍语义 |
-| 原生 `<textarea>`（便签） | `Textarea` | 标签不变；官方的 `field-sizing:content` / `display:flex` / `shadow-xs` 会让便签按 `scrollHeight` 自动长高算错，由兼容层 CSS 复位 |
-| 原生 `<select>`（天气浮层 ×2、模块页签 ×2） | `NativeSelect` | 见下；`withWrapper={false}` 保留原有 DOM 与自绘箭头 |
+| `Modal` / `ConfirmDialog` | `Dialog` / `AlertDialog` | 焦点陷阱、Esc 层叠、滚动锁；兼容层补回无 `DialogTrigger` 时的焦点还原 |
+| `ToastProvider` / `useToast` | `Toaster`（sonner） | `toast.custom()` 自绘气泡，偏移实测 `.dock-shell` |
+| `SwitchButton` / `Switch` | `Switch` | 尺寸与滑块位置由 `.sp-switch` CSS 锁回原样 |
+| `Segmented` | `RadioGroup` / `RadioGroupItem` | 扩展为支持 children |
+| `Range` | `Slider` | DOM 从 `<input type=range>` 变为 `role="slider"`，测试改用方向键 |
+| `TextInput` / `Button` / `Field` | `Input` / `Button` / `Label` | 官方默认样式由 `cn()` 用项目原有类名覆盖 |
+| `FieldGroup` | `Label`（+ `role="group"`） | 多控件字段不能用 `<label>` |
+| 原生 `<textarea>` | `Textarea` | 复位 `field-sizing:content` 等三项，见 `globals.css` |
+| 原生 `<select>` ×4 | `NativeSelect` | `withWrapper={false}` 保留原有 DOM 与自绘箭头 |
 
-**为什么是 `NativeSelect` 而不是 `Select`**：官方 `Select` 基于 Radix，DOM 会变成
-`role="combobox"` + portal 浮层，`value=""` 的占位 `<option>` 无法表达，`fireEvent.change`
-/ `selectOption` / `toHaveValue` 也全部失效。`NativeSelect` 渲染的就是原生 `<select>` + `<option>`，
-因此页面结构、键盘操作、占位项、禁用态、选项由系统渲染的外观，以及全部单测/E2E 选择器都原样保留。
-官方默认带的 `wrapper <div>` 和 `ChevronDownIcon` 通过 `withWrapper={false}` 关掉 —— 项目早有
-`.weather-select-wrap` + 自绘 `ChevronDown`，再套一层会多出 DOM 节点、`w-fit` 让宽度塌掉、
-并出现两个箭头。
+官方 `Select` 基于 Radix，DOM 是 `role="combobox"` + portal 浮层，放不下 `value=""` 占位项，
+测试里的 `fireEvent.change` / `selectOption` 也会失效，所以选了渲染原生 `<select>` 的 `NativeSelect`。
+`withWrapper={false}` 关掉官方的 wrapper 与箭头：外层已有 `.weather-select-wrap` 和自绘 `ChevronDown`。
 
-`globals.css` 里有一组 **token 桥**：把 `--background` / `--foreground` / `--border` 等 shadcn 语义
-变量别名到项目自有的 `--bg-base` / `--fg` / `--glass-border`，官方组件因此继承现有设计语言；
-`--accent` **刻意不重定义**（它是品牌蓝，与 shadcn 的「弱交互底色」语义不同）。
-末尾的「shadcn/ui 兼容层」CSS 段把玻璃面板、开关、分段、滑块、toast 的默认外观锁回替换前的样子，
-并复位 `Textarea` 的三项默认样式。`NativeSelect` 无需额外 CSS —— 项目 `.weather-select` 自己就设了
-`box-shadow` 与 `:focus-visible`，无层规则天然压过 Tailwind utilities。
+`globals.css` 的 token 桥把 `--background` / `--foreground` / `--border` 别名到
+`--bg-base` / `--fg` / `--glass-border`。`--accent` 不重定义，它是品牌蓝。
+文件末尾的「shadcn/ui 外观兜底」段统一开关、分段、滑块、toast 与玻璃面板的描边和底色；
+`NativeSelect` 不需要兜底，`.weather-select` 的无层规则本身就压过 Tailwind utilities。
 
-对官方源码的最小改动（都在文件内注明原因）：
-- `sonner.tsx` 去掉 `next-themes`（项目主题唯一数据源是 `ConfigProvider`）；
-- `dialog.tsx` 的 `DialogContent` 增加 `overlayProps`（保留遮罩 testid 与毛玻璃）；
-- `radio-group.tsx` / `slider.tsx` 支持 `children` / `thumbLabel`（分段文字与滑块可访问名）；
-- `native-select.tsx` 增加 `withWrapper`（默认 `true`，官方行为不变；`false` 时只渲染
-  `<select>`，让项目原有的容器与箭头继续负责外观）。
+对官方源码的改动：
+- `sonner.tsx` 去掉 `next-themes`；
+- `dialog.tsx` 的 `DialogContent` 增加 `overlayProps`；
+- `radio-group.tsx` / `slider.tsx` 支持 `children` / `thumbLabel`；
+- `native-select.tsx` 增加 `withWrapper`，`false` 时只渲染 `<select>`。
 
-体积代价：`/` 页 First Load JS 由 177 kB 增至 237 kB（Radix + sonner，约 +60 kB）。
-这是「用官方组件」的必然成本，不是优化回归。
+`/` 页 First Load JS 从 177 kB 增至当前 **229 kB**（Radix + sonner；后期统一 `cn`、按需加载与样式拆分又收回一部分）。
 
-### 3.2 逐项替换的选型边界
+### 3.2 选型边界
 
-组件选型原则是「**magicui 优先，不适用时再 shadcn**」，实际落地结果：
+选型按 magicui 优先、不适用时 shadcn。magicui registry 没有 `input` / `button`，
+表单控件因此走 shadcn；动效组件优先 magicui。
 
-- **表单 / 按钮类控件 magicui 不适用**：官方 registry 无 `input` / `button`（实测 404），
-  因此 4 类原生输入（隐藏 `type=file` ×3、`type=color`、主搜索、命令面板）统一由
-  shadcn `Input` 替换。`globals.css` 末尾的「shadcn Input 兼容兜底」段把官方默认的
-  `h-9 / w-full / border / px-3 / rounded-md / md:text-sm / shadow-xs / focus-visible ring`
-  复位回各控件原有排印 —— 采集 12 个控件的 DOM 骨架 + 30 项 computed style，逐项比对 0 差异。
-- **magicui 官方源码已接入一处**：`BlurIn` 内部委托官方 `blur-fade`
-  （`src/components/magicui/blur-fade.official.tsx`），保留原导出名与 `motion.span` DOM。
-  对官方源码做了两处最小扩展（`as` 允许渲染 span、`variant` 放宽为 `Variants`），
-  适配层再用 `variant` + `transition` 精确复现原有 blur 10px / y 8 / 自定义 ease 参数。
-- **未替换项及原因**（均已实测，非待办）：
-  - 业务侧原生 `<button>`：官方 `Button` 默认 `bg-primary` / `inline-flex` / `rounded-md` /
-    `h-9 px-4` 与这些按钮的透明底、`grid|block`、`999px` 圆角冲突，逐类复位等于抵消官方价值；
-  - `TextAnimate`：官方版默认 `as="p"`、容器加 `whitespace-pre-wrap`、额外插 `sr-only` span、
-    `startOnView` 门控、stagger 按 `duration/segments.length` 平分，与逐字 `inline-block` 结构不兼容；
-  - `useAnimatedThemeToggle`：官方是组件、项目导出的是 hook（按钮由 `BarButton` 承载）；
-  - `AnimatedDigits` / `Spotlight`：registry 无语义对应项（`number-ticker` 是数值滚动计数，
-    `magic-card` 是边框高亮）。
+- 4 类原生输入（隐藏 `type=file` ×3、`type=color`、主搜索、命令面板）由 shadcn `Input` 替换，
+  `globals.css` 末尾复位官方默认排印。
+- `BlurIn` 委托 magicui 官方 `blur-fade`（`magicui/blur-fade.official.tsx`），
+  官方源码加了 `as` 和 `variant` 两个扩展，适配层沿用原动画参数。
+- 保留原实现的项：
+  - 业务侧 `<button>`：官方 `Button` 的默认底色、圆角、尺寸与现有按钮冲突；
+  - `TextAnimate`：官方版 `as="p"`、`sr-only` span、`startOnView` 和 stagger 算法都与逐字结构不兼容；
+  - `useAnimatedThemeToggle`：官方是组件，项目导出的是 hook；
+  - `AnimatedDigits` / `Spotlight`：registry 没有语义对应项。
+
+### 3.3 后续补齐的交互
+
+| 能力 | 落点 | 关键约束 |
+|---|---|---|
+| 搜索历史 | `lib/search-history.ts` + `search-box.tsx` | 单独 localStorage key，最多 8 条；**不进 config**，因此不参与导入导出，也不会每次搜索都写整份配置 |
+| 书签导入 | `lib/bookmarks.ts` + 设置 → 快捷跳转 | 解析 Netscape HTML；先预览再确认；与现有项按 URL 去重；遵守 `LIMITS.maxShortcuts` |
+| 删除撤销 | `shortcut-manager.tsx` + toast 动作 | toast 新增可选 `action`；撤销按原索引插回，6 秒后消失 |
+| 设置搜索 | `settings-panel.tsx` | 关键词表负责跨页签跳转，DOM 文本负责过滤；`MutationObserver` 等新页签挂载后再应用 |
+| 快捷键帮助 | `shortcut-help.tsx` | `?` 触发，输入框内不触发；命令面板也有入口 |
+| 未来三天 | `services.fetchWeather` + 天气浮层 | 预报是可选字段，缺失只隐藏预报区，不影响当前天气 |
+| 模块级错误边界 | `widget-boundary.tsx` | 天气 / 便签 / 一言 / Dock 各自隔离；浮层用 `silent` 不渲染占位 |
+
+错误边界的意义：React 19 在渲染期抛错会卸载整棵树，`app/error.tsx` 只能兜到整页。
+现在一个模块出错只降级那一块，其余模块照常可用。
+
+### 3.4 简洁布局与时间入口
+
+首页默认 `home.simple = true`：只渲染时钟、搜索、一言与 Dock，没有顶栏、页脚与快捷方块。
+时钟与搜索**在「一言以上」的可视区里垂直居中**（`margin-block: auto`，内容比可视区高时自动归零、从顶部开始滚，不会被裁掉）。点击时钟、右键时钟或按 Esc 进入/退出「展开态」——
+
+- 壁纸图片额外 `blur(18px)`、亮度 0.82，保留照片的色块与明暗，不会糊成纯色；
+- **时钟与搜索平滑上移**：展开区的高度从 `0` 动画到 `auto`（520ms `ease-out-cubic`），主列是 auto 外边距居中，方块每长高一像素，时钟就被重新居中、往上让位 —— 不需要给时钟写任何 transform，也不会「点一下自己往上跳」；
+- 中部浮出快捷方块（**没有托板、没有标题栏**，直接落在模糊壁纸上）：52px 实心片 + 站点图标 + 名称，末尾是虚线「添加」；方块本身带 30ms 级联淡入上浮，行距与搜索间距放在展开区的内层 padding 里，跟着高度一起长出来（margin 会瞬间生效、先跳 30px）；
+- 右上角浮出设置齿轮；点齿轮先出**二级菜单**（常规设置 / 搜索引擎偏好 / 壁纸偏好 / 快捷跳转 / 模块显示 / 隐私与数据 / 关于），选分类后才打开完整设置弹窗；
+- 弹窗仍是上一版的「左侧页签 + 卡片分组」玻璃样式；打开时第一下 Esc 只关弹窗，展开态与模糊壁纸保留；
+- 再次点击时间、右键或按 Esc 收起，展开区高度收回 0、时钟落回居中位，壁纸同时回到清晰。
+
+设置里把「简洁首页」关掉即回到经典布局：天气、便签、一言按「模块」页签的开关显示。
+这条分支让旧模块继续可用，同时不再挤占默认首屏。
 
 ## 四、目录结构
 
@@ -196,30 +216,33 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 src/
   app/
     layout.tsx        # 元数据、JSON-LD、首屏主题内联脚本（防 FOUC）
-    page.tsx          # 青柠式一屏编排（左上天气→时钟→搜索→便签→一言→Dock）+ 等比缩放 + 顶栏动作组 + 浮层挂载
+    page.tsx          # 简洁首页（默认时间/搜索/一言/Dock；点时间 → 快捷方块 + 右上设置）/ 经典一屏 + 等比缩放 + 浮层挂载
     sitemap.ts        # /sitemap.xml
     robots.ts         # /robots.txt
     not-found.tsx     # 404
     error.tsx         # 段级错误边界（重试 / 回首页），避免异常时整页纯白
   components/
     clock.tsx  search-box.tsx  daily-quote.tsx  shortcut-dock.tsx  shortcut-icon.tsx
+    shortcut-grid.tsx          # 点击时间后浮出的快捷托板（标题 + 管理 + 站点方块 + 添加方块）
+    settings-menu.tsx          # 齿轮的二级菜单：选分类后打开完整设置
     shortcut-manager.tsx       # 快捷项增删改与排序（只在设置面板里出现）
-    wallpaper.tsx              # Edge 每日壁纸层（预解码后淡入）+ 可选自定义图片叠加
+    wallpaper.tsx              # Edge 每日壁纸层（预解码后淡入）+ 暗角 + 可选自定义图片叠加
     weather.tsx  settings-panel.tsx  command-palette.tsx  theme-sync.tsx  note-pad.tsx
+    shortcut-help.tsx          # 按 ? 打开的快捷键说明浮层
+    widget-boundary.tsx        # 模块级错误边界：一个模块渲染失败不拖垮整页
     engine-glyph.tsx           # EngineBadge：优先取站点 favicon，失败退回内联 SVG（四色 G / Bing / 百度）
     ui/                        # shadcn/ui 官方组件（CLI 生成，见 components.json）
       dialog.tsx  alert-dialog.tsx  switch.tsx  radio-group.tsx  slider.tsx
       label.tsx  input.tsx  button.tsx  sonner.tsx
       textarea.tsx  native-select.tsx   # 同标签官方组件（便签 / 省市下拉）
       primitives.tsx          # 兼容层：把官方组件包装成项目原有 API（签名/testid 不变）
-    settings/                  # 设置面板的页签与控制器（壳留在 settings-panel.tsx）
+    settings/                  # 设置面板的分区与控制器（壳留在 settings-panel.tsx）
       controller.ts            # 草稿状态 + 引擎排序 / 指令 / 背景 / 白名单 / 导入导出 / 定位
       search-tab.tsx  appearance-tab.tsx  shortcuts-tab.tsx  modules-tab.tsx
       background-tab.tsx  privacy-tab.tsx  about-tab.tsx  tab-icons.tsx
-    magicui/                   # Magic UI 等价实现（零额外依赖，只保留真正在用的 5 个）
+    magicui/                   # Magic UI 等价实现（零额外依赖，只保留真正在用的 4 个）
       blur-fade.official.tsx  # 官方 registry 源码（BlurIn 适配层委托，含 2 处最小扩展）
       animated-digits.tsx  blur-in.tsx  text-animate.tsx        # 文本 / 数字动效
-      spotlight.tsx                                             # 鼠标跟随光斑
       animated-theme-toggler.tsx                                # View Transitions 主题切换
   config/
     site.ts     # 引擎、每日壁纸、强调色、白名单、限额
@@ -227,6 +250,8 @@ src/
     cities.ts   # 34 个省级行政区 / 200+ 城市坐标（离线，不查接口）
   lib/
     storage.ts     # localStorage / IndexedDB 封装（mergeConfig 转发给 config-schema）
+    search-history.ts  # 搜索历史：独立 localStorage key，最多 8 条
+    bookmarks.ts       # 浏览器书签 HTML 解析、URL 去重、限额截断
     image-store.ts # 图片资源库：本体进 IndexedDB，配置只留 idb: 引用；旧 dataURL 自动迁移
     use-stored-image.ts # 把 idb:/data:/http(s) 三种取值解析成可直接用的 img src
     config-schema.ts # 配置字段级 schema：枚举 / 数值范围 / 数组元素 / 限额的导入校验
@@ -239,11 +264,14 @@ src/
     motion.ts      # 统一动效变体与入场时序
     config-store.tsx  # 配置 Context + 减少动效偏好
   styles/
-    globals.css    # 设计 token（间距/圆角/阴影/模糊/时长）+ 全部 Magic UI 类 + 主题变量
-tests/             # Vitest 单元 / 组件测试（19 文件 237 项，有覆盖率门禁）
+    globals.css    # 只留 @import 与 dark 变体；顺序即层叠顺序
+    tokens.css     # 设计 token（间距/圆角/阴影/模糊/时长）+ 主题变量 + shadcn 语义映射
+    base.css  panels.css  widgets.css  chrome.css
+    layout.css  effects.css  responsive.css  utilities.css  shadcn-compat.css
+tests/             # Vitest 单元 / 组件测试（26 文件 277 项，有覆盖率门禁）
 .github/workflows/ci.yml  # CI：typecheck → lint → 覆盖率 → build → e2e
 scripts/           # capture-shots.mjs：视觉验收截图脚本
-e2e/               # Playwright 端到端测试（5 文件 39 项，含 axe 无障碍扫描）
+e2e/               # Playwright 端到端测试（5 文件 47 项，含 axe 无障碍扫描）
 ```
 
 ---
@@ -268,7 +296,7 @@ pnpm lint            # ESLint（next/core-web-vitals + next/typescript）
 
 期望：`typecheck` 无输出；`lint` 输出 `0 problems`。
 
-### 5.2 单元 / 组件测试（Vitest，237 项）
+### 5.2 单元 / 组件测试（Vitest，277 项）
 
 ```bash
 pnpm test              # 单次运行
@@ -289,19 +317,26 @@ pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 | `tests/config-store.test.tsx` | 4 | 跨标签页同步：外部写入跟手更新、应用后不回写、清空回到出厂、无关键不触发 |
 | `tests/csp.test.ts` | 13 | 安全响应头纯函数：dev 必须含 `'unsafe-eval'` 且不含 `upgrade-insecure-requests`、生产反之；`connect-src` 不得缺失（缺了会回退 `default-src 'self'` 掐断接口）、`form-action` 覆盖三家引擎 |
 | `tests/storage.test.ts` | 10 | 配置读写、防御式深合并（类型不符不覆盖、未知字段丢弃、可空字段兼容）、清除 |
-| `tests/services.test.ts` | 24 | **白名单拒绝时 fetch 未被调用**、credentials omit、no-referrer、HTTP 500、超时抛错、suggest 截断 8 条、天气码映射 |
-| `tests/search-box.test.tsx` | 12 | 默认引擎 Google、原生表单属性、点击循环 / 右键菜单、`/` 提示、指令跳转、Esc 清空、**空提交直接新标签打开引擎官网**、**回车与点按钮都在新标签打开（不劫持当前页）**、Shift+Enter |
+| `tests/services.test.ts` | 27 | **白名单拒绝时 fetch 未被调用**、credentials omit、no-referrer、HTTP 500、超时抛错、suggest 截断 8 条、天气码映射 |
+| `tests/search-box.test.tsx` | 16 | 默认引擎 Bing、原生表单属性、**点击图标弹出引擎列表（当前项带勾、不会自动切下一个）**、菜单选定后写回、右键同样开菜单、`/` 提示、指令跳转、Esc 清空、**空提交直接新标签打开引擎官网**、**回车与点按钮都在新标签打开（不劫持当前页）**、Shift+Enter |
 | `tests/daily-quote.test.tsx` | 7 | 本地源零网络请求、默认远程取一条、远程失败静默回退、点正文换一条、**不存在来源标签 / 分类 / 刷新按钮**、出处含破折号、聚焦输入框时 `data-dimmed` 翻转 |
 | `tests/shortcut-dock.test.tsx` | 13 | 首页 Dock：展平渲染 12 项、无分组标题、**首页不存在任何编辑 / 删除 / 前移后移 / 添加按钮**、悬停只有图标层、`target=_blank` + `title` 含「打开 」、空态是引导文案；设置内 `ShortcutManager`：列表 12 行、增删改、空名校验、URL 自动补全、删除二次确认、取消不删、前后调序持久化 |
-| `tests/settings-panel.test.tsx` | 35 | **七个分类页签**全部设置项（搜索引擎 / 外观 / 快捷跳转 / 模块 / 背景 / 隐私与数据 / 关于）、每日壁纸开关与回溯天数、对比度校验、导入导出、一键清除、恢复出厂；**本地图片落的是 `idb:` 引用而非 dataURL**、写失败明确报错、拒绝 dataURL 地址、点「往前回溯」标题不再重置偏移、上传图标存成引用 |
-| `tests/command-palette.test.tsx` | 11 | 默认条目、搜索过滤、方向键 + Enter、Esc、⌘K、点主题 / 每日壁纸开关 / 回溯 / 设置项真的改配置 |
+| `tests/settings-panel.test.tsx` | 38 | **七个页签**（搜索引擎 / 外观 / 快捷跳转 / 模块 / 背景 / 隐私与数据 / 关于）全部设置项、每日壁纸开关与回溯天数、暗角开关、对比度校验、导入导出、一键清除、恢复出厂；**本地图片落的是 `idb:` 引用而非 dataURL**、写失败明确报错、拒绝 dataURL 地址、点「往前回溯」标题不再重置偏移、上传图标存成引用 |
+| `tests/command-palette.test.tsx` | 14 | 默认条目、搜索过滤、方向键 + Enter、Esc、⌘K、点主题 / 每日壁纸开关 / 回溯 / 设置项真的改配置 |
 | `tests/scroll-lock.test.ts` | 3 | 浮层滚动锁的引用计数语义：多个浮层叠加时「最后一个关的人还原」、重复释放不把计数减穿、还原成锁之前的值 |
 | `tests/image-store.test.ts` | 11 | 图片资源库：引用格式、内容去重（同图只占一份）、非图片数据拒绝、写入失败抛错、内存缓存命中、删除回收、旧配置 dataURL 迁移与幂等性 |
 | `tests/field-group.test.tsx` | 3 | `FieldGroup` 点标题不触发内部选项（`label` 激活行为回归）、`role=group` 可访问名、`Field` 仍保留单控件转发 |
-| `tests/widgets.test.tsx` | 13 | 时钟（问候一致性、显隐、秒）、壁纸（关闭时只渲染渐变兜底且**零网络请求**、Edge 取回后渲染图片、自定义图片失败降级）、天气（默认开启、静默定位、选省市写入坐标、成功、失败） |
+| `tests/widgets.test.tsx` | 15 | 时钟（问候一致性、显隐、秒、点击 / 右键触发展开）、壁纸（关闭时只渲染渐变兜底且**零网络请求**、Edge 取回后渲染图片、自定义图片失败降级）、天气（默认开启、静默定位、选省市写入坐标、成功、失败） |
 | `tests/note-pad.test.tsx` | 6 | 待办便签显式关闭时不渲染、回填已存内容、防抖落盘、清空与禁用态、「已保存」提示、2000 字截断 |
+| `tests/search-history.test.ts` | 6 | 去重、8 条上限、忽略空串与指令、单删 / 全清、坏 JSON 不抛错、不写配置 key |
+| `tests/bookmarks.test.ts` | 7 | 书签 HTML 解析：实体、嵌套文件夹、`javascript:` 过滤、文件内去重、URL 去重、上限、标题截断 |
+| `tests/bookmark-import.test.tsx` | 1 | 导入流程：先预览、确认后写入、跳过与现有项重复的书签 |
+| `tests/shortcut-undo.test.tsx` | 1 | 删除后从 toast 撤销，按原位置恢复 |
+| `tests/shortcut-help.test.tsx` | 4 | `?` 打开、输入框内不触发、已打开不重复触发、列出主要快捷键 |
+| `tests/shortcut-grid.test.tsx` | 3 | 快捷托板：展平 12 项 + 添加方块、头部「管理」、`_blank` 跳转、深链回调、关闭图标抓取时每个方块都有首字母兜底 |
+| `tests/widget-boundary.test.tsx` | 3 | 模块抛错只降级自己、兄弟节点仍在、重试恢复、silent 模式不渲染占位 |
 
-### 5.3 端到端测试（Playwright，39 项）
+### 5.3 端到端测试（Playwright，47 项）
 
 ```bash
 pnpm test:e2e                            # 全量（自动 build + start，端口 3100）
@@ -319,9 +354,9 @@ Playwright 会自动执行 `pnpm run build && pnpm run start --port 3100`（见 
 
 | 文件 | 项数 | 覆盖内容 |
 |---|---|---|
-| `e2e/startpage.spec.ts` | 30 | 首屏五模块 + 无横向滚动、**每个模块各自独立成层（左上天气→时钟→搜索→便签卡→一言→底部 Dock，且不存在任何 bento 板）**、**玻璃面板均启用 backdrop-filter 且底色半透明**、**天气胶囊与动作组同高同材质**、**四种视口下整页/main 均无滚动且缩放系数在 0.6~1**、时钟走秒、**秒数可见且字号 ≥ 主数字一半**、**首屏请求分两层把关（接口走白名单、图片只允许 favicon）**（并断言「关壁纸 + 关图标抓取 + 一言切本地库后外部请求必须为 0」）、**聚焦搜索框时一言 `opacity` 归零、失焦复原**、引擎切换三种方式（默认 Google）、`/` 指令、**回车与点按钮都在新标签打开、空提交直接进引擎官网**、快捷项增改删**全流程都在设置里**（首页断言无编辑入口与无 `add-shortcut`）、**悬停只有图标层动（格子无底色/无阴影/无描边）**、图标前后调序与顺序持久化、Ctrl+1、**点一言正文换一条且无来源/分类/刷新**、每日壁纸开关与暗化滑杆、主题写 `html[data-theme]`、命令面板搜索执行、模块关闭后刷新保持、一键清除、导出下载、skip-link、焦点陷阱与焦点恢复、减少动效、**设置内「添加」再叠一层编辑弹窗时标题可见且 Esc 只关最上层** |
+| `e2e/startpage.spec.ts` | 30 | 首屏五模块 + 无横向滚动、**每个模块各自独立成层（左上天气→时钟→搜索→便签卡→一言→底部 Dock，且不存在任何 bento 板）**、**玻璃面板均启用 backdrop-filter 且底色半透明**、**天气胶囊与动作组同高同材质**、**四种视口下整页/main 均无滚动且缩放系数在 0.6~1**、时钟走秒、**秒数可见且字号 ≥ 主数字一半**、**首屏请求分两层把关（接口走白名单、图片只允许 favicon）**（并断言「关壁纸 + 关图标抓取 + 一言切本地库后外部请求必须为 0」）、**聚焦搜索框时一言 `opacity` 归零、失焦复原**、**默认 Bing，点引擎图标弹列表并可选定（不会自动切下一个）**、`/` 指令、**回车与点按钮都在新标签打开、空提交直接进引擎官网**、快捷项增改删**全流程都在设置里**（首页断言无编辑入口与无 `add-shortcut`）、**悬停只有图标层动（格子无底色/无阴影/无描边）**、图标前后调序与顺序持久化、Ctrl+1、**点一言正文换一条且无来源/分类/刷新**、每日壁纸开关与暗化滑杆、主题写 `html[data-theme]`、命令面板搜索执行、模块关闭后刷新保持、一键清除、导出下载、skip-link、焦点陷阱与焦点恢复、减少动效、**设置内「添加」再叠一层编辑弹窗时标题可见且 Esc 只关最上层** |
 | `e2e/a11y.spec.ts` | 5 | axe-core 扫描首页（暗/亮）、设置面板**七个页签**、命令面板、快捷项编辑弹窗 —— 断言 **0 个 serious / critical** |
-| `e2e/no-js.spec.ts` | 1 | 禁用 JS 后页面完整可读，搜索框通过原生表单 GET 真的跳转到 `https://www.google.com/search?q=...` |
+| `e2e/no-js.spec.ts` | 1 | 禁用 JS 后页面完整可读，搜索框通过原生表单 GET 真的跳转到 `https://www.bing.com/search?q=...` |
 | `e2e/reduced-motion.spec.ts` | 1 | 系统 `prefers-reduced-motion: reduce` 时，四个入场模块首帧即 `opacity:1`、无位移，一言的入场 `animation: none`、聚焦渐隐只淡出不位移，逐字动画降级 |
 | `e2e/note.spec.ts` | 3 | 待办便签默认可见、可输入并在刷新后保留、关闭后便签卡整体退场且不留空盒子、清空按钮清内容且写回存储 |
 
@@ -346,7 +381,7 @@ pnpm 版本不写死，由 `pnpm/action-setup@v4` 读 `package.json` 的 `packag
 
 1. **一屏**：在 1440×900、1366×768、1280×600、390×844 下刷新，页面均**无纵向 / 横向滚动条**；缩小窗口时内容整体等比缩小，不裁切顶部（`main[data-fit-scale]` 可查当前缩放）。
 2. **入场**：刷新后壁纸先预解码再淡入（0.7s），时钟 150ms、搜索 300ms、卡片 450ms、一言 600ms 依次淡入。
-3. **搜索**：默认显示 Google → 点图标变 Bing → 右键图标开菜单选「百度」→ **不输入任何内容直接点右侧圆钮或按 Enter，应新开一个 bing.com 标签，且当前页不跳走** → 回来输入 `hello` 按 Enter（新标签打开搜索结果）→ Shift+Enter 同样是新标签。
+3. **搜索**：默认显示 Google → 点图标变 Bing → 右键图标开菜单选「百度」→ **不输入任何内容直接点右侧放大镜或按 Enter，应新开一个 bing.com 标签，且当前页不跳走** → 回来输入 `hello` 按 Enter（新标签打开搜索结果）→ Shift+Enter 同样是新标签。
 4. **快捷指令**：输入 `/` 看到三条提示 → 输入 `/g react` 回车，跳到 GitHub 搜索页；输入 `github.com` 出现「直接打开」提示。
 5. **一言**：**点一下搜索框**，确认一言整体淡出、失焦后淡回 —— 且一言本身没有任何边框或玻璃底；**只有一行正文 + 一行出处（没有「远程/本地」标签、没有分类下拉、没有刷新按钮）**；点一下正文即换一条。
 6. **快捷跳转**：在首页把指针移到 Dock 图标上，确认**只有图标上浮 + 柔光 + 上方浮出名称气泡**，没有卡片底色、**也没有任何编辑按钮**；然后设置 → 快捷跳转 → 点「添加」→ 名称留空保存（应报错且弹窗不关）→ 填名称与 `mysite.dev`（自动补 `https://`）保存 → 用 ↑↓ 调序 → 点铅笔改名 → 垃圾桶二次确认删除；回到首页 `Ctrl+1` 直达第一项。

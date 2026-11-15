@@ -32,7 +32,7 @@ export default function Error({
         </p>
         {error.digest ? (
           <p
-            className="mt-2 font-mono text-[10.5px] text-[var(--fg-subtle)]"
+            className="mt-2 font-mono text-[11px] text-[var(--fg-subtle)]"
             data-testid="error-digest"
           >
             错误编号 {error.digest}

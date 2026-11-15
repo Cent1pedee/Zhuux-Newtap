@@ -44,6 +44,10 @@ const enumOf = (values: readonly string[]): Field => ({ kind: "enum", values });
 
 const SCHEMA: Record<keyof AppConfig, Field> = {
   version: { kind: "number", min: 1, max: 1 },
+  home: {
+    kind: "object",
+    fields: { simple: { kind: "boolean" } },
+  },
   engineId: { kind: "string", max: 40 },
   engineOrder: { kind: "stringArray", max: 32, maxLen: 40 },
   quickCommands: { kind: "quickCommands" },
@@ -85,6 +89,7 @@ const SCHEMA: Record<keyof AppConfig, Field> = {
       offset: { kind: "number", min: 0, max: 7 },
       dim: { kind: "number", min: 0, max: 100 },
       blur: { kind: "number", min: 0, max: 20 },
+      vignette: { kind: "boolean" },
       kenBurns: { kind: "boolean" },
     },
   },

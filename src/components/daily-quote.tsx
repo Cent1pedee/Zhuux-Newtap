@@ -127,7 +127,7 @@ export function DailyQuote() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0, y: reduce ? 0 : -4 }}
               transition={{ duration: reduce ? 0 : 0.16, ease: EASE_OUT_CUBIC }}
-              className="text-quote block text-[13.5px] leading-[1.9]"
+              className="text-quote block text-[13px] leading-[1.9]"
             >
               <TextAnimate
                 text={loading && !quote ? "正在取一句话…" : (quote?.text ?? "加载中…")}
@@ -139,7 +139,7 @@ export function DailyQuote() {
         </button>
 
         {/* 只留出处。远程/本地、分类、刷新都不显示 —— 一行小字旁边挂四个控件只会分散注意力 */}
-        <span className="quote-from text-[10.5px] text-[var(--fg-subtle)]" data-testid="quote-from">
+        <span className="quote-from text-[11px] text-[var(--fg-subtle)]" data-testid="quote-from">
           {quote?.from ? `— ${quote.from}` : ""}
         </span>
       </div>

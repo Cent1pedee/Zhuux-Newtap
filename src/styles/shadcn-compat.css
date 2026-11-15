@@ -1,0 +1,186 @@
+/* shadcn/ui 官方组件的外观兜底 */
+
+/* ============================================================
+   shadcn/ui 外观兜底
+   ============================================================ */
+
+/* 官方 Content 自带 border / bg / shadow，按 .glass-strong 覆盖回去 */
+[data-slot="dialog-content"].glass-strong,
+[data-slot="alert-dialog-content"].glass-strong {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-3), inset 0 1px 0 transparent;
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(150%);
+  backdrop-filter: blur(var(--blur-3)) saturate(150%);
+}
+
+/* reduced-motion 下关掉官方 data-[state] 动画 */
+[data-motion="reduce"] [data-slot="dialog-overlay"],
+[data-motion="reduce"] [data-slot="dialog-content"],
+[data-motion="reduce"] [data-slot="alert-dialog-overlay"],
+[data-motion="reduce"] [data-slot="alert-dialog-content"],
+[data-reduce-motion="true"],
+[data-reduce-motion="true"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Switch：官方默认 18.4×32 / 14px 滑块，这里还原成原来的 34×20 / 16px 滑块 */
+.sp-switch {
+  /* 官方根节点没有 relative，Thumb 会跑到弹窗左上角 */
+  position: relative;
+  margin-top: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--fg) 16%, transparent) !important;
+}
+.sp-switch--md {
+  height: 20px !important;
+  width: 34px !important;
+  margin-top: 2px !important;
+}
+.sp-switch--sm {
+  height: 18px !important;
+  width: 32px !important;
+}
+.sp-switch[data-state="checked"] {
+  background: var(--accent) !important;
+}
+.sp-switch [data-slot="switch-thumb"] {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: 16px;
+  width: 16px;
+  background: #fff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transform: translateX(0);
+  transition: transform 200ms ease-out;
+}
+.sp-switch--sm [data-slot="switch-thumb"] {
+  height: 14px;
+  width: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.sp-switch[data-state="checked"] [data-slot="switch-thumb"] {
+  transform: translateX(14px);
+}
+.sp-switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Segmented：官方 RadioGroupItem 是圆点单选，这里还原成分段胶囊 */
+.sp-segmented [data-slot="radio-group-item"] {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  aspect-ratio: auto;
+}
+.sp-segmented [data-slot="radio-group-item"][data-state="checked"] {
+  color: #fff;
+}
+.sp-segmented [data-slot="radio-group-indicator"] {
+  display: none;
+}
+.sp-segmented [data-slot="radio-group-item"]:hover:not([data-state="checked"]) {
+  background: transparent;
+}
+
+/* 还原原生 range 的 6px 轨道与 accent 小圆钮 */
+.sp-slider [data-slot="slider-track"] {
+  height: 6px;
+  background: var(--input-bg);
+}
+.sp-slider [data-slot="slider-range"] {
+  background: transparent;
+}
+.sp-slider [data-slot="slider-thumb"] {
+  height: 12px;
+  width: 12px;
+  border: 0;
+  background: var(--accent);
+  box-shadow: none;
+}
+.sp-slider [data-slot="slider-thumb"]:hover,
+.sp-slider [data-slot="slider-thumb"]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* toast 走 toast.custom，去掉官方卡片底 */
+[data-sonner-toaster] [data-sonner-toast][data-styled="false"] {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  width: auto;
+  min-height: 0;
+}
+[data-sonner-toaster][data-sonner-toaster] {
+  z-index: 60;
+}
+
+/* 复位官方 Textarea 默认样式；field-sizing:content 会让便签自动长高算错 */
+[data-slot="textarea"].note-input {
+  display: inline-block;
+  field-sizing: fixed;
+  box-shadow: none;
+}
+
+/* 补回 :focus 内发光 */
+[data-slot="textarea"].note-input:focus,
+[data-slot="textarea"].note-input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* 复位官方 Input 默认样式 */
+[data-slot="input"].hidden {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border-width: 0;
+  border-radius: 0;
+  font-size: 16px;
+  line-height: 24px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+
+/* 取色器沿用原有 32px 圆形排印 */
+[data-slot="input"][type="color"] {
+  min-width: auto;
+  font-size: 16px;
+  line-height: 24px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+
+/* 主搜索沿用 .search-input 排印 */
+[data-slot="input"].search-input {
+  padding: 0;
+  border-width: 0;
+  border-radius: 0;
+  font-size: 15px;
+  line-height: 22.5px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+
+/* 命令面板输入自动聚焦，连 focus-visible ring 一起清掉 */
+[data-slot="input"][data-testid="palette-input"] {
+  min-width: auto;
+  padding: 0;
+  border-width: 0;
+  font-size: 13px;
+  line-height: 20.25px;
+  box-shadow: none;
+  transition-property: all;
+  transition-duration: 0s;
+}
+[data-slot="input"][data-testid="palette-input"]:focus-visible {
+  box-shadow: none;
+}

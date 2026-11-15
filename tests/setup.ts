@@ -2,7 +2,7 @@ import "@testing-library/dom";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 
-// jsdom 未实现 matchMedia / scrollIntoView，测试环境补齐（不进入生产代码）
+// jsdom 没有 matchMedia / scrollIntoView
 if (!window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -23,11 +23,7 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
-/*
- * shadcn/ui 底层是 Radix，jsdom 缺这些浏览器 API 会让 RadioGroup / Slider / Dialog
- * 在渲染期直接抛错（表现为「找不到选项文字」而不是明确报错）。
- * 只补测试环境，不进生产包。
- */
+// Radix 在 jsdom 下需要 ResizeObserver / IntersectionObserver / DOMRect 等
 if (!globalThis.ResizeObserver) {
   globalThis.ResizeObserver = class {
     observe() {}

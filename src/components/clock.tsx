@@ -17,7 +17,14 @@ import { BlurIn } from "@/components/magicui/blur-in";
  * background-clip:text 不生效，文字就彻底不可见 —— 用户反馈「时钟不显示」。
  * 现在改用实心色 + 柔和投影保证任意壁纸上都可读。
  */
-export function Clock() {
+export function Clock({
+  onActivate,
+  active = false,
+}: {
+  /** 点击时间：简洁首页用它浮出快捷方块与设置入口 */
+  onActivate?: () => void;
+  active?: boolean;
+} = {}) {
   const { config, ready } = useConfig();
   const reduce = useReducedMotionPref();
   const [now, setNow] = useState<Date | null>(null);
@@ -40,20 +47,10 @@ export function Clock() {
 
   if (!config.clock.show) return null;
 
-  return (
-    <motion.section
-      aria-label="当前时间与问候"
-      data-entrance="clock"
-      className="flex flex-col items-center text-center"
-      variants={fadeUp(reduce, 14)}
-      initial="hidden"
-      animate="show"
-      transition={{ delay: reduce || !ready ? 0 : ENTRANCE_DELAY.clock }}
-    >
+  const content = (
+    <>
       <div
         className="clock-digits select-none text-[var(--fg)]"
-        /* 视口高度也参与决定字号：矮屏（600~700 高）自动收小，避免把网格挤出首屏 */
-        style={{ fontSize: "clamp(46px, min(10vw, 12vh), 104px)" }}
         data-testid="clock"
         aria-live="off"
       >
@@ -132,6 +129,53 @@ export function Clock() {
       <span className="sr-only" data-testid="clock-text">
         {timeText}
       </span>
-    </motion.section>
+    </>
+  );
+
+  const entrance = {
+    "data-entrance": "clock",
+    variants: fadeUp(reduce, 14),
+    initial: "hidden",
+    animate: "show",
+    transition: { delay: reduce || !ready ? 0 : ENTRANCE_DELAY.clock },
+  } as const;
+
+  /*
+   * 简洁首页把时间做成入口：点它才浮出快捷方块与设置。
+   * 经典布局没有这个交互 —— 渲染成 <section>，避免出现一个「按了没反应」的按钮。
+   */
+  if (!onActivate) {
+    return (
+      <motion.section {...entrance} className="flex flex-col items-center text-center">
+        {content}
+      </motion.section>
+    );
+  }
+
+  return (
+    <motion.button
+      type="button"
+      {...entrance}
+      onClick={onActivate}
+      onContextMenu={(event) => {
+        /*
+         * 右键与左键同一个开关。
+         * 不做「右键打开、左键关闭」这种非对称规则 —— 用户记不住，
+         * 而且误触后还得先想清楚现在是哪个状态。
+         */
+        event.preventDefault();
+        onActivate();
+      }}
+      whileTap={reduce ? undefined : { scale: 0.985 }}
+      aria-expanded={active}
+      aria-controls={active ? "home-reveal" : undefined}
+      data-interactive="true"
+      className="clock-trigger flex flex-col items-center text-center"
+      title="点击或右键显示快捷网站与设置"
+    >
+      {content}
+      {/* 可见文字参与可访问名（axe: label-content-name-mismatch），不能只用 aria-label 覆盖 */}
+      <span className="sr-only">，点击显示快捷网站与设置</span>
+    </motion.button>
   );
 }

@@ -11,6 +11,11 @@ test.describe("系统减少动效", () => {
     await page.addInitScript(() => {
       try {
         window.localStorage.clear();
+        // 一言只在经典布局出现；显式开启以覆盖它的动画降级
+        window.localStorage.setItem(
+          "startpage.config.v1",
+          JSON.stringify({ home: { simple: false }, quote: { show: true, source: "local" } }),
+        );
       } catch {
         /* ignore */
       }

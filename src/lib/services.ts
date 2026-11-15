@@ -188,7 +188,33 @@ export async function fetchSuggestions(
 
 /* ------------------------------ 天气 ------------------------------ */
 
-export type WeatherNow = { temperature: number; code: number; isDay: boolean };
+export type WeatherDay = {
+  /** yyyy-mm-dd（接口原样，用作 key） */
+  date: string;
+  /** 明天 / 后天 / 周几 */
+  label: string;
+  code: number;
+  max: number;
+  min: number;
+};
+
+export type WeatherNow = {
+  temperature: number;
+  code: number;
+  isDay: boolean;
+  /** 未来三天（不含今天）；接口没给就是空数组，UI 直接不渲染预报区 */
+  daily: WeatherDay[];
+};
+
+const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function dayLabel(date: string, index: number): string {
+  if (index === 1) return "明天";
+  if (index === 2) return "后天";
+  const [y, m, d] = date.split("-").map(Number);
+  const parsed = new Date(y, (m ?? 1) - 1, d ?? 1);
+  return Number.isNaN(parsed.getTime()) ? date : WEEKDAYS[parsed.getDay()];
+}
 
 /** Open-Meteo：无需 API key，只发经纬度，不发任何本地数据 */
 export async function fetchWeather(
@@ -199,18 +225,50 @@ export async function fetchWeather(
 ): Promise<WeatherNow> {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}` +
-    `&current=temperature_2m,weather_code,is_day&timezone=auto` +
+    `&current=temperature_2m,weather_code,is_day` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4` +
+    `&timezone=auto` +
     (unit === "f" ? "&temperature_unit=fahrenheit" : "");
   const res = await safeFetch(url, { whitelist, timeoutMs: 4000 });
   const data = (await res.json()) as {
     current?: { temperature_2m?: number; weather_code?: number; is_day?: number };
+    daily?: {
+      time?: string[];
+      weather_code?: number[];
+      temperature_2m_max?: number[];
+      temperature_2m_min?: number[];
+    };
   };
   const current = data.current;
   if (!current || typeof current.temperature_2m !== "number") throw new Error("天气数据为空");
+
+  /*
+   * 预报是可选的：字段缺失、长度对不上都只返回空数组。
+   * 不能因为「未来三天没拿到」就让当前天气也一起失败。
+   */
+  const daily: WeatherDay[] = [];
+  const d = data.daily;
+  if (d?.time && d.weather_code && d.temperature_2m_max && d.temperature_2m_min) {
+    const count = Math.min(d.time.length, d.weather_code.length, d.temperature_2m_max.length, d.temperature_2m_min.length);
+    for (let i = 1; i < count && daily.length < 3; i += 1) {
+      const max = d.temperature_2m_max[i];
+      const min = d.temperature_2m_min[i];
+      if (typeof max !== "number" || typeof min !== "number") continue;
+      daily.push({
+        date: d.time[i],
+        label: dayLabel(d.time[i], i),
+        code: d.weather_code[i] ?? 0,
+        max: Math.round(max),
+        min: Math.round(min),
+      });
+    }
+  }
+
   return {
     temperature: Math.round(current.temperature_2m),
     code: current.weather_code ?? 0,
     isDay: current.is_day !== 0,
+    daily,
   };
 }
 

@@ -28,6 +28,7 @@ describe("每日一言", () => {
   });
 
   it("默认走远程 API，成功后展示接口返回的句子", async () => {
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ quote: { show: true, source: "remote" } }));
     const fetchSpy = vi.fn(async () =>
       new Response(JSON.stringify({ hitokoto: "远程来的一句话", from: "测试来源" }), {
         status: 200,
@@ -42,6 +43,7 @@ describe("每日一言", () => {
   });
 
   it("远程失败时静默回退内置语录库", async () => {
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ quote: { show: true, source: "remote" } }));
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
     renderWithProviders(<DailyQuote />);
     await waitFor(() => expect(TEXTS.has(screen.getByTestId("quote-text").textContent!.trim())).toBe(true));

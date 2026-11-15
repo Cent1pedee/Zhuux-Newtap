@@ -1,20 +1,7 @@
 "use client";
 
-/**
- * 兼容层：把 shadcn/ui 官方组件包装成项目原有的 API。
- *
- * 为什么需要这一层：
- *  - 官方 Dialog / Switch / RadioGroup / Slider / Input / Button / Label / sonner 的
- *    props 与本项目调用方（7 个设置页签、快捷项编辑器、命令面板…）完全不一样；
- *    直接替换会连锁改动十几处业务代码，也违背「对外接口保持一致」。
- *  - 这里保留每一个导出名、每一个 prop、每一个 data-testid 与每一段类名，
- *    只把内部实现换成 shadcn 组件，由 Radix 提供焦点陷阱 / Esc / 滚动锁 / aria 语义，
- *    由 cn() 保证项目原有类名覆盖官方默认样式 —— 因此页面样式不变。
- *
- * 例外（见各自注释）：Slider 的 DOM 由原生 input 变成 Radix 的 div，
- * 因此 E2E 里对它的 Playwright 交互从 fill() 改成键盘操作；弹窗动画由 motion 弹簧
- * 换成 shadcn 的 data-[state] CSS 动画（视觉等价，reduced-motion 下统一禁用）。
- */
+/* 把 shadcn 官方组件包装成项目原有的 API：导出名、props、data-testid、类名都不变。
+   Slider 的 DOM 变成 Radix thumb，E2E 设值改用键盘；弹窗动画换成 data-[state] CSS 动画。 */
 
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -57,7 +44,7 @@ const DIALOG_PANEL_CLASS =
   "glass-strong flex flex-col overflow-hidden rounded-[var(--radius-card)] border-0 bg-transparent p-0 shadow-none gap-0 outline-none " +
   "max-w-none focus-visible:ring-0";
 
-const DIALOG_OVERLAY_CLASS = "bg-black/55 backdrop-blur-[3px] border-0";
+const DIALOG_OVERLAY_CLASS = "bg-black/45 backdrop-blur-[10px] border-0";
 
 type OverlayProps = React.ComponentProps<typeof DialogOverlay>;
 
@@ -73,6 +60,8 @@ export function Modal({
   labelledBy,
   bodyClassName,
   fixedHeight = false,
+  returnFocusTo,
+  panelClassName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -85,6 +74,10 @@ export function Modal({
   labelledBy?: string;
   bodyClassName?: string;
   fixedHeight?: boolean;
+  /** 显式指定关闭后焦点回到哪个元素；不传则用打开时的 activeElement */
+  returnFocusTo?: HTMLElement | null;
+  /** 追加到弹窗面板上的类名（例如设置弹窗需要更实的底色） */
+  panelClassName?: string;
 }) {
   const autoId = useId();
   const titleId = labelledBy ?? `${autoId}-title`;
@@ -106,18 +99,26 @@ export function Modal({
   const restoreRef = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
   if (!wasOpen.current && open) {
-    restoreRef.current = typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null);
+    restoreRef.current =
+      returnFocusTo ?? (typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null));
   }
   wasOpen.current = open;
 
-  useEffect(() => {
-    if (open) return;
+  /*
+   * 焦点还必须在 Radix 完成清理之后（它关闭时会把焦点丢给 body）。
+   * 用 onCloseAutoFocus 而不是自己 setTimeout：这个回调就是为「关闭后焦点去哪」准备的，
+   * 还能 preventDefault 掉 Radix 的默认行为。
+   */
+  const onCloseAutoFocus = (event: Event) => {
     const node = restoreRef.current;
     restoreRef.current = null;
     if (!node || !document.contains(node)) return;
-    const raf = requestAnimationFrame(() => node.focus());
-    return () => cancelAnimationFrame(raf);
-  }, [open]);
+    event.preventDefault();
+    // 等 Radix 把 aria-hidden / inert 从背景移除后再聚焦，否则 focus() 会被吞掉
+    window.setTimeout(() => {
+      if (node.isConnected) node.focus();
+    }, 0);
+  };
 
   const widthClass =
     size === "sm"
@@ -138,10 +139,11 @@ export function Modal({
       <DialogContent
         showCloseButton={false}
         overlayProps={overlayProps}
+        onCloseAutoFocus={onCloseAutoFocus}
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         data-reduce-motion={reduceMotion ? "true" : undefined}
-        className={cn(DIALOG_PANEL_CLASS, heightClass, widthClass, "w-full")}
+        className={cn(DIALOG_PANEL_CLASS, heightClass, widthClass, "w-full", panelClassName)}
       >
         <DialogHeader className="flex flex-row shrink-0 items-start justify-between gap-4 border-b border-[var(--glass-border)] px-5 py-4 text-left">
           <div>
@@ -183,7 +185,8 @@ export function Modal({
    ========================================================================== */
 
 type ToastTone = "info" | "success" | "error";
-type ToastContextValue = { push: (text: string, tone?: ToastTone) => void };
+type ToastAction = { label: string; onClick: () => void };
+type ToastContextValue = { push: (text: string, tone?: ToastTone, action?: ToastAction) => void };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
@@ -232,25 +235,34 @@ export function ToastProvider({
   const reduce = reduceMotion ?? systemReduce;
   const dockOffset = useDockOffset();
 
-  const push = useCallback((text: string, tone: ToastTone = "info") => {
+  const push = useCallback((text: string, tone: ToastTone = "info", action?: ToastAction) => {
     const dot = tone === "error" ? "#f87171" : tone === "success" ? "#34d399" : "var(--accent)";
     toast.custom(
-      () => (
+      (t) => (
         <div
-          className="glass-strong pointer-events-auto max-w-[90vw] rounded-full px-4 py-2 text-xs shadow-lg"
+          className="glass-strong pointer-events-auto flex max-w-[90vw] items-center gap-2 rounded-full px-4 py-2 text-xs shadow-lg"
           data-testid="toast"
           data-reduce-motion={reduce ? "true" : undefined}
           role="status"
         >
-          <span
-            aria-hidden="true"
-            className="mr-1.5 inline-block size-1.5 rounded-full align-middle"
-            style={{ background: dot }}
-          />
-          {text}
+          <span aria-hidden="true" className="inline-block size-1.5 shrink-0 rounded-full" style={{ background: dot }} />
+          <span>{text}</span>
+          {action ? (
+            <button
+              type="button"
+              onClick={() => {
+                action.onClick();
+                toast.dismiss(t);
+              }}
+              data-testid="toast-action"
+              className="shrink-0 rounded-[var(--radius-xs)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--accent)] transition-opacity hover:opacity-80"
+            >
+              {action.label}
+            </button>
+          ) : null}
         </div>
       ),
-      { duration: 2600, unstyled: true },
+      { duration: action ? 6000 : 2600, unstyled: true },
     );
   }, [reduce]);
 
@@ -322,13 +334,12 @@ export function SwitchButton({
       aria-label={label}
       disabled={disabled}
       data-testid={testId}
-      data-state={checked ? "on" : "off"}
       className={cn("sp-switch shrink-0", size === "sm" ? "sp-switch--sm" : "sp-switch--md")}
     />
   );
 }
 
-/** 带标题与描述的整行开关：用 shadcn Label + htmlFor 保留「点文字也能切换」 */
+/** 带标题与描述的整行开关：用 shadcn Label 保留「点文字也能切换」 */
 export function Switch({
   checked,
   onChange,
@@ -476,7 +487,7 @@ export function Button({
   ariaLabel?: string;
 }) {
   const base =
-    "inline-flex shrink items-center justify-center gap-1.5 rounded-[var(--radius-sm)] font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-45 h-auto focus-visible:ring-0 focus-visible:border-transparent";
+    "inline-flex shrink items-center justify-center gap-1.5 rounded-[var(--radius-sm)] font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 h-auto focus-visible:ring-0 focus-visible:border-transparent";
   const sizes = size === "sm" ? "px-2.5 py-1.5 text-[12px]" : "px-3.5 py-2 text-[13px]";
   const variants: Record<string, string> = {
     primary: "text-white hover:brightness-110 active:brightness-95 hover:bg-transparent",

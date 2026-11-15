@@ -20,24 +20,39 @@ describe("搜索框：引擎切换", () => {
     window.localStorage.clear();
   });
 
-  it("默认引擎为 Google，且表单有原生 GET 兜底", async () => {
+  it("默认引擎为 Bing，且表单有原生 GET 兜底", async () => {
     renderWithProviders(<SearchBox />);
-    await waitFor(() => expect(screen.getByTestId("engine-name").textContent).toContain("Google"));
+    await waitFor(() => expect(screen.getByTestId("engine-name").textContent).toContain("Bing"));
     const form = screen.getByTestId("search-form") as HTMLFormElement;
     expect(form.getAttribute("method")).toBe("get");
-    expect(form.getAttribute("action")).toContain("google.com");
+    expect(form.getAttribute("action")).toContain("bing.com");
     // 无 JS 时 input 的 name 决定查询参数
     expect(input().getAttribute("name")).toBe("q");
   });
 
-  it("点击引擎按钮循环切换引擎", async () => {
+  it("点击引擎按钮弹出引擎列表，而不是直接切到下一个", async () => {
     renderWithProviders(<SearchBox />);
-    await waitFor(() => expect(screen.getByTestId("engine-name").textContent).toContain("Google"));
+    await waitFor(() => expect(screen.getByTestId("engine-name").textContent).toContain("Bing"));
     fireEvent.click(screen.getByTestId("engine-button"));
-    await waitFor(() => expect(screen.getByTestId("engine-name").textContent).not.toContain("Google"));
+    await waitFor(() => expect(screen.getByTestId("engine-menu")).toBeTruthy());
+    // 只是把列表摊开，当前引擎不变
+    expect(screen.getByTestId("engine-name").textContent).toContain("Bing");
+    expect(screen.getByTestId("engine-option-bing").getAttribute("aria-checked")).toBe("true");
+    // 再点一次收起
+    fireEvent.click(screen.getByTestId("engine-button"));
+    await waitFor(() => expect(screen.queryByTestId("engine-menu")).toBeNull());
   });
 
-  it("右键打开引擎菜单，可选择并关闭", async () => {
+  it("在菜单里选定引擎后写回配置并收起菜单", async () => {
+    renderWithProviders(<SearchBox />);
+    fireEvent.click(screen.getByTestId("engine-button"));
+    await waitFor(() => expect(screen.getByTestId("engine-option-baidu")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("engine-option-baidu"));
+    await waitFor(() => expect(screen.queryByTestId("engine-menu")).toBeNull());
+    expect(screen.getByTestId("engine-name").textContent).toContain("百度");
+  });
+
+  it("右键同样打开引擎菜单", async () => {
     renderWithProviders(<SearchBox />);
     fireEvent.contextMenu(screen.getByTestId("engine-button"));
     await waitFor(() => expect(screen.getByTestId("engine-menu")).toBeTruthy());
@@ -116,7 +131,7 @@ describe("搜索框：提交行为", () => {
     fireEvent.keyDown(input(), { key: "Enter", shiftKey: true });
     expect(openSpy).toHaveBeenCalledTimes(1);
     const [url, target] = openSpy.mock.calls[0];
-    expect(url).toContain("google.com");
+    expect(url).toContain("bing.com");
     expect(url).toContain("hello%20world");
     expect(target).toBe("_blank");
     vi.unstubAllGlobals();
@@ -146,6 +161,69 @@ describe("搜索框：提交行为", () => {
     fireEvent.change(input(), { target: { value: "/g react" } });
     fireEvent.keyDown(input(), { key: "Enter", shiftKey: true });
     expect(openSpy.mock.calls[0][0]).toBe("https://github.com/search?q=react");
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("搜索框：最近搜索", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("提交后记入历史，清空输入时展示", async () => {
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+    renderWithProviders(<SearchBox />);
+
+    const el = input();
+    fireEvent.focus(el);
+    fireEvent.change(el, { target: { value: "react 19" } });
+    fireEvent.keyDown(el, { key: "Enter" });
+    expect(openSpy).toHaveBeenCalledTimes(1);
+
+    // 清空输入 → 历史面板出现（仍处于聚焦态）
+    fireEvent.change(el, { target: { value: "" } });
+    await waitFor(() => expect(screen.getByTestId("search-history")).toBeTruthy());
+    expect(screen.getByTestId("search-history").textContent).toContain("react 19");
+    vi.unstubAllGlobals();
+  });
+
+  it("点历史条目直接搜索，且不会污染成指令", async () => {
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+    renderWithProviders(<SearchBox />);
+
+    const el = input();
+    fireEvent.focus(el);
+    fireEvent.change(el, { target: { value: "vite" } });
+    fireEvent.keyDown(el, { key: "Enter" });
+    fireEvent.change(el, { target: { value: "" } });
+
+    await waitFor(() => expect(screen.getByTestId("search-history")).toBeTruthy());
+    fireEvent.click(screen.getByText("vite"));
+    expect(openSpy.mock.calls.at(-1)?.[0]).toContain("vite");
+    vi.unstubAllGlobals();
+  });
+
+  it("可删除单条与清除全部", async () => {
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+    renderWithProviders(<SearchBox />);
+
+    const el = input();
+    fireEvent.focus(el);
+    fireEvent.change(el, { target: { value: "alpha" } });
+    fireEvent.keyDown(el, { key: "Enter" });
+    fireEvent.change(el, { target: { value: "beta" } });
+    fireEvent.keyDown(el, { key: "Enter" });
+    fireEvent.change(el, { target: { value: "" } });
+
+    await waitFor(() => expect(screen.getAllByTestId("search-history-remove")).toHaveLength(2));
+    fireEvent.click(screen.getAllByTestId("search-history-remove")[0]);
+    await waitFor(() => expect(screen.getAllByTestId("search-history-remove")).toHaveLength(1));
+
+    fireEvent.click(screen.getByTestId("search-history-clear"));
+    await waitFor(() => expect(screen.queryByTestId("search-history")).toBeNull());
     vi.unstubAllGlobals();
   });
 });

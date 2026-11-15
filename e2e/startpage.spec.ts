@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { openSettings } from "./helpers";
 
 /**
  * E2E：按 PRD 的五个 P0 要素逐条验证「真实浏览器里的可操作性」。
@@ -62,24 +63,116 @@ async function shortcutId(page: Page, title: string): Promise<string> {
  * 首页 Dock 悬停不再浮出编辑工具条。
  */
 async function openShortcutSettings(page: Page) {
-  await page.getByTestId("settings-trigger").click();
+  await openSettings(page);
   await page.getByTestId("settings-tab-shortcuts").click();
   await expect(page.getByTestId("shortcut-manager")).toBeVisible();
 }
 
 test.describe("首屏与布局", () => {
-  test("五个 P0 模块全部渲染，且无横向滚动", async ({ page }) => {
+  test("默认态：时间 / 搜索 / 一言 / Dock，且无横向滚动", async ({ page }) => {
     await fresh(page);
     await expect(page.getByTestId("clock")).toBeVisible();
     await expect(page.getByTestId("search-form")).toBeVisible();
+    await expect(page.getByTestId("shortcut-dock")).toBeVisible();
     await expect(page.getByTestId("shortcut-total")).toHaveText("12");
     await expect(page.getByTestId("quote-card")).toBeVisible();
     await expect(page.getByTestId("wallpaper")).toBeAttached();
+    await expect(page.getByTestId("wallpaper-vignette")).toBeVisible();
+    // 快捷方块与右上角设置属于「点时间之后」的展开态
+    await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
+    await expect(page.getByTestId("settings-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("wallpaper")).toHaveAttribute("data-blurred", "false");
+    // 天气与便签仍收在经典布局里，不占首屏
+    await expect(page.getByTestId("note-card-panel")).toHaveCount(0);
+    await expect(page.getByTestId("weather-card")).toHaveCount(0);
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test("点击时间：壁纸高斯模糊，时钟与搜索上移，方块浮现，Esc 收起", async ({ page }) => {
+    await fresh(page);
+    const before = await page.getByTestId("clock").boundingBox();
+    await page.getByTestId("clock").click();
+
+    await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    await expect(page.getByTestId("settings-trigger")).toBeVisible();
+    await expect(page.getByTestId("wallpaper")).toHaveAttribute("data-blurred", "true");
+    await expect(page.locator(".clock-trigger")).toHaveAttribute("aria-expanded", "true");
+    // 一言与 Dock 不因展开而消失
+    await expect(page.getByTestId("quote-card")).toBeVisible();
+    await expect(page.getByTestId("shortcut-dock")).toBeVisible();
+
+    // 时钟确实上移（居中 → 给方块让位）。高度动画还在跑，用轮询等它落位
+    const clockY = async () => (await page.getByTestId("clock").boundingBox())?.y ?? Number.POSITIVE_INFINITY;
+    expect(before).not.toBeNull();
+    await expect.poll(clockY).toBeLessThan(before!.y - 40);
+
+    // 壁纸图片可能因为网络不可达而缺失，有节点时再核对真实滤镜值
+    const filter = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="wallpaper-image"]');
+      return el ? getComputedStyle(el).filter : "";
+    });
+    if (filter) expect(filter).toContain("blur(18px)");
+
+    // Esc 收起：方块与齿轮退场，壁纸恢复清晰
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
+    await expect(page.getByTestId("wallpaper")).toHaveAttribute("data-blurred", "false");
+    await expect(page.locator(".clock-trigger")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("右键时间同样展开，再点一次收起", async ({ page }) => {
+    await fresh(page);
+    await page.getByTestId("clock").click({ button: "right" });
+    await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    await expect(page.locator(".clock-trigger")).toHaveAttribute("aria-expanded", "true");
+
+    await page.getByTestId("clock").click();
+    await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
+    await expect(page.locator(".clock-trigger")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("右上角设置：齿轮先出二级菜单，选分类才打开完整设置，Esc 只关弹窗", async ({ page }) => {
+    await fresh(page);
+    expect(await page.getByTestId("settings-trigger").count()).toBe(0);
+
+    await page.getByTestId("clock").click();
+    await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    await page.getByTestId("settings-trigger").click();
+
+    // 二级菜单：先选「去哪一页」，不直接把整套设置拍出来
+    await expect(page.getByTestId("settings-menu")).toBeVisible();
+    await expect(page.getByTestId("settings-done")).toHaveCount(0);
+    await expect(page.getByTestId("settings-menu-search")).toContainText("搜索引擎偏好");
+    await page.getByTestId("settings-menu-search").click();
+    await expect(page.getByTestId("settings-done")).toBeVisible();
+    await expect(page.getByTestId("settings-tab-search")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("dialog")).toContainText("设置");
+
+    // 第一下 Esc 只关弹窗，展开态（方块 / 模糊壁纸）保留
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("settings-done")).toBeHidden();
+    await expect(page.getByTestId("modal-overlay")).toHaveCount(0);
+    await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    await expect(page.getByTestId("wallpaper")).toHaveAttribute("data-blurred", "true");
+
+    // 第二下 Esc 收起展开态
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
+    await expect(page.getByTestId("wallpaper")).toHaveAttribute("data-blurred", "false");
+  });
+
+  test("「添加」方块直达快捷跳转设置", async ({ page }) => {
+    await fresh(page);
+    await page.getByTestId("clock").click();
+    await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    await page.getByTestId("shortcut-add-tile").click();
+    await expect(page.getByTestId("settings-done")).toBeVisible();
+    await expect(page.getByTestId("settings-tab-shortcuts")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("shortcut-manager")).toBeVisible();
   });
 
   test("时钟按秒走动（开启秒后）", async ({ page }) => {
@@ -111,7 +204,12 @@ test.describe("首屏与布局", () => {
     // 回归测试：改造前所有次级模块塞在同一块 Bento 玻璃板里；
     // 现在天气钉在左上角（环境读数，不进主列），便签是独立卡片，
     // 一言单独一条贴着 Dock，时钟与搜索框直接压在壁纸上（无容器）。
-    await fresh(page);
+    await fresh(page, {
+      home: { simple: false },
+      weather: { enabled: true },
+      note: { enabled: true },
+      quote: { show: true, source: "local" },
+    });
     const order = await page.evaluate(() => {
       const box = (sel: string) => {
         const el = document.querySelector(sel) as HTMLElement | null;
@@ -189,7 +287,8 @@ test.describe("首屏与布局", () => {
     });
     for (const [key, value] of Object.entries(panels)) {
       expect(value, `${key} 面板应存在`).not.toBeNull();
-      expect(value!.blur, `${key} 应有 backdrop-filter blur`).toBeGreaterThanOrEqual(12);
+      // 搜索胶囊的模糊值对齐参考站（blur(10px)），Dock 仍是 20px+
+      expect(value!.blur, `${key} 应有 backdrop-filter blur`).toBeGreaterThanOrEqual(8);
       expect(value!.alpha, `${key} 底色应半透明`).toBeLessThan(0.95);
     }
   });
@@ -197,7 +296,7 @@ test.describe("首屏与布局", () => {
   test("天气胶囊与右上角动作组同高、同材质", async ({ page }) => {
     // 回归测试：天气胶囊原先用 --panel-bg（通明玻璃），和旁边的 --board-bg 实心胶囊
     // 并排，一眼就是两块不同来源的控件。现在两者共用同一套板材质与同一个高度。
-    await fresh(page);
+    await fresh(page, { home: { simple: false }, weather: { enabled: true } });
     const m = await page.evaluate(() => {
       const read = (sel: string) => {
         const el = document.querySelector(sel) as HTMLElement | null;
@@ -311,7 +410,7 @@ test.describe("首屏与布局", () => {
     expect(imageOffenders, `非法外部请求：${imageOffenders.join(", ")}`).toEqual([]);
 
     // 关掉每日壁纸 + 关掉图标抓取 + 一言切回本地库后，reload 应当一次外部请求都不发
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await page.getByTestId("settings-tab-background").click();
     await page.getByTestId("background-edge").click();
     await page.getByTestId("settings-tab-privacy").click();
@@ -327,23 +426,31 @@ test.describe("首屏与布局", () => {
 });
 
 test.describe("搜索引擎框", () => {
-  test("默认 Google，表单可原生提交", async ({ page }) => {
+  test("默认 Bing，表单可原生提交", async ({ page }) => {
     await fresh(page);
-    await expect(page.getByTestId("engine-name")).toHaveText("Google");
+    await expect(page.getByTestId("engine-name")).toHaveText("Bing");
     const form = page.getByTestId("search-form");
     await expect(form).toHaveAttribute("method", "get");
-    await expect(form).toHaveAttribute("action", /google\.com/);
+    await expect(form).toHaveAttribute("action", /bing\.com/);
   });
 
-  test("点击引擎按钮循环切换，右键菜单可选择", async ({ page }) => {
+  test("点击引擎按钮弹出列表，选定后切换并收起", async ({ page }) => {
     await fresh(page);
     await page.getByTestId("engine-button").click();
-    await expect(page.getByTestId("engine-name")).not.toHaveText("Google");
-
-    await page.getByTestId("engine-button").click({ button: "right" });
     await expect(page.getByTestId("engine-menu")).toBeVisible();
+    // 点开只是摊开列表，不会自动跳到下一个引擎
+    await expect(page.getByTestId("engine-name")).toHaveText("Bing");
+    await expect(page.getByTestId("engine-option-bing")).toHaveAttribute("aria-checked", "true");
+
     await page.getByTestId("engine-option-baidu").click();
     await expect(page.getByTestId("engine-name")).toHaveText("百度");
+    await expect(page.getByTestId("engine-menu")).toBeHidden();
+
+    // 再点一次按钮：重新摊开列表，当前项是百度
+    await page.getByTestId("engine-button").click();
+    await expect(page.getByTestId("engine-menu")).toBeVisible();
+    await expect(page.getByTestId("engine-option-baidu")).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
     await expect(page.getByTestId("engine-menu")).toBeHidden();
   });
 
@@ -376,7 +483,7 @@ test.describe("搜索引擎框", () => {
       .poll(() => page.evaluate(() => (window as unknown as { __opened: string[][] }).__opened))
       .toHaveLength(1);
     const opened = await page.evaluate(() => (window as unknown as { __opened: string[][] }).__opened);
-    expect(opened[0][0]).toContain("google.com");
+    expect(opened[0][0]).toContain("bing.com");
     expect(decodeURIComponent(opened[0][0])).toContain("playwright e2e");
     expect(opened[0][1]).toBe("_blank");
     expect(opened[0][2]).toContain("noopener");
@@ -401,7 +508,7 @@ test.describe("搜索引擎框", () => {
     await input.fill("hello startpage");
     await input.press("Enter");
     await expect.poll(readOpened).toHaveLength(1);
-    expect((await readOpened())[0][0]).toContain("google.com");
+    expect((await readOpened())[0][0]).toContain("bing.com");
     expect(page.url()).toBe(urlBefore);
 
     // ② 有内容 + 点搜索按钮 → 同样在新标签
@@ -414,7 +521,7 @@ test.describe("搜索引擎框", () => {
     await input.fill("");
     await page.getByTestId("search-submit").click();
     await expect.poll(readOpened).toHaveLength(3);
-    expect((await readOpened())[2][0]).toMatch(/^https:\/\/www\.google\.com\/?$/);
+    expect((await readOpened())[2][0]).toMatch(/^https:\/\/www\.bing\.com\/?$/);
     expect((await readOpened())[2][1]).toBe("_blank");
     expect(page.url()).toBe(urlBefore);
   });
@@ -520,8 +627,17 @@ test.describe("快捷跳转", () => {
     expect(["rgba(0, 0, 0, 0)", "transparent"]).toContain(state.bg);
     expect(state.boxShadow).toBe("none");
     expect(state.borderWidth).toBe("0px");
-    // 图标层：确实发生了位移/放大
-    expect(state.iconTransform).not.toBe("none");
+    // 图标层：确实发生了位移/放大（spring 动画异步落位，等它一帧）
+    await expect
+      .poll(
+        () =>
+          item.evaluate((el) => {
+            const wrap = el.querySelector(".shortcut-icon-wrap");
+            return wrap ? getComputedStyle(wrap).transform : "none";
+          }),
+        { timeout: 2000 },
+      )
+      .not.toBe("none");
   });
 
   test("快捷项可前后调序，顺序持久化到刷新后", async ({ page }) => {
@@ -576,7 +692,7 @@ test.describe("快捷跳转", () => {
 
 test.describe("每日一言", () => {
   test("点击正文即换一条，且不再有来源标签/分类/刷新按钮", async ({ page }) => {
-    await fresh(page);
+    await fresh(page, { home: { simple: false }, quote: { show: true, source: "local" } });
     const text = page.getByTestId("quote-text");
     await expect(text).not.toBeEmpty();
     const before = await text.textContent();
@@ -591,7 +707,7 @@ test.describe("每日一言", () => {
   });
 
   test("聚焦搜索框时一言渐隐，失焦后复原（且一言没有自己的容器）", async ({ page }) => {
-    await fresh(page);
+    await fresh(page, { home: { simple: false }, quote: { show: true, source: "local" } });
     const section = page.getByTestId("quote-section");
     const opacityOf = () =>
       section.evaluate((el) => Number(getComputedStyle(el).opacity));
@@ -613,7 +729,7 @@ test.describe("每日一言", () => {
     await expect.poll(opacityOf, { timeout: 2000 }).toBe(0);
 
     // 失焦 → 淡回
-    await page.getByTestId("clock").click();
+    await page.getByTestId("theme-toggle").focus();
     await expect(section).toHaveAttribute("data-dimmed", "false");
     await expect.poll(opacityOf, { timeout: 2000 }).toBe(1);
   });
@@ -624,15 +740,14 @@ test.describe("背景与主题", () => {
     // 第⑥项改造（m03287）：Magic UI Backgrounds 全部移除，背景只有两种来源 ——
     // Edge 每日壁纸（默认开）与渐变兜底。这里验证开关与暗化滑杆都真的落到配置上。
     await fresh(page);
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await page.getByTestId("settings-tab-background").click();
 
     await expect(page.getByTestId("background-edge")).toHaveAttribute("aria-checked", "true");
     await page.getByTestId("background-edge").click();
     await expect(page.getByTestId("background-edge")).toHaveAttribute("aria-checked", "false");
 
-    // shadcn/ui Slider 是 Radix thumb（role=slider），没有原生 input 可 fill；
-    // End → 70，再左移 10 格 = 60，等价地验证滑杆真的写回配置。
+    // Radix thumb 不能 fill，用键盘设到 60（End=70，左移 10 格）。
     const dimThumb = page.getByTestId("wallpaper-dim").getByRole("slider");
     await dimThumb.focus();
     await dimThumb.press("End");
@@ -648,13 +763,16 @@ test.describe("背景与主题", () => {
     await expect(page.getByTestId("wallpaper")).toHaveAttribute("data-bg-source", "none");
   });
 
-  test("主题切换写回 html[data-theme]", async ({ page }) => {
+  test("在设置里切换主题", async ({ page }) => {
     await fresh(page);
     const before = await page.evaluate(() => document.documentElement.dataset.theme);
-    await page.getByTestId("theme-toggle").click();
+    await openSettings(page);
+    // 常规设置是默认分区，主题模式直接在第一组里
+    await page.getByTestId("theme-mode").getByText("亮色").click();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
-      .not.toBe(before);
+      .toBe("light");
+    expect(before).not.toBe("light");
   });
 });
 
@@ -679,9 +797,10 @@ test.describe("命令面板", () => {
 });
 
 test.describe("设置与数据", () => {
-  test("关闭模块后首页不再渲染对应组件，刷新后保持", async ({ page }) => {
-    await fresh(page);
-    await page.getByTestId("settings-trigger").click();
+  test("经典布局下关闭模块后首页不再渲染对应组件，刷新后保持", async ({ page }) => {
+    await fresh(page, { home: { simple: false }, quote: { show: true, source: "local" } });
+    await expect(page.getByTestId("quote-card")).toBeVisible();
+    await openSettings(page);
     await page.getByTestId("settings-tab-modules").click();
     await page.getByTestId("quote-show").click();
     await page.getByTestId("settings-done").click();
@@ -693,7 +812,7 @@ test.describe("设置与数据", () => {
 
   test("一键清除全部数据需二次确认，且清空后回到出厂配置", async ({ page }) => {
     await fresh(page, { theme: { mode: "light", accent: "#12A150" } });
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await page.getByTestId("settings-tab-privacy").click();
     await page.getByTestId("clear-data").click();
     await expect(page.getByTestId("confirm-ok")).toBeVisible();
@@ -706,7 +825,7 @@ test.describe("设置与数据", () => {
 
   test("导出配置生成 JSON 文件", async ({ page }) => {
     await fresh(page);
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await page.getByTestId("settings-tab-privacy").click();
     const downloadPromise = page.waitForEvent("download");
     await page.getByTestId("export-config").click();
@@ -728,22 +847,89 @@ test.describe("无障碍与键盘", () => {
 
   test("设置弹窗焦点被困在内部，Esc 关闭后焦点回到触发按钮", async ({ page }) => {
     await fresh(page);
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await expect(page.getByTestId("settings-done")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("settings-done")).toBeHidden();
-    const active = await page.evaluate(() => document.activeElement?.getAttribute("data-testid"));
-    expect(active).toBe("settings-trigger");
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-testid")))
+      .toBe("settings-trigger");
   });
 
   test("减少动效开关写入 data-motion", async ({ page }) => {
     await fresh(page);
-    await page.getByTestId("settings-trigger").click();
+    await openSettings(page);
     await page.getByTestId("settings-tab-appearance").click();
     await page.getByTestId("reduce-motion").click();
     await page.getByTestId("settings-done").click();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.dataset.motion))
       .toBe("reduce");
+  });
+});
+
+test.describe("本轮新增：历史 / 导入 / 帮助 / 设置搜索", () => {
+  test("搜索历史：独立存储、可单条删除、可清空", async ({ page }) => {
+    await fresh(page);
+    await page.evaluate(() => {
+      window.localStorage.setItem("startpage.search-history.v1", JSON.stringify(["react 19", "vite"]));
+    });
+    await page.reload();
+    await page.getByTestId("search-input").focus();
+
+    await expect(page.getByTestId("search-history")).toBeVisible();
+    await expect(page.getByTestId("search-history")).toContainText("react 19");
+
+    await page.getByTestId("search-history-remove").first().click();
+    await expect(page.getByTestId("search-history")).not.toContainText("react 19");
+
+    await page.getByTestId("search-history-clear").click();
+    await expect(page.getByTestId("search-history")).toBeHidden();
+    // 清空的是独立 key，配置本身不受影响
+    await expect(page.getByTestId("clock")).toBeVisible();
+  });
+
+  test("书签导入：预览确认后才写入，标题与 URL 正确", async ({ page }) => {
+    await fresh(page);
+    await openShortcutSettings(page);
+    const before = await page.getByTestId("shortcut-list").locator("li").count();
+
+    const html = `<DL><p><DT><H3>工作</H3><DL><p>
+      <DT><A HREF="https://example.com/docs">示例文档</A>
+      <DT><A HREF="https://example.org/tools">示例工具</A>
+    </DL><p></DL><p>`;
+    await page.getByTestId("bookmarks-file").setInputFiles({
+      name: "bookmarks.html",
+      mimeType: "text/html",
+      buffer: Buffer.from(html, "utf8"),
+    });
+
+    await expect(page.getByTestId("bookmark-preview-list")).toContainText("示例文档");
+    await page.getByTestId("confirm-bookmark-import").click();
+    await expect(page.getByTestId("shortcut-list").locator("li")).toHaveCount(before + 2);
+    await expect(page.getByTestId("shortcut-list")).toContainText("示例工具");
+  });
+
+  test("设置搜索：跨页签跳转并隐藏未命中分区", async ({ page }) => {
+    await fresh(page);
+    await openSettings(page);
+    await expect(page.getByTestId("settings-tab-appearance")).toHaveAttribute("aria-current", "page");
+
+    await page.getByTestId("settings-search").fill("模糊");
+    await expect(page.getByTestId("settings-tab-background")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("wallpaper-blur")).toBeVisible();
+    await expect(page.getByTestId("settings-search-count")).toHaveText("1 项");
+
+    await page.getByTestId("settings-search").fill("");
+    await expect(page.getByTestId("settings-search-count")).toBeHidden();
+  });
+
+  test("按 ? 打开快捷键帮助", async ({ page }) => {
+    await fresh(page);
+    await page.keyboard.press("?");
+    await expect(page.getByTestId("shortcut-help-list")).toBeVisible();
+    await expect(page.getByTestId("shortcut-help-list")).toContainText("命令面板");
+    await page.getByTestId("shortcut-help-close").click();
+    await expect(page.getByTestId("shortcut-help-list")).toBeHidden();
   });
 });

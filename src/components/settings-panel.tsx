@@ -1,9 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
-import { Button, ConfirmDialog, Modal, useToast } from "@/components/ui/primitives";
+import { Button, ConfirmDialog, Modal, TextInput, useToast } from "@/components/ui/primitives";
 import { useSettingsController } from "@/components/settings/controller";
 import { AboutTab } from "@/components/settings/about-tab";
 import { AppearanceTab } from "@/components/settings/appearance-tab";
@@ -23,9 +23,26 @@ import { IconGrid, IconImage, IconInfo, IconLayers, IconPalette, IconSearch, Ico
  * 新增页签也只需要动 TABS 一处。
  */
 
-type Tab = "search" | "appearance" | "shortcuts" | "modules" | "background" | "privacy" | "about";
+export type SettingsTab = "search" | "appearance" | "shortcuts" | "modules" | "background" | "privacy" | "about";
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+/**
+ * 页签级关键词。
+ *
+ * 只用于「输入的关键词当前页签没有 → 跳到第一个可能有的页签」，
+ * 真正的过滤仍按 DOM 文本做 —— 所以这里不用穷举每个开关的文案，
+ * 写几个同义词够用即可。
+ */
+const TAB_KEYWORDS: Record<SettingsTab, string> = {
+  search: "搜索引擎 引擎 建议 快捷指令 指令 排序 google bing 百度",
+  appearance: "常规 外观 主题 亮色 暗色 跟随系统 强调色 颜色 暗角 减少动效 动效 简洁 经典 布局",
+  shortcuts: "快捷跳转 快捷项 图标 书签 导入 排序 添加 删除",
+  modules: "模块 时钟 秒 问候语 一言 便签 天气 温度 单位 城市 定位 启用",
+  background: "背景 壁纸 每日一图 回溯 暗化 模糊 缩放 ken burns 自定义 上传",
+  privacy: "隐私 白名单 图标 favicon 导入 导出 清除 数据 配置",
+  about: "关于 版本 说明 开源 隐私 快捷键",
+};
+
+const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "search", label: "搜索引擎", icon: <IconSearch /> },
   { id: "appearance", label: "外观", icon: <IconPalette /> },
   { id: "shortcuts", label: "快捷跳转", icon: <IconGrid /> },
@@ -35,15 +52,84 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "about", label: "关于", icon: <IconInfo /> },
 ];
 
-export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsPanel({
+  open,
+  onClose,
+  initialTab,
+  returnFocusTo,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** 从命令面板等入口指定要打开的页签；不传则保持上一次停留的页签 */
+  initialTab?: SettingsTab;
+  /** 关闭后焦点回到哪；由页面在打开前捕获，避免快捷面板卸载后丢焦点 */
+  returnFocusTo?: HTMLElement | null;
+}) {
   const { reset } = useConfig();
   const reduce = useReducedMotionPref();
   const { push } = useToast();
   const s = useSettingsController();
 
-  const [tab, setTab] = useState<Tab>("appearance");
+  const [tab, setTab] = useState<SettingsTab>("appearance");
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [query, setQuery] = useState("");
+  const [matchCount, setMatchCount] = useState(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // 关掉面板时清空搜索，下次打开回到完整列表
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
+  // 指定页签只在「打开」或「指定值变化」时生效，不影响用户手动切换
+  useEffect(() => {
+    if (open && initialTab) setTab(initialTab);
+  }, [open, initialTab]);
+
+  /*
+   * 按 DOM 文本过滤当前页签。
+   *
+   * 监听 contentRef 的子节点变化，而不是跟着 [query, tab] 跑一次：
+   * AnimatePresence 的 mode="wait" 会先播完退出动画再挂载新页签，
+   * 只监听 tab 的话，过滤会在新内容挂载之前执行、拿到 0 个节点。
+   * MutationObserver 还能覆盖「切页签后内容异步挂载」这类情况。
+   */
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!root) return;
+
+    const apply = () => {
+      const q = query.trim().toLowerCase();
+      let hits = 0;
+      for (const section of Array.from(root.querySelectorAll<HTMLElement>(".settings-section"))) {
+        const hit = !q || (section.textContent ?? "").toLowerCase().includes(q);
+        section.style.display = hit ? "" : "none";
+        if (q && hit) {
+          section.dataset.searchHit = "true";
+          hits += 1;
+        } else {
+          delete section.dataset.searchHit;
+        }
+      }
+      setMatchCount(hits);
+    };
+
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [query]);
+
+  const onSearch = (value: string) => {
+    setQuery(value);
+    const q = value.trim().toLowerCase();
+    if (!q) return;
+    if (!TAB_KEYWORDS[tab].includes(q)) {
+      const next = TABS.find((t) => TAB_KEYWORDS[t.id].includes(q));
+      if (next && next.id !== tab) setTab(next.id);
+    }
+  };
 
   return (
     <>
@@ -55,6 +141,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
         size="lg"
         reduceMotion={reduce}
         fixedHeight
+        returnFocusTo={returnFocusTo}
         bodyClassName="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5"
         footer={
           <>
@@ -67,15 +154,29 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           </>
         }
       >
+        <div className="mb-3 flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <TextInput
+              value={query}
+              onChange={onSearch}
+              placeholder="搜索设置项，例如「模糊」「书签」"
+              ariaLabel="搜索设置项"
+              testId="settings-search"
+            />
+          </div>
+          {query.trim() ? (
+            <span className="shrink-0 text-[11px] text-[var(--fg-subtle)]" data-testid="settings-search-count">
+              {matchCount} 项
+            </span>
+          ) : null}
+        </div>
+
         <div className="flex min-h-0 w-full flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
           {/*
             分类导航。
-            早先用 `boxShadow: inset 2px 0 0 var(--accent)` 画左侧强调条 —— 那是一条
-            画在按钮内部的线，和 padding 完全脱钩：文字一长、字号一换，线就贴着左边缘
-            漂出去，移动端横排时更是整条错位（用户说的「设置里的按钮有偏移」）。
-            改成「一颗真正会滑动的胶囊底」：active 项由 layoutId 共享一层圆角底，
-            切换页签时它从旧位置滑到新位置，视觉上是一条连贯的动线，而不再是一根
-            对不准的边线。
+            下面「滑动胶囊底」是上一版的外观：active 项由 layoutId 共享一层圆角底，
+            切换页签时它从旧位置滑到新位置。这个版本是用户要求回滚的样式，
+            不要改回「菜单面板」那一版。
           */}
           <nav aria-label="设置分类" className="settings-nav">
             {TABS.map((t) => {
@@ -107,7 +208,11 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           </nav>
 
           {/* 右侧内容区：只有这里滚动，面板本身不撑破视口 */}
-          <div className="thin-scroll min-w-0 flex-1 overflow-y-auto pr-0.5" data-testid="settings-content">
+          <div
+            ref={contentRef}
+            className="thin-scroll min-w-0 flex-1 overflow-y-auto pr-0.5"
+            data-testid="settings-content"
+          >
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={tab}

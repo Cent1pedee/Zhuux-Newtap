@@ -1,0 +1,76 @@
+/* 基础层：盒模型、html/body、全局排版 */
+
+/* ============================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * 视口锁定：整页永不滚动。
+ * overscroll-behavior 关掉橡皮筋/滚动链，避免触摸或滚轮把页面拖着走；
+ * 真正需要滚动的只有面板内容区（.thin-scroll）。
+ */
+body {
+  font-family: var(--font-sans);
+  color: var(--fg);
+  background-color: var(--bg-base);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 移动端点按不再闪一层灰块（iOS / Android 都会画，圆图标上尤其脏） */
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color var(--dur-theme) var(--ease-out-cubic),
+    background-color var(--dur-theme) var(--ease-out-cubic);
+}
+
+/* 一屏原则：所有内容在单视口内，禁止滚动（PRD 3.2） */
+.app-shell {
+  position: relative;
+  /* 先给 vh 兜底：dvh 在 Safari 15.4 / 旧 Android WebView 上整条声明无效，
+     那样 .app-shell 会退回 auto 高度，配合 body 的 overflow:hidden 直接裁掉底部。
+     支持 dvh 的引擎会用第二行覆盖，地址栏收放时仍然跟手。 */
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * 主体内容列。
+ * 间距走变量而非固定 gap：矮视口（笔记本 768 / 600 高）自动收紧，
+ * 配合 page.tsx 的等比缩放，保证一屏放得下、页面不必滚动。
+ */
+.content-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap);
+}
+
+@media (max-height: 820px) {
+  :root {
+    --stack-gap: 14px;
+  }
+}
+
+@media (max-height: 680px) {
+  :root {
+    --stack-gap: 10px;
+  }
+}

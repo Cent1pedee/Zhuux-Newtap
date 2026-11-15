@@ -12,6 +12,17 @@ export function AppearanceTab({ s }: { s: SettingsController }) {
   return (
     <div className="settings-body">
       <section className="settings-section">
+        <h3 className="settings-h3">首页布局</h3>
+        <Switch
+          checked={config.home.simple}
+          onChange={(v) => update("home", { simple: v })}
+          label="简洁首页"
+          description="默认只显示时间、搜索、一言与 Dock；关闭后回到经典布局（天气 / 便签 / 顶栏）。"
+          testId="home-simple"
+        />
+      </section>
+
+      <section className="settings-section">
         <h3 className="settings-h3">主题</h3>
         <Segmented
           options={[
@@ -23,6 +34,13 @@ export function AppearanceTab({ s }: { s: SettingsController }) {
           onChange={(v) => update("theme", { mode: v })}
           label="主题模式"
           testId="theme-mode"
+        />
+        <Switch
+          checked={config.background.vignette}
+          onChange={(v) => update("background", { vignette: v })}
+          label="壁纸暗角"
+          description="四角轻微压暗，让视线落在时间与快捷方块上。"
+          testId="background-vignette"
         />
       </section>
 

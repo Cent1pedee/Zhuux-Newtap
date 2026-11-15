@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 import { CircleIcon } from "lucide-react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 
@@ -18,11 +18,7 @@ function RadioGroup({
   )
 }
 
-/**
- * 项目适配：官方版把 children 写死成圆点 Indicator，调用方传入的文字会被覆盖。
- * 这里只在显式传了 children 时改用它（分段控件要把标签写进按钮里），
- * 不传时行为与官方组件完全一致。
- */
+/* 官方版写死圆点 Indicator；传了 children 就用它，分段控件要把标签放进按钮。 */
 function RadioGroupItem({
   className,
   children,
