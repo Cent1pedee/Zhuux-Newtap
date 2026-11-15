@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { Button, ConfirmDialog, Modal, TextInput, useToast } from "@/components/ui/primitives";
 import { useSettingsController } from "@/components/settings/controller";
@@ -12,58 +12,84 @@ import { ModulesTab } from "@/components/settings/modules-tab";
 import { PrivacyTab } from "@/components/settings/privacy-tab";
 import { SearchTab } from "@/components/settings/search-tab";
 import { ShortcutsTab } from "@/components/settings/shortcuts-tab";
-import { IconGrid, IconImage, IconInfo, IconLayers, IconPalette, IconSearch, IconShield } from "@/components/settings/tab-icons";
+import { IconGrid, IconImage, IconLayers, IconPalette, IconSearch } from "@/components/settings/tab-icons";
 
 /**
- * 设置面板的壳。
+ * 设置层的壳。
  *
- * 职责只剩三件：分类导航、内容区的进出动画、两个二次确认。
- * 具体每个页签长什么样在自己文件里（settings/*-tab.tsx），
- * 草稿状态与副作用在 settings/controller.ts —— 这样切页签不会丢草稿，
- * 新增页签也只需要动 TABS 一处。
+ * 三种视图共用一个 controller（草稿不丢）、一个弹窗体系：
+ *   · settings —— 五个分类的主面板，左侧导航按「首页 / 外观与服务」分组；
+ *   · privacy  —— 二级菜单直达的「隐私与数据」独立弹窗；
+ *   · about    —— 二级菜单直达的「关于」独立弹窗。
+ *
+ * 隐私与关于此前既是主面板的页签、又是二级菜单的入口，导航重复了一遍；
+ * 两页里还各写了一段几乎相同的「数据只存本机」说明。现在这两类内容只从
+ * 二级菜单进入，主面板不再出现，重复的说明合并到隐私弹窗一份。
  */
 
-export type SettingsTab = "search" | "appearance" | "shortcuts" | "modules" | "background" | "privacy" | "about";
+/** 主面板的五个页签 */
+export type SettingsTab = "appearance" | "modules" | "shortcuts" | "background" | "search";
+/** 二级菜单可选的目标：五个页签 + 两个独立弹窗 */
+export type SettingsTarget = SettingsTab | "privacy" | "about";
+/** 弹窗视图 */
+export type SettingsView = "settings" | "privacy" | "about";
 
 /**
  * 页签级关键词。
  *
- * 只用于「输入的关键词当前页签没有 → 跳到第一个可能有的页签」，
- * 真正的过滤仍按 DOM 文本做 —— 所以这里不用穷举每个开关的文案，
- * 写几个同义词够用即可。
+ * 只用于「输入的词当前页签没有 → 跳到第一个可能有的页签」。
+ * 写进来的每个词都必须能在该页签的 DOM 文本里找到 —— 历史 bug：
+ * 「暗角」已迁到背景页却还留在常规页的关键词里，「快捷键」只写在关于页
+ * 的关键词里却不出现在正文；搜索这两项都会停在原地、把全部分区隐藏，
+ * 只剩一个空白面板。真正的过滤仍按 DOM 文本做。
  */
 const TAB_KEYWORDS: Record<SettingsTab, string> = {
-  search: "搜索引擎 引擎 建议 快捷指令 指令 排序 google bing 百度",
-  appearance: "常规 外观 主题 亮色 暗色 跟随系统 强调色 颜色 暗角 减少动效 动效 简洁 经典 布局",
-  shortcuts: "快捷跳转 快捷项 图标 书签 导入 排序 添加 删除",
-  modules: "模块 时钟 秒 问候语 一言 便签 天气 温度 单位 城市 定位 启用",
-  background: "背景 壁纸 每日一图 回溯 暗化 模糊 缩放 ken burns 自定义 上传",
-  privacy: "隐私 白名单 图标 favicon 导入 导出 清除 数据 配置",
-  about: "关于 版本 说明 开源 隐私 快捷键",
+  appearance: "常规 首页布局 简洁首页 经典 主题 亮色 暗色 跟随系统 强调色 对比度 动效 减少动效",
+  modules: "模块 时间 时钟 秒 问候语 便签 一言 语录 数据源",
+  shortcuts: "快捷跳转 快捷项 站点 图标 favicon 书签 导入 排序 添加 删除",
+  background: "背景 壁纸 每日一图 回溯 暗角 暗化 模糊 ken burns 自定义 上传 本地图片",
+  search: "搜索引擎 引擎 搜索建议 快捷指令 指令 排序 google bing 百度",
 };
 
-const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-  { id: "search", label: "搜索引擎", icon: <IconSearch /> },
-  { id: "appearance", label: "外观", icon: <IconPalette /> },
-  { id: "shortcuts", label: "快捷跳转", icon: <IconGrid /> },
-  { id: "modules", label: "模块", icon: <IconLayers /> },
-  { id: "background", label: "背景", icon: <IconImage /> },
-  { id: "privacy", label: "隐私与数据", icon: <IconShield /> },
-  { id: "about", label: "关于", icon: <IconInfo /> },
+type TabDef = {
+  id: SettingsTab;
+  label: string;
+  icon: React.ReactNode;
+  group: "home" | "service";
+};
+
+const TAB_GROUPS: { id: TabDef["group"]; label: string }[] = [
+  { id: "home", label: "首页" },
+  { id: "service", label: "外观与服务" },
+];
+
+const TABS: TabDef[] = [
+  // 常规置首，也是默认打开的页签；同组内按「先整体、后局部」排
+  { id: "appearance", label: "常规", icon: <IconPalette />, group: "home" },
+  { id: "modules", label: "模块", icon: <IconLayers />, group: "home" },
+  { id: "shortcuts", label: "快捷跳转", icon: <IconGrid />, group: "home" },
+  { id: "background", label: "背景", icon: <IconImage />, group: "service" },
+  { id: "search", label: "搜索引擎", icon: <IconSearch />, group: "service" },
 ];
 
 export function SettingsPanel({
   open,
   onClose,
+  view = "settings",
   initialTab,
   returnFocusTo,
+  onOpenHelp,
 }: {
   open: boolean;
   onClose: () => void;
+  /** 二级菜单选中「隐私与数据 / 关于」时直接进对应弹窗，不再经过主面板 */
+  view?: SettingsView;
   /** 从命令面板等入口指定要打开的页签；不传则保持上一次停留的页签 */
   initialTab?: SettingsTab;
   /** 关闭后焦点回到哪；由页面在打开前捕获，避免快捷面板卸载后丢焦点 */
   returnFocusTo?: HTMLElement | null;
+  /** 「关于」里的查看快捷键入口 */
+  onOpenHelp?: () => void;
 }) {
   const { reset } = useConfig();
   const reduce = useReducedMotionPref();
@@ -75,6 +101,13 @@ export function SettingsPanel({
   const [confirmClear, setConfirmClear] = useState(false);
   const [query, setQuery] = useState("");
   const [matchCount, setMatchCount] = useState(0);
+  /*
+   * 过滤是按 DOM 文本逐 section 遍历的命令式操作，输入每敲一个字都会重跑。
+   * 用 deferred 值承接过滤，React 会在快速输入时跳过中间态、只提交最后一次，
+   * 输入本身不再被过滤阻塞（CPU 4x 下原本会出现 51ms 长任务）。
+   * 跨页签跳转仍读即时 query，保证「输完就跳」的响应不打折。
+   */
+  const deferredQuery = useDeferredValue(query);
   const contentRef = useRef<HTMLDivElement>(null);
 
   // 关掉面板时清空搜索，下次打开回到完整列表
@@ -84,23 +117,23 @@ export function SettingsPanel({
 
   // 指定页签只在「打开」或「指定值变化」时生效，不影响用户手动切换
   useEffect(() => {
-    if (open && initialTab) setTab(initialTab);
-  }, [open, initialTab]);
+    if (open && view === "settings" && initialTab) setTab(initialTab);
+  }, [open, view, initialTab]);
 
   /*
    * 按 DOM 文本过滤当前页签。
    *
-   * 监听 contentRef 的子节点变化，而不是跟着 [query, tab] 跑一次：
-   * AnimatePresence 的 mode="wait" 会先播完退出动画再挂载新页签，
-   * 只监听 tab 的话，过滤会在新内容挂载之前执行、拿到 0 个节点。
-   * MutationObserver 还能覆盖「切页签后内容异步挂载」这类情况。
+   * observer 只观察内容根节点的直接 childList：AnimatePresence mode="wait"
+   * 会等 180ms 退出动画播完才挂载新页签，光靠 [query, tab, open] 的 effect
+   * 会过滤到旧内容上；输入文字只改属性/文本，不会产生 childList 变化。
    */
   useEffect(() => {
+    if (view !== "settings") return;
     const root = contentRef.current;
     if (!root) return;
 
     const apply = () => {
-      const q = query.trim().toLowerCase();
+      const q = deferredQuery.trim().toLowerCase();
       let hits = 0;
       for (const section of Array.from(root.querySelectorAll<HTMLElement>(".settings-section"))) {
         const hit = !q || (section.textContent ?? "").toLowerCase().includes(q);
@@ -116,10 +149,43 @@ export function SettingsPanel({
     };
 
     apply();
+    if (!deferredQuery.trim()) return;
     const observer = new MutationObserver(apply);
-    observer.observe(root, { childList: true, subtree: true });
+    observer.observe(root, { childList: true });
     return () => observer.disconnect();
-  }, [query]);
+  }, [deferredQuery, tab, open, view]);
+
+  /**
+   * 内容区是否真的在滚。
+   * 只有真的溢出时才在底边加一道渐隐 —— 否则「刚好放得下」的页签
+   * 也会把最后一行的下沿压暗，看起来像没渲染完。
+   *
+   * 历史 bug：ResizeObserver 只观察滚动容器，而容器自身的盒子从不随内容
+   * 高度变化，再加上 AnimatePresence 延迟挂载，切换页签后标记会反过来
+   * （shortcuts 明明要滚却标 false，appearance 不滚却还留着 true）。
+   * 现在同时观察内层 .settings-body，并在内容根节点 childList 变化时重新挂观察器。
+   */
+  const [scrollable, setScrollable] = useState(false);
+  useEffect(() => {
+    if (view !== "settings" || !open) return;
+    const el = contentRef.current;
+    if (!el) return;
+    const update = () => setScrollable(el.scrollHeight - el.clientHeight > 4);
+    const ro = new ResizeObserver(update);
+    const observe = () => {
+      ro.disconnect();
+      ro.observe(el);
+      el.querySelectorAll(".settings-body").forEach((node) => ro.observe(node));
+      update();
+    };
+    observe();
+    const mo = new MutationObserver(observe);
+    mo.observe(el, { childList: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [tab, query, open, view]);
 
   const onSearch = (value: string) => {
     setQuery(value);
@@ -131,109 +197,8 @@ export function SettingsPanel({
     }
   };
 
-  return (
+  const clearDialogs = (
     <>
-      <Modal
-        open={open}
-        onClose={onClose}
-        title="设置"
-        description="所有配置只保存在本机 localStorage。接口请求只走白名单（壁纸 / 一言 / 天气）；站点图标会向对应域名取一次 favicon，可在「隐私与数据」关闭。"
-        size="lg"
-        reduceMotion={reduce}
-        fixedHeight
-        returnFocusTo={returnFocusTo}
-        bodyClassName="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5"
-        footer={
-          <>
-            <Button onClick={() => setConfirmReset(true)} variant="ghost" testId="settings-reset">
-              恢复出厂
-            </Button>
-            <Button onClick={onClose} variant="primary" testId="settings-done">
-              完成
-            </Button>
-          </>
-        }
-      >
-        <div className="mb-3 flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <TextInput
-              value={query}
-              onChange={onSearch}
-              placeholder="搜索设置项，例如「模糊」「书签」"
-              ariaLabel="搜索设置项"
-              testId="settings-search"
-            />
-          </div>
-          {query.trim() ? (
-            <span className="shrink-0 text-[11px] text-[var(--fg-subtle)]" data-testid="settings-search-count">
-              {matchCount} 项
-            </span>
-          ) : null}
-        </div>
-
-        <div className="flex min-h-0 w-full flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
-          {/*
-            分类导航。
-            下面「滑动胶囊底」是上一版的外观：active 项由 layoutId 共享一层圆角底，
-            切换页签时它从旧位置滑到新位置。这个版本是用户要求回滚的样式，
-            不要改回「菜单面板」那一版。
-          */}
-          <nav aria-label="设置分类" className="settings-nav">
-            {TABS.map((t) => {
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTab(t.id)}
-                  aria-current={active ? "page" : undefined}
-                  data-testid={`settings-tab-${t.id}`}
-                  className={`settings-tab ${active ? "settings-tab--active" : ""}`}
-                >
-                  {active ? (
-                    <motion.span
-                      layoutId={reduce ? undefined : "settings-tab-pill"}
-                      className="settings-tab-pill"
-                      aria-hidden="true"
-                      transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
-                    />
-                  ) : null}
-                  <span className="settings-tab-icon" aria-hidden="true">
-                    {t.icon}
-                  </span>
-                  <span className="whitespace-nowrap">{t.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* 右侧内容区：只有这里滚动，面板本身不撑破视口 */}
-          <div
-            ref={contentRef}
-            className="thin-scroll min-w-0 flex-1 overflow-y-auto pr-0.5"
-            data-testid="settings-content"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0, y: reduce ? 0 : 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: reduce ? 0 : -6 }}
-                transition={{ duration: reduce ? 0 : 0.18, ease: [0.215, 0.61, 0.355, 1] }}
-              >
-                {tab === "search" ? <SearchTab s={s} /> : null}
-                {tab === "appearance" ? <AppearanceTab s={s} /> : null}
-                {tab === "shortcuts" ? <ShortcutsTab /> : null}
-                {tab === "modules" ? <ModulesTab s={s} /> : null}
-                {tab === "background" ? <BackgroundTab s={s} /> : null}
-                {tab === "privacy" ? <PrivacyTab s={s} onClear={() => setConfirmClear(true)} /> : null}
-                {tab === "about" ? <AboutTab s={s} /> : null}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </div>
-      </Modal>
-
       <ConfirmDialog
         open={confirmReset}
         title="恢复出厂设置"
@@ -266,6 +231,191 @@ export function SettingsPanel({
           push("本地数据已清空", "success");
         }}
       />
+    </>
+  );
+
+  /* ---------------------------- 隐私与数据：二级菜单直达 ---------------------------- */
+  if (view === "privacy") {
+    return (
+      <>
+        <Modal
+          open={open}
+          onClose={onClose}
+          title="隐私与数据"
+          description="请求白名单、配置备份与本地数据清理。"
+          size="md"
+          reduceMotion={reduce}
+          panelClassName="settings-modal settings-modal--compact"
+          bodyClassName="thin-scroll settings-compact-body flex-1 overflow-y-auto px-5 py-4"
+          returnFocusTo={returnFocusTo}
+          initialFocus="panel"
+          footer={
+            <Button onClick={onClose} variant="primary" testId="settings-done">
+              完成
+            </Button>
+          }
+        >
+          <PrivacyTab s={s} onClear={() => setConfirmClear(true)} />
+        </Modal>
+        {clearDialogs}
+      </>
+    );
+  }
+
+  /* ---------------------------- 关于：二级菜单直达 ---------------------------- */
+  if (view === "about") {
+    return (
+      <>
+        <Modal
+          open={open}
+          onClose={onClose}
+          title="关于"
+          description="站点信息、技术栈与快捷入口。"
+          size="md"
+          reduceMotion={reduce}
+          panelClassName="settings-modal settings-modal--compact"
+          bodyClassName="thin-scroll settings-compact-body flex-1 overflow-y-auto px-5 py-4"
+          returnFocusTo={returnFocusTo}
+          initialFocus="panel"
+          footer={
+            <Button onClick={onClose} variant="primary" testId="settings-done">
+              完成
+            </Button>
+          }
+        >
+          <AboutTab s={s} onOpenHelp={onOpenHelp} onClose={onClose} />
+        </Modal>
+        {clearDialogs}
+      </>
+    );
+  }
+
+  /* ---------------------------- 主设置面板：五个分类 ---------------------------- */
+  return (
+    <>
+      <Modal
+        open={open}
+        onClose={onClose}
+        title="设置"
+        description="配置只存在本机；隐私、备份与站点信息在右上角菜单里。"
+        size="lg"
+        reduceMotion={reduce}
+        fixedHeight
+        panelClassName="settings-modal"
+        returnFocusTo={returnFocusTo}
+        bodyClassName="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5"
+        footer={
+          <>
+            <Button onClick={() => setConfirmReset(true)} variant="ghost" testId="settings-reset">
+              恢复出厂
+            </Button>
+            <Button onClick={onClose} variant="primary" testId="settings-done">
+              完成
+            </Button>
+          </>
+        }
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <TextInput
+              value={query}
+              onChange={onSearch}
+              placeholder="搜索设置项，例如「模糊」「书签」"
+              ariaLabel="搜索设置项"
+              testId="settings-search"
+            />
+          </div>
+          {query.trim() ? (
+            <span className="shrink-0 text-[11px] text-[var(--fg-subtle)]" data-testid="settings-search-count">
+              {matchCount} 项
+            </span>
+          ) : null}
+        </div>
+
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
+          {/*
+            分类导航按「首页 / 外观与服务」两组分层，组名只在桌面竖排时显示；
+            窄屏是横排，组名会让按钮换行挤成一团，交给 CSS 隐藏。
+            选中项仍由 layoutId 共享一层胶囊底，切换时从旧位置滑到新位置。
+          */}
+          <nav aria-label="设置分类" className="settings-nav">
+            {TAB_GROUPS.map((group, groupIndex) => (
+              <Fragment key={group.id}>
+                {groupIndex > 0 ? <span className="settings-nav-sep" aria-hidden="true" /> : null}
+                <span className="settings-nav-label" aria-hidden="true">
+                  {group.label}
+                </span>
+                {TABS.filter((t) => t.group === group.id).map((t) => {
+                  const active = tab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTab(t.id)}
+                      aria-current={active ? "page" : undefined}
+                      data-testid={`settings-tab-${t.id}`}
+                      className={`settings-tab ${active ? "settings-tab--active" : ""}`}
+                    >
+                      {active ? (
+                        <motion.span
+                          layoutId={reduce ? undefined : "settings-tab-pill"}
+                          className="settings-tab-pill"
+                          aria-hidden="true"
+                          transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+                        />
+                      ) : null}
+                      <span className="settings-tab-icon" aria-hidden="true">
+                        {t.icon}
+                      </span>
+                      <span className="whitespace-nowrap">{t.label}</span>
+                    </button>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </nav>
+
+          {/* 右侧内容区：只有这里滚动，面板本身不撑破视口 */}
+          <div
+            ref={contentRef}
+            className="settings-content thin-scroll min-w-0 flex-1 overflow-y-auto pr-0.5"
+            data-testid="settings-content"
+            data-scrollable={scrollable ? "true" : "false"}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={tab}
+                initial={{ opacity: 0, y: reduce ? 0 : 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: reduce ? 0 : -6 }}
+                transition={{ duration: reduce ? 0 : 0.18, ease: [0.215, 0.61, 0.355, 1] }}
+              >
+                {tab === "appearance" ? <AppearanceTab s={s} /> : null}
+                {tab === "modules" ? <ModulesTab s={s} /> : null}
+                {tab === "shortcuts" ? <ShortcutsTab s={s} /> : null}
+                {tab === "background" ? <BackgroundTab s={s} /> : null}
+                {tab === "search" ? <SearchTab s={s} /> : null}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* 搜索无结果：以前是一块空白面板，连「搜不到了」都不说 */}
+            {query.trim() && matchCount === 0 ? (
+              <div className="settings-search-empty" data-testid="settings-search-empty" role="status">
+                <p className="settings-search-empty-title">没有找到「{query.trim()}」</p>
+                <p className="settings-search-empty-note">
+                  试试「壁纸」「模糊」「书签」这类关键词，或清空搜索查看全部分类。
+                  隐私与数据、关于在右上角齿轮菜单里。
+                </p>
+                <Button onClick={() => setQuery("")} size="sm" testId="settings-search-clear">
+                  清空搜索
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </Modal>
+
+      {clearDialogs}
     </>
   );
 }

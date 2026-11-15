@@ -6,17 +6,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Clock } from "@/components/clock";
 import { CommandPalette } from "@/components/command-palette";
 import { DailyQuote } from "@/components/daily-quote";
-import { useAnimatedThemeToggle } from "@/components/magicui/animated-theme-toggler";
 import { NotePad } from "@/components/note-pad";
 import { SearchBox } from "@/components/search-box";
 import { ShortcutDock } from "@/components/shortcut-dock";
 import { ShortcutGrid } from "@/components/shortcut-grid";
 import { ShortcutHelp } from "@/components/shortcut-help";
 import { Wallpaper } from "@/components/wallpaper";
-import { Weather } from "@/components/weather";
 import { WidgetBoundary } from "@/components/widget-boundary";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
-import type { SettingsTab } from "@/components/settings-panel";
+import type { SettingsTab, SettingsTarget, SettingsView } from "@/components/settings-panel";
 import { EASE_OUT_CUBIC } from "@/lib/motion";
 
 /**
@@ -110,6 +108,8 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // null = 沿用面板上次停留的页签；指定值来自快捷设置 / 命令面板的深链
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+  // settings = 五分类主面板；privacy / about = 二级菜单直达的独立弹窗
+  const [settingsView, setSettingsView] = useState<SettingsView>("settings");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   // 设置面板一旦打开过就保持挂载，保留退出动画
@@ -118,6 +118,8 @@ export default function Home() {
   const [settingsReturnFocus, setSettingsReturnFocus] = useState<HTMLElement | null>(null);
   // 点击时间后的「展开态」：壁纸高斯模糊，快捷方块与右上设置入口浮现
   const [revealed, setRevealed] = useState(false);
+  // 右键落点的一圈涟漪：告诉用户「这一下整页都收到了」
+  const [revealRipple, setRevealRipple] = useState<{ id: number; x: number; y: number } | null>(null);
   // 右上角齿轮先出二级菜单，选完分类才打开完整设置
   const [menuOpen, setMenuOpen] = useState(false);
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -134,11 +136,17 @@ export default function Home() {
     if (!revealed) setMenuOpen(false);
   }, [simple, revealed]);
 
-  const openSettings = useCallback((tab?: SettingsTab, trigger?: HTMLElement | null) => {
+  const openSettings = useCallback((target?: SettingsTarget, trigger?: HTMLElement | null) => {
     // 显式传入触发按钮：鼠标点击在部分浏览器里不会自动聚焦按钮，
     // 只读 document.activeElement 会把焦点还给页面上一次停留的位置。
     setSettingsReturnFocus(trigger ?? (document.activeElement as HTMLElement | null));
-    setSettingsTab(tab ?? null);
+    if (target === "privacy" || target === "about") {
+      // 隐私与关于不再经过主面板，直接由二级菜单打开各自的弹窗
+      setSettingsView(target);
+    } else {
+      setSettingsView("settings");
+      setSettingsTab(target ?? null);
+    }
     setSettingsOpen(true);
   }, []);
 
@@ -150,6 +158,43 @@ export default function Home() {
    */
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current = settingsOpen || paletteOpen || helpOpen || menuOpen;
+
+  /*
+   * 右键统一交互范围：整页任意位置都能唤出隐藏内容。
+   *
+   * 旧实现把 onContextMenu 只挂在时钟按钮上，页面其余 95% 的面积右键毫无反应 ——
+   * 手势有了，却没有「可点区域」的暗示，用户只能靠猜。现在监听放在 document 上，
+   * 简洁布局切换展开态，经典布局（没有展开态）则唤出命令面板这块隐藏内容。
+   *
+   * 三条必要的例外，不是「缩小范围」，而是别把浏览器该做的事抢了：
+   *   · defaultPrevented —— 时钟 / 搜索引擎按钮有自己的右键语义，避免一次手势触发两下；
+   *   · 表单控件 —— 复制粘贴、拼写检查必须保留原生菜单；
+   *   · 浮层打开时 / 浮层内部 —— 不该改动被遮住的那层页面。
+   */
+  useEffect(() => {
+    const onContextMenu = (event: MouseEvent) => {
+      if (event.defaultPrevented) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (overlayOpenRef.current) return;
+      if (
+        target.closest(
+          '[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-popper-content-wrapper], .settings-menu, [data-sonner-toaster]',
+        )
+      )
+        return;
+
+      event.preventDefault();
+      if (!reduce && (event.clientX > 0 || event.clientY > 0)) {
+        setRevealRipple({ id: Date.now(), x: event.clientX, y: event.clientY });
+      }
+      if (simple) setRevealed((value) => !value);
+      else setPaletteOpen(true);
+    };
+    document.addEventListener("contextmenu", onContextMenu);
+    return () => document.removeEventListener("contextmenu", onContextMenu);
+  }, [simple, reduce]);
 
   useEffect(() => {
     if (!revealed) return;
@@ -205,7 +250,31 @@ export default function Home() {
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [measure, config, simple]);
+    // 不能依赖整份 config：主题、强调色这类改动都会换新对象，于是每次都
+    // 重建 ResizeObserver 并强制测量一遍；内容高度变化本身已被 RO 覆盖。
+  }, [measure, simple]);
+
+  /*
+   * 展开区高度：Motion 的 `height: "auto"` 每帧都要读一次 offsetHeight 才能插值，
+   * 实测一次展开 54 次布局。这里改为在内容挂载后量一次、用 ResizeObserver 兜住
+   * 内容变化，动画目标直接用像素值 —— 时钟依然被 auto 外边距推着上移，
+   * 但每帧少一次强制同步布局。
+   */
+  const revealInnerRef = useRef<HTMLDivElement | null>(null);
+  const [revealHeight, setRevealHeight] = useState(0);
+  useEffect(() => {
+    if (!revealed) return;
+    const el = revealInnerRef.current;
+    if (!el) return;
+    const update = () => {
+      const next = el.offsetHeight;
+      setRevealHeight((prev) => (Math.abs(prev - next) < 1 ? prev : next));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [revealed]);
 
   const [systemLight, setSystemLight] = useState(false);
   useEffect(() => {
@@ -218,15 +287,17 @@ export default function Home() {
 
   const isLight = config.theme.mode === "light" || (config.theme.mode === "system" && systemLight);
   const scaled = fitScale < 0.999 && zoomSupported;
-  const weatherVisible = config.weather.enabled;
   const noteVisible = config.note.enabled;
   const quoteVisible = config.quote.show;
 
-  const { toggle: toggleThemeAnimated } = useAnimatedThemeToggle();
-  const toggleTheme = (event?: React.MouseEvent<HTMLButtonElement>) => {
-    const origin = event ? { x: event.clientX, y: event.clientY } : undefined;
-    toggleThemeAnimated(isLight, () => update("theme", { mode: isLight ? "dark" : "light" }), origin);
-  };
+  /*
+   * 主题只改组件自己的颜色，壁纸层完全不参与（见 wallpaper.tsx / effects.css）。
+   * 之前这里走整页 View Transitions 快照：20 多个 backdrop-filter 层 + 大面积渐变
+   * 一起被拍进新旧两张位图，实测一次切换 138ms 主线程、67 次样式重算、出现 50ms 长帧。
+   * 背景既然不该变，就没有理由为它做整页快照 —— 直接提交 data-theme，
+   * 让各个组件用各自的 transition 过渡即可。
+   */
+  const toggleTheme = () => update("theme", { mode: isLight ? "dark" : "light" });
 
   const dock = (
     <div className="dock-shell">
@@ -241,6 +312,17 @@ export default function Home() {
   return (
     <>
       <Wallpaper blurred={revealed} />
+
+      {revealRipple ? (
+        <span
+          key={revealRipple.id}
+          className="reveal-ripple"
+          data-testid="reveal-ripple"
+          style={{ left: revealRipple.x, top: revealRipple.y }}
+          onAnimationEnd={() => setRevealRipple(null)}
+          aria-hidden="true"
+        />
+      ) : null}
 
       <div
         className="app-shell relative z-10"
@@ -267,9 +349,9 @@ export default function Home() {
                   key="settings-menu"
                   open={menuOpen}
                   onOpenChange={setMenuOpen}
-                  onSelect={(tab) => {
+                  onSelect={(target) => {
                     setMenuOpen(false);
-                    openSettings(tab, settingsTriggerRef.current);
+                    openSettings(target, settingsTriggerRef.current);
                   }}
                   trigger={
                     <motion.button
@@ -318,7 +400,7 @@ export default function Home() {
                 <AnimatePresence initial={false}>
                   {revealed ? (
                     /*
-                     * 高度从 0 长到 auto：主列是「auto 外边距居中」的，
+                     * 高度从 0 长到实测像素值：主列是「auto 外边距居中」的，
                      * 展开区每长高一像素，时钟与搜索就被重新居中、平滑上移 ——
                      * 不需要给时钟写任何 transform，也就不会出现「点一下自己往上跳」。
                      */
@@ -327,14 +409,14 @@ export default function Home() {
                       id="home-reveal"
                       className="home-reveal"
                       initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
+                      animate={{ height: revealHeight, opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       transition={{
                         height: { duration: reduce ? 0 : 0.52, ease: EASE_OUT_CUBIC },
                         opacity: { duration: reduce ? 0 : 0.3, ease: "easeOut" },
                       }}
                     >
-                      <div className="home-reveal-inner">
+                      <div ref={revealInnerRef} className="home-reveal-inner">
                         <WidgetBoundary label="快捷跳转">
                           <ShortcutGrid onManage={() => openSettings("shortcuts")} />
                         </WidgetBoundary>
@@ -360,29 +442,11 @@ export default function Home() {
           <>
             <header className="flex shrink-0 items-center gap-2 px-4 py-3 sm:px-6">
               <h1 className="sr-only">起始页</h1>
-              <AnimatePresence initial={false}>
-                {weatherVisible ? (
-                  <motion.div
-                    key="weather"
-                    layout={!reduce}
-                    initial={{ opacity: 0, x: reduce ? 0 : -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: reduce ? 1 : 0.96, transition: { duration: 0.18 } }}
-                    transition={{ duration: reduce ? 0 : 0.32, ease: EASE_OUT_CUBIC }}
-                    className="weather-slot"
-                    data-testid="weather-card"
-                  >
-                    <WidgetBoundary label="天气">
-                      <Weather />
-                    </WidgetBoundary>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
               <div className="bar-dock ml-auto">
                 <BarButton
                   label={isLight ? "切换到暗色主题" : "切换到亮色主题"}
                   hint="设置里可改为跟随系统"
-                  onClick={toggleTheme}
+                  onClick={() => toggleTheme()}
                   testId="theme-toggle"
                 >
                   {isLight ? <IconMoon /> : <IconSun />}
@@ -393,9 +457,9 @@ export default function Home() {
                 <SettingsMenu
                   open={menuOpen}
                   onOpenChange={setMenuOpen}
-                  onSelect={(tab) => {
+                  onSelect={(target) => {
                     setMenuOpen(false);
-                    openSettings(tab, settingsTriggerRef.current);
+                    openSettings(target, settingsTriggerRef.current);
                   }}
                   trigger={
                     <motion.button
@@ -493,8 +557,10 @@ export default function Home() {
             <SettingsPanel
               open={settingsOpen}
               onClose={() => setSettingsOpen(false)}
+              view={settingsView}
               initialTab={settingsTab ?? undefined}
               returnFocusTo={settingsReturnFocus}
+              onOpenHelp={() => setHelpOpen(true)}
             />
           </WidgetBoundary>
         ) : null}
@@ -507,7 +573,12 @@ export default function Home() {
           />
         </WidgetBoundary>
 
-        <ShortcutHelp open={helpOpen} onOpen={() => setHelpOpen(true)} onClose={() => setHelpOpen(false)} />
+        <ShortcutHelp
+          open={helpOpen}
+          onOpen={() => setHelpOpen(true)}
+          onClose={() => setHelpOpen(false)}
+          returnFocusTo={settingsTriggerRef.current}
+        />
       </div>
     </>
   );

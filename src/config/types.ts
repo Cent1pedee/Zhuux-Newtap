@@ -5,7 +5,7 @@ export type WallpaperSource = "none" | "url" | "local";
 
 export type AppConfig = {
   version: 1;
-  /** 首页形态：simple = 只有时间/搜索/Dock；classic = 保留天气、便签、一言与顶栏 */
+  /** 首页形态：simple = 只有时间/搜索/Dock；classic = 保留便签、一言与顶栏 */
   home: {
     simple: boolean;
   };
@@ -54,27 +54,6 @@ export type AppConfig = {
   };
   suggest: {
     enabled: boolean;
-  };
-  weather: {
-    enabled: boolean;
-    unit: "c" | "f";
-    /** 省级行政区名（如「浙江省」）；空串表示未选 */
-    province: string;
-    /** 城市名（如「杭州」）；空串表示未选 */
-    city: string;
-    /**
-     * 查询用的最终坐标。
-     *
-     * 来源有三种，优先级从高到低：
-     * 1. 用户手动选省 + 市 → 查内置坐标表写入（source = "manual"）
-     * 2. 用户点「使用我的定位」→ 浏览器定位后反查最近城市回填（source = "geo"）
-     * 3. 两者都没有 → 天气模块保持 idle，给出「选择城市 / 使用定位」入口
-     * 不再让用户手填经纬度 —— 那是给开发者用的，不是给用户用的。
-     */
-    lat: number | null;
-    lon: number | null;
-    /** 坐标来源，仅用于界面提示，不参与逻辑判断 */
-    source: "none" | "manual" | "geo";
   };
   icons: {
     /** 抓取站点自身 favicon（默认关闭，开启后需把站点域名加入白名单） */

@@ -17,17 +17,26 @@ import { useStoredImage } from "@/lib/use-stored-image";
  *   3. 站点 /favicon.ico    —— 默认（icons.autoFetch=true），失败自动降级
  *   4. 首字母               —— 最终兜底（内网地址、无 favicon 的站点）
  *
- * 视觉上只有一种「片」：
- *   中性片（白 / 暗色主题的 #2b2f38）+ 图形。
- *   favicon 直接落在片上；没有 favicon 的站点用「品牌色字形」顶上，
- *   而不是整块刷成品牌色 —— 参考站的应用抽屉里，所有图标都躺在同一色号的
- *   方块里，靠图形本身区分，一片彩色底会把整排切成「色块拼贴」。
- * Dock（42px / 12px 圆角）与快捷网格（52px / 14px 圆角）只是同一枚片的两个尺寸。
+ * 视觉上**只有一枚片**，且片的材质与品牌色只做很轻的关联：
+ *   旧版是「暗色中性片 + 品牌色小字」，favicon 抓到的站点却是彩色 logo，
+ *   没抓到的只剩一颗半透明字母 —— 13 个格子读起来像两套完全不同的图标，
+ *   黑色 logo（MDN）还会直接消失在深色片里。
+ *   新版统一成微微带品牌色倾向的浅色 squircle：
+ *     · 相对圆角 28%，Dock(42px) 与网格(52px) 共用同一比例；
+ *     · 顶部高光 + 底部柔和渐变 + 一圈内描边，三个来源的图标都躺在同一材质上；
+ *     · 字形颜色按品牌色统一压深、字号 / 字重 / 位置固定，
+ *       不再出现「一个蓝 Z、一个绿语、一个红微」的彩虹字；
+ *     · favicon 落在同一枚浅片上，深色标识不再需要滤镜硬描白边。
+ *   用户在设置里自定义的图片 / emoji 仍完整保留，只是套上同一枚片。
  */
 
-/** 品牌色字形：往前景色里掺，暗色主题下自动提亮，浅色主题下自动压深 */
+/**
+ * 品牌色字形：统一压到「深而有彩」的一档。
+ * 直接用品牌色会让 #FB7299 / #00B96B 在浅片上几乎读不出来，
+ * 直接用中性黑又失去品牌辨识；掺 28% 深色后所有站点亮度接近、仍能认出颜色。
+ */
 function glyphColor(bg: string): string {
-  return `color-mix(in srgb, ${bg} 55%, var(--fg))`;
+  return `color-mix(in srgb, ${bg} 72%, #101828)`;
 }
 
 export function ShortcutIcon({
@@ -73,12 +82,12 @@ export function ShortcutIcon({
 
   const isTile = variant === "tile";
   const plateClass = `shortcut-plate ${isTile ? "shortcut-tile-icon" : "shortcut-dock-icon"}`;
-  const plate = { width: size, height: size };
+  const plate = { width: size, height: size, ["--tile" as string]: bg };
 
   // 1) 自定义图片：铺满整片，图片本身就是图标
   if (resolvedImage && item.iconKind === "image" && !imageFailed) {
     return (
-      <span className={`${plateClass} overflow-hidden`} style={plate}>
+      <span className={`${plateClass} shortcut-plate--image`} style={plate}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={resolvedImage}
@@ -96,12 +105,10 @@ export function ShortcutIcon({
   // 2) 自定义 emoji：中性片 + emoji 字形（emoji 自带颜色，不再叠品牌底）
   if (customEmoji) {
     return (
-      <span
-        className={`${plateClass} leading-none`}
-        style={{ ...plate, fontSize: size * 0.48 }}
-        aria-hidden="true"
-      >
-        {item.iconValue}
+      <span className={`${plateClass} leading-none`} style={plate} aria-hidden="true">
+        <span className="shortcut-plate-glyph" style={{ fontSize: size * 0.46 }}>
+          {item.iconValue}
+        </span>
       </span>
     );
   }
@@ -112,8 +119,8 @@ export function ShortcutIcon({
       <span className={plateClass} style={plate}>
         {!faviconLoaded ? (
           <span
-            className="shortcut-tile-letter"
-            style={{ color: glyphColor(bg), fontSize: size * 0.4 }}
+            className="shortcut-plate-glyph shortcut-tile-letter"
+            style={{ color: glyphColor(bg), fontSize: size * 0.42 }}
             aria-hidden="true"
           >
             {letter}
@@ -123,8 +130,8 @@ export function ShortcutIcon({
         <img
           src={remote}
           alt=""
-          width={Math.round(size * 0.54)}
-          height={Math.round(size * 0.54)}
+          width={Math.round(size * 0.6)}
+          height={Math.round(size * 0.6)}
           className="shortcut-icon-img"
           data-loaded={faviconLoaded ? "true" : "false"}
           onLoad={() => setFaviconLoaded(true)}
@@ -139,13 +146,13 @@ export function ShortcutIcon({
 
   // 4) 首字母：中性片 + 品牌色字形（与 emoji 同一套片）
   return (
-    <span
-      className={`${plateClass} font-semibold`}
-      style={{ ...plate, color: glyphColor(bg), fontSize: size * 0.42 }}
-      aria-hidden="true"
-      data-testid="icon-fallback"
-    >
-      {letter}
+    <span className={plateClass} style={plate} aria-hidden="true" data-testid="icon-fallback">
+      <span
+        className="shortcut-plate-glyph"
+        style={{ color: glyphColor(bg), fontSize: size * 0.42 }}
+      >
+        {letter}
+      </span>
     </span>
   );
 }

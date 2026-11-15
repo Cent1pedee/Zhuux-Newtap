@@ -8,9 +8,9 @@
  *
  * 校验原则：
  *  1. 以出厂配置为骨架，逐字段按显式 schema 判断，**不使用 typeof 猜**；
- *  2. 默认值为 null 的可空字段（weather.lat / a11y.reducedMotion）单独声明期望类型
- *     —— 历史 bug：typeof null === "object"，让 `{"weather":{"lat":"x"}}` 也能写进去，
- *     随后 `lat.toFixed(3)` 直接抛错、整块天气白屏；
+ *  2. 默认值为 null 的可空字段（a11y.reducedMotion）单独声明期望类型
+ *     —— 历史 bug：typeof null === "object"，让一个字符串也能写进可空数值字段，
+ *     随后组件对 null 调数值方法直接抛错、整块首屏白屏；
  *  3. 枚举值必须在白名单里 —— 否则 `theme.mode: "purple"` 会让 `data-theme` 变成
  *     不存在的主题，CSS 变量全部落空；
  *  4. 数值越界一律 clamp —— `blur: 9999` 能把整页糊成一片；
@@ -108,18 +108,6 @@ const SCHEMA: Record<keyof AppConfig, Field> = {
   suggest: {
     kind: "object",
     fields: { enabled: { kind: "boolean" } },
-  },
-  weather: {
-    kind: "object",
-    fields: {
-      enabled: { kind: "boolean" },
-      unit: enumOf(["c", "f"]),
-      province: { kind: "string", max: 40 },
-      city: { kind: "string", max: 40 },
-      lat: { kind: "number|null", min: -90, max: 90 },
-      lon: { kind: "number|null", min: -180, max: 180 },
-      source: enumOf(["none", "manual", "geo"]),
-    },
   },
   icons: {
     kind: "object",

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button, FieldGroup, Range, Segmented, Switch, TextInput } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
 
-/** 背景页签：每日壁纸、自定义图片、前景可读性 */
+/** 背景页签：壁纸来源 → 显示效果 → 自定义图片 */
 export function BackgroundTab({ s }: { s: SettingsController }) {
   const {
     config,
@@ -20,16 +20,12 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
   return (
     <div className="settings-body">
       <section className="settings-section">
-        <h3 className="settings-h3">每日壁纸</h3>
-        <p className="mb-2 text-[11px] leading-relaxed text-[var(--fg-subtle)]">
-          Edge / Bing 每日一图，随日期自动更新。元数据取自 bing.biturl.top（已在白名单内）， 图片由 bing.com
-          直链加载；请求失败时自动回落到纯渐变，页面不会白屏。
-        </p>
+        <h3 className="settings-h3">壁纸来源</h3>
         <Switch
           checked={config.background.source === "edge"}
           onChange={(v) => update("background", { source: v ? "edge" : "none" })}
           label="使用每日壁纸"
-          description="关闭后只剩纯渐变底色，第三方请求数降为 0。"
+          description="Edge / Bing 每日一图；关闭后只剩纯渐变底色，第三方请求降为 0。"
           testId="background-edge"
         />
         <FieldGroup label="往前回溯" hint="0 = 今天；想看前几天的图可以往后调">
@@ -49,45 +45,14 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
       </section>
 
       <section className="settings-section">
-        <h3 className="settings-h3">自定义图片（可选）</h3>
-        <p className="mb-2 text-[11px] leading-relaxed text-[var(--fg-subtle)]">
-          优先级高于每日壁纸。留空或点「移除」则回到每日壁纸。
-        </p>
-        <div className="flex gap-1.5">
-          <div className="min-w-0 flex-1">
-            <TextInput
-              value={wallpaperUrl}
-              onChange={setWallpaperUrl}
-              placeholder="https://example.com/bg.jpg"
-              ariaLabel="远程背景图片地址"
-              testId="wallpaper-url"
-            />
-          </div>
-          <Button onClick={applyWallpaperUrl} size="sm" testId="wallpaper-url-apply">
-            应用
-          </Button>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button onClick={() => wallpaperFileRef.current?.click()} size="sm" testId="wallpaper-upload">
-            选择本地图片
-          </Button>
-          <Input
-            ref={wallpaperFileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            data-testid="wallpaper-file"
-            onChange={(e) => onWallpaperFile(e.target.files?.[0])}
-          />
-          <Button onClick={clearWallpaper} size="sm" variant="ghost" testId="wallpaper-clear">
-            移除图片
-          </Button>
-          <span className="text-[11px] text-[var(--fg-subtle)]">本地图片小于 8MB，仅存本机</span>
-        </div>
-      </section>
-
-      <section className="settings-section">
-        <h3 className="settings-h3">前景可读性</h3>
+        <h3 className="settings-h3">显示效果</h3>
+        <Switch
+          checked={config.background.vignette}
+          onChange={(v) => update("background", { vignette: v })}
+          label="壁纸暗角"
+          description="四角轻微压暗，视线落在时间与快捷方块上。"
+          testId="background-vignette"
+        />
         <Range
           label="暗化程度"
           min={0}
@@ -112,6 +77,42 @@ export function BackgroundTab({ s }: { s: SettingsController }) {
           label="Ken Burns 缓慢缩放"
           testId="wallpaper-kenburns"
         />
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-h3">自定义图片</h3>
+        <p className="settings-note">优先级高于每日壁纸；留空或点「移除」回到每日壁纸。</p>
+        <div className="settings-actions settings-actions--row">
+          <div className="min-w-0 flex-1">
+            <TextInput
+              value={wallpaperUrl}
+              onChange={setWallpaperUrl}
+              placeholder="https://example.com/bg.jpg"
+              ariaLabel="远程背景图片地址"
+              testId="wallpaper-url"
+            />
+          </div>
+          <Button onClick={applyWallpaperUrl} size="sm" testId="wallpaper-url-apply">
+            应用
+          </Button>
+        </div>
+        <div className="settings-actions mt-2">
+          <Button onClick={() => wallpaperFileRef.current?.click()} size="sm" testId="wallpaper-upload">
+            选择本地图片
+          </Button>
+          <Input
+            ref={wallpaperFileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            data-testid="wallpaper-file"
+            onChange={(e) => onWallpaperFile(e.target.files?.[0])}
+          />
+          <Button onClick={clearWallpaper} size="sm" variant="ghost" testId="wallpaper-clear">
+            移除图片
+          </Button>
+          <span className="text-[11px] text-[var(--fg-subtle)]">小于 8MB，仅存本机</span>
+        </div>
       </section>
     </div>
   );

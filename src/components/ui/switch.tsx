@@ -24,7 +24,10 @@ function Switch({
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          "pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0 dark:data-[state=checked]:bg-primary-foreground dark:data-[state=unchecked]:bg-foreground"
+          /* Tailwind v4 的 `translate-x-*` 生成的是独立的 CSS `translate` 属性，
+             会与 shadcn-compat.css 里控制滑块的 `transform` 叠加（实测开启态多走一倍）。
+             位移统一交给项目 CSS，这里只保留形状与尺寸。 */
+          "pointer-events-none block rounded-full bg-background ring-0 group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 dark:data-[state=checked]:bg-primary-foreground dark:data-[state=unchecked]:bg-foreground"
         )}
       />
     </SwitchPrimitive.Root>

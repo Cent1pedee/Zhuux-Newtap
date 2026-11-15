@@ -19,33 +19,18 @@ function edgeCacheKey(offset: number): string {
 /**
  * 壁纸遮罩。
  *
- * 暗色：一层黑，暗化度就是它的不透明度。深色主题靠压暗照片立住白色文字，越压越稳，
- * 没有别的诉求，所以保持一行 rgba 不动。
+ * 只负责「曝光」，而且**与主题完全无关**：
+ * 背景层（图片 / 纯色兜底 / 暗角 / 这层薄纱）在亮暗两套主题下是同一张图，
+ * 主题切换时它一个像素都不该重画。明暗的差别交给组件自己：
+ * 搜索胶囊、Dock、设置面板、卡片按 `data-theme` 换材质。
  *
- * 亮色：**不能**用「同等强度的白雾」。旧实现是 `0.3 + dim*0.45` 的整面白 + 一层白色
- * 上下渐变，实测把棋盘格里 rgb(20,20,20) 的黑块抬到 rgb(109,110,111)，黑白亮度差从
- * 235 掉到 143 —— 照片边缘其实还是锐的，但整张图被洗成粉彩，观感就是「糊、不透气」。
- * 现在拆成三层，各自负责一件事：
- *   1. base   —— 极淡的整体磨砂，只压一点过曝高光，让照片保持本色；
- *   2. center —— 内容列所在的椭圆柔光，时钟 / 搜索 / 卡片正好落在这里，
- *                深色文字在照片上也有足够对比度（大字号 3:1 绰绰有余）；
- *   3. edge   —— 上下边缘一小段渐变，给顶栏与页脚的超小号文字兜底。
- * 结果是四角与四周保持干净锐利，中间仍然可读 —— 通透与可读性各让一步。
+ * 恒定压暗也是刻意的：壁纸是每日一图，明暗完全随机，而照片上的文字
+ * （时间 / 日期 / 名称 / 一言）统一用白色 + 暗投影，背景就必须稳定偏暗。
  */
-function scrimBackground(isLight: boolean, dim: number): string {
+function scrimBackground(dim: number): string {
   const d = Math.min(100, Math.max(0, dim)) / 100;
-  if (!isLight) return `rgba(0,0,0,${d.toFixed(2)})`;
-
-  const base = 0.04 + d * 0.14;
-  const center = 0.32 + d * 0.40;
-  const mid = center * 0.5;
-  const edge = 0.12 + d * 0.26;
-
-  return [
-    `radial-gradient(ellipse 68% 52% at 50% 40%, rgba(255,255,255,${center.toFixed(2)}) 0%, rgba(255,255,255,${mid.toFixed(2)}) 46%, rgba(255,255,255,0) 78%)`,
-    `linear-gradient(180deg, rgba(255,255,255,${edge.toFixed(2)}) 0%, rgba(255,255,255,0) 14%, rgba(255,255,255,0) 80%, rgba(255,255,255,${edge.toFixed(2)}) 100%)`,
-    `rgba(248,250,253,${base.toFixed(2)})`,
-  ].join(", ");
+  const base = 0.05 + d * 0.7;
+  return `rgba(4, 7, 14, ${base.toFixed(2)})`;
 }
 
 /**
@@ -59,7 +44,7 @@ function scrimBackground(isLight: boolean, dim: number): string {
 export function Wallpaper({ blurred = false }: { blurred?: boolean } = {}) {
   const { config, ready } = useConfig();
   const reduce = useReducedMotionPref();
-  const { background, wallpaper, theme } = config;
+  const { background, wallpaper } = config;
 
   const [focus, setFocus] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -68,17 +53,6 @@ export function Wallpaper({ blurred = false }: { blurred?: boolean } = {}) {
   /** 图片是否已完整解码 —— 未解码前不透明度保持 0，避免「加载一半先画一半」 */
   const [decoded, setDecoded] = useState(false);
   const seq = useRef(0);
-
-  // 亮色主题判定（跟随系统时按 matchMedia 解析），用于切换暗化层的色调
-  const [systemLight, setSystemLight] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: light)");
-    const apply = () => setSystemLight(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
-  const isLight = theme.mode === "light" || (theme.mode === "system" && systemLight);
 
   /*
    * 本地上传的图存在 IndexedDB，配置里只留 `idb:` 引用；远程地址与历史 dataURL 直接用。
@@ -290,17 +264,13 @@ export function Wallpaper({ blurred = false }: { blurred?: boolean } = {}) {
         />
       ) : null}
 
-      {/* 暗角：四角压暗、中心留亮，让视线落在内容列上（可在「常规设置」关闭） */}
+      {/* 暗角：四角压暗、中心留亮，让视线落在内容列上（可在「背景」里关闭） */}
       {background.vignette ? (
         <div className="wallpaper-vignette" data-testid="wallpaper-vignette" />
       ) : null}
 
-      {/* 遮罩层：暗色压黑、亮色分层柔光，见 scrimBackground 的说明 */}
-      <div
-        className="wallpaper-scrim"
-        data-theme-scrim={isLight ? "light" : "dark"}
-        style={{ background: scrimBackground(isLight, background.dim) }}
-      />
+      {/* 遮罩层：两个主题完全同一层，不参与主题切换 */}
+      <div className="wallpaper-scrim" style={{ background: scrimBackground(background.dim) }} />
     </div>
   );
 }

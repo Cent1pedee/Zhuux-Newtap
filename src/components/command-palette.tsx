@@ -10,7 +10,7 @@ import { EASE_OUT_CUBIC } from "@/lib/motion";
 import { lockBodyScroll } from "@/lib/scroll-lock";
 import { resolveSearchUrl } from "@/lib/commands";
 import { useToast } from "@/components/ui/primitives";
-import type { SettingsTab } from "@/components/settings-panel";
+import type { SettingsTarget } from "@/components/settings-panel";
 import { clearSearchHistory } from "@/lib/search-history";
 
 type Item =
@@ -38,7 +38,7 @@ export function CommandPalette({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenSettings: (tab?: SettingsTab) => void;
+  onOpenSettings: (target?: SettingsTarget) => void;
   onOpenHelp?: () => void;
 }) {
   const { config, set, update } = useConfig();
@@ -146,6 +146,20 @@ export function CommandPalette({
           label: "打开设置",
           hint: "设置",
           run: () => onOpenSettings(),
+        },
+        {
+          id: "open-privacy",
+          kind: "action",
+          label: "打开隐私与数据",
+          hint: "隐私",
+          run: () => onOpenSettings("privacy"),
+        },
+        {
+          id: "open-about",
+          kind: "action",
+          label: "关于本站",
+          hint: "关于",
+          run: () => onOpenSettings("about"),
         },
         {
           id: "focus-search",

@@ -9,14 +9,14 @@ describe("快捷方块网格", () => {
     window.localStorage.clear();
   });
 
-  it("展平默认分组，渲染 12 个站点方块 + 1 个添加方块", () => {
+  it("展平默认分组，渲染 13 个站点方块 + 1 个添加方块", () => {
     renderWithProviders(<ShortcutGrid onManage={() => {}} />);
     const grid = screen.getByTestId("shortcut-grid");
-    expect(grid.querySelectorAll(".shortcut-tile")).toHaveLength(13);
-    const github = screen.getByTestId("shortcut-grid-sc-github");
-    expect(github.getAttribute("href")).toBe("https://github.com");
-    expect(github.getAttribute("target")).toBe("_blank");
-    expect(github.textContent).toContain("GitHub");
+    expect(grid.querySelectorAll(".shortcut-tile")).toHaveLength(14);
+    const zhuux = screen.getByTestId("shortcut-grid-sc-zhuux");
+    expect(zhuux.getAttribute("href")).toBe("https://nav.zhuux.cn");
+    expect(zhuux.getAttribute("target")).toBe("_blank");
+    expect(zhuux.textContent).toContain("Zhuux");
     expect(screen.getByTestId("shortcut-add-tile").textContent).toContain("添加");
     // 不再有玻璃托板与头部标题栏：方块直接落在壁纸上
     expect(screen.queryByTestId("shortcut-shelf")).toBeNull();
@@ -33,6 +33,6 @@ describe("快捷方块网格", () => {
   it("关闭图标抓取后每个方块都有首字母兜底，不会出现空白方块", () => {
     window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ icons: { autoFetch: false } }));
     renderWithProviders(<ShortcutGrid onManage={() => {}} />);
-    expect(screen.getAllByTestId("icon-fallback")).toHaveLength(12);
+    expect(screen.getAllByTestId("icon-fallback")).toHaveLength(13);
   });
 });

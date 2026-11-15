@@ -179,7 +179,7 @@ export function ShortcutManager() {
         <p className="text-[11px] leading-relaxed text-[var(--fg-subtle)]">
           首页底部图标条的顺序即此列表顺序。共 {items.length} / {LIMITS.maxShortcuts} 个。
         </p>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="settings-actions shrink-0">
           <Button onClick={() => bookmarkRef.current?.click()} size="sm" variant="secondary" testId="import-bookmarks">
             导入书签
           </Button>
@@ -567,7 +567,7 @@ function ShortcutEditor({
 
       {iconKind === "image" ? (
         <FieldGroup label="图片" hint="小于 512KB，仅存本机（IndexedDB）">
-          <div className="flex items-center gap-2">
+          <div className="settings-actions settings-actions--row">
             <Button onClick={() => fileRef.current?.click()} size="sm" testId="shortcut-upload">
               选择图片
             </Button>

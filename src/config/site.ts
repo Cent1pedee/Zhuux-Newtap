@@ -130,26 +130,27 @@ export const DEFAULT_GROUPS: ShortcutGroup[] = [
     name: "快捷跳转",
     items: [
       /*
-       * 默认全部是公网站点：新用户第一次打开时，每个图标都应该能打开。
-       * 早先这里有 4 项指向 192.168.1.10（NAS / Grafana / Uptime / Jellyfin），
-       * 对绝大多数人是 4 个打不开的图标 + 4 条必然失败的 favicon 请求。
-       * 内网服务的配置方式见 README「把 NAS 等内网服务放进来」。
+       * 默认全部是「国内网络能直接打开」的站点：
+       * GitHub / Stack Overflow / Figma / Vercel 会在不少网络下超时，
+       * 一排打不开的图标比没有图标更糟，所以默认表里不放它们 ——
+       * 需要的话在「设置 → 快捷跳转」里自己加，或用书签导入。
        *
        * 公网站点一律留空 iconValue，交给 favicon 自动抓取（shortcut-icon.tsx 的降级链），
        * 抓不到才退回首字母。
        */
-      { id: "sc-github", title: "GitHub", url: "https://github.com", iconKind: "letter", iconValue: "", color: "#24292F" },
-      { id: "sc-mdn", title: "MDN", url: "https://developer.mozilla.org", iconKind: "letter", iconValue: "", color: "#000000" },
-      { id: "sc-npm", title: "npm", url: "https://www.npmjs.com", iconKind: "letter", iconValue: "", color: "#CB3837" },
-      { id: "sc-stackoverflow", title: "Stack Overflow", url: "https://stackoverflow.com", iconKind: "letter", iconValue: "", color: "#F48024" },
-      { id: "sc-canIuse", title: "Can I use", url: "https://caniuse.com", iconKind: "letter", iconValue: "", color: "#1F7A3F" },
-      { id: "sc-figma", title: "Figma", url: "https://www.figma.com/files", iconKind: "letter", iconValue: "", color: "#F24E1E" },
+      { id: "sc-zhuux", title: "Zhuux", url: "https://nav.zhuux.cn", iconKind: "letter", iconValue: "", color: "#4F6BF6" },
       { id: "sc-juejin", title: "掘金", url: "https://juejin.cn", iconKind: "letter", iconValue: "", color: "#1E80FF" },
-      { id: "sc-bili", title: "哔哩哔哩", url: "https://www.bilibili.com", iconKind: "letter", iconValue: "", color: "#FB7299" },
       { id: "sc-zhihu", title: "知乎", url: "https://www.zhihu.com", iconKind: "letter", iconValue: "", color: "#0084FF" },
+      { id: "sc-bili", title: "哔哩哔哩", url: "https://www.bilibili.com", iconKind: "letter", iconValue: "", color: "#FB7299" },
       { id: "sc-weibo", title: "微博", url: "https://weibo.com", iconKind: "letter", iconValue: "", color: "#E6162D" },
       { id: "sc-douban", title: "豆瓣", url: "https://www.douban.com", iconKind: "letter", iconValue: "", color: "#2E963D" },
-      { id: "sc-vercel", title: "Vercel", url: "https://vercel.com/dashboard", iconKind: "letter", iconValue: "", color: "#000000" },
+      { id: "sc-gitee", title: "Gitee", url: "https://gitee.com", iconKind: "letter", iconValue: "", color: "#C71D23" },
+      { id: "sc-yuque", title: "语雀", url: "https://www.yuque.com", iconKind: "letter", iconValue: "", color: "#00B96B" },
+      { id: "sc-mdn", title: "MDN", url: "https://developer.mozilla.org", iconKind: "letter", iconValue: "", color: "#000000" },
+      { id: "sc-canIuse", title: "Can I use", url: "https://caniuse.com", iconKind: "letter", iconValue: "", color: "#1F7A3F" },
+      { id: "sc-bing", title: "Bing", url: "https://www.bing.com", iconKind: "letter", iconValue: "", color: "#008373" },
+      { id: "sc-baidu", title: "百度", url: "https://www.baidu.com", iconKind: "letter", iconValue: "", color: "#2932E1" },
+      { id: "sc-sspai", title: "少数派", url: "https://sspai.com", iconKind: "letter", iconValue: "", color: "#D71A1B" },
     ],
   },
 ];
@@ -195,7 +196,6 @@ export const FALLBACK_GRADIENT =
 export const DEFAULT_WHITELIST = [
   "v1.hitokoto.cn", // 远程一言（默认开启）
   "api.bing.com", // 搜索建议（默认关闭）
-  "api.open-meteo.com", // 天气（默认开启）
   "bing.biturl.top", // Edge 每日壁纸元数据（默认开启）
 ];
 

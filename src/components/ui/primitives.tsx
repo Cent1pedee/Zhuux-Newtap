@@ -62,6 +62,7 @@ export function Modal({
   fixedHeight = false,
   returnFocusTo,
   panelClassName,
+  initialFocus = "first",
 }: {
   open: boolean;
   onClose: () => void;
@@ -78,6 +79,13 @@ export function Modal({
   returnFocusTo?: HTMLElement | null;
   /** 追加到弹窗面板上的类名（例如设置弹窗需要更实的底色） */
   panelClassName?: string;
+  /**
+   * 打开时焦点落在哪。
+   * 默认交给 Radix 找第一个可聚焦元素；没有输入框的弹窗会落到右上角关闭按钮上，
+   * 而程序化聚焦在 Chrome 里会命中 :focus-visible，一打开就有一圈刺眼的轮廓。
+   * 这类弹窗改成聚焦面板本身（tabIndex=-1），读屏仍会播报标题，Tab 再去关闭按钮。
+   */
+  initialFocus?: "first" | "panel";
 }) {
   const autoId = useId();
   const titleId = labelledBy ?? `${autoId}-title`;
@@ -139,6 +147,15 @@ export function Modal({
       <DialogContent
         showCloseButton={false}
         overlayProps={overlayProps}
+        tabIndex={initialFocus === "panel" ? -1 : undefined}
+        onOpenAutoFocus={
+          initialFocus === "panel"
+            ? (event) => {
+                event.preventDefault();
+                (event.currentTarget as HTMLElement).focus();
+              }
+            : undefined
+        }
         onCloseAutoFocus={onCloseAutoFocus}
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
@@ -181,7 +198,19 @@ export function Modal({
 }
 
 /* ==========================================================================
-   Toast：shadcn 官方方案 sonner，用 toast.custom 保持原气泡外观与 data-testid
+   Toast：shadcn 官方方案 sonner + 项目自己的一张卡片
+
+   之前的 toast 是「34px 小胶囊 + 6px 圆点」，和页面里 12~18px 圆角的卡片、
+   13px 正文完全不是一套语言；位置又挂在 bottom-center 上、靠实测 Dock 高度
+   抬起来，于是：窄屏 Dock 折行时偏移会滞后、设置弹窗打开时气泡正好压在
+   「恢复出厂 / 完成」那排按钮上、一言那行文字也会被盖住。多条同时出现时
+   sonner 默认把旧的气泡缩小叠在后面，宽度随文字变，堆成一摞参差的碎片。
+
+   现在统一成：
+     · 位置固定 top-center + 20px，与 Dock / 一言 / 弹窗页脚彻底无关；
+     · 一张 14px 圆角卡片，底色与描边取和设置面板相同的玻璃 token；
+     · 语气用「同尺寸图标 + 同尺寸色块」表达，不再靠一颗小圆点；
+     · 宽度由 sonner 的 --width 统一，多条展开堆叠，不再缩放错位。
    ========================================================================== */
 
 type ToastTone = "info" | "success" | "error";
@@ -189,6 +218,27 @@ type ToastAction = { label: string; onClick: () => void };
 type ToastContextValue = { push: (text: string, tone?: ToastTone, action?: ToastAction) => void };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+
+/** 三种语气共用同一套 14px 线性图标：尺寸、线宽、圆角一致，只有路径不同 */
+function ToastToneIcon({ tone }: { tone: ToastTone }) {
+  const shape = (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      {tone === "success" ? (
+        <path d="m8 12 2.7 2.7L16 9.4" strokeLinecap="round" strokeLinejoin="round" />
+      ) : tone === "error" ? (
+        <path d="M15 9l-6 6M9 9l6 6" strokeLinecap="round" />
+      ) : (
+        <path d="M12 11.2v5M12 7.9h.01" strokeLinecap="round" />
+      )}
+    </>
+  );
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+      {shape}
+    </svg>
+  );
+}
 
 /**
  * 系统级「减少动效」偏好兜底（layout 里没给 ToastProvider 传 reduceMotion，
@@ -209,21 +259,6 @@ function useSystemReduceMotion(): boolean {
   return reduce;
 }
 
-/** 气泡与 Dock 之间的动态间距：桌面一行 56px、窄屏两行 110px，写死会压住图标 */
-function useDockOffset(): number {
-  const [offset, setOffset] = useState(0);
-  useEffect(() => {
-    const dock = document.querySelector(".dock-shell");
-    if (!dock || typeof ResizeObserver === "undefined") return;
-    const apply = () => setOffset(Math.round(dock.getBoundingClientRect().height) + 8);
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(dock);
-    return () => ro.disconnect();
-  }, []);
-  return offset;
-}
-
 export function ToastProvider({
   children,
   reduceMotion,
@@ -233,20 +268,15 @@ export function ToastProvider({
 }) {
   const systemReduce = useSystemReduceMotion();
   const reduce = reduceMotion ?? systemReduce;
-  const dockOffset = useDockOffset();
 
   const push = useCallback((text: string, tone: ToastTone = "info", action?: ToastAction) => {
-    const dot = tone === "error" ? "#f87171" : tone === "success" ? "#34d399" : "var(--accent)";
     toast.custom(
       (t) => (
-        <div
-          className="glass-strong pointer-events-auto flex max-w-[90vw] items-center gap-2 rounded-full px-4 py-2 text-xs shadow-lg"
-          data-testid="toast"
-          data-reduce-motion={reduce ? "true" : undefined}
-          role="status"
-        >
-          <span aria-hidden="true" className="inline-block size-1.5 shrink-0 rounded-full" style={{ background: dot }} />
-          <span>{text}</span>
+        <div className="sp-toast" data-testid="toast" data-tone={tone} role="status">
+          <span className="sp-toast-icon" aria-hidden="true">
+            <ToastToneIcon tone={tone} />
+          </span>
+          <span className="sp-toast-text">{text}</span>
           {action ? (
             <button
               type="button"
@@ -255,16 +285,16 @@ export function ToastProvider({
                 toast.dismiss(t);
               }}
               data-testid="toast-action"
-              className="shrink-0 rounded-[var(--radius-xs)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--accent)] transition-opacity hover:opacity-80"
+              className="sp-toast-action"
             >
               {action.label}
             </button>
           ) : null}
         </div>
       ),
-      { duration: action ? 6000 : 2600, unstyled: true },
+      { duration: action ? 6000 : 2800, unstyled: true },
     );
-  }, [reduce]);
+  }, []);
 
   /** 配置写盘失败的提示：ConfigProvider 自己拿不到 UI，只广播事件 */
   useEffect(() => {
@@ -291,11 +321,13 @@ export function ToastProvider({
     <ToastContext.Provider value={{ push }}>
       {children}
       <Toaster
-        position="bottom-center"
+        position="top-center"
         visibleToasts={3}
-        duration={2600}
-        offset={dockOffset || 92}
-        gap={8}
+        duration={2800}
+        offset={20}
+        gap={10}
+        expand
+        className={reduce ? "toaster toaster--reduce" : "toaster"}
       />
     </ToastContext.Provider>
   );
@@ -311,7 +343,7 @@ export function useToast(): ToastContextValue {
    基础控件
    ========================================================================== */
 
-/** 开关本体：shadcn Switch（Radix），尺寸与配色由 .sp-switch 系列 CSS 锁回原样 */
+/** 开关本体：shadcn Switch（Radix），几何与位移由 .sp-switch 系列 CSS 独占 */
 export function SwitchButton({
   checked,
   onChange,
@@ -365,24 +397,6 @@ export function Switch({
       </span>
       <SwitchButton checked={checked} onChange={onChange} label={label} disabled={disabled} testId={testId} />
     </Label>
-  );
-}
-
-/** 下拉框右侧的自绘箭头（原生 select 的箭头在深色下几乎看不见） */
-export function ChevronDown({ className = "weather-select-chevron" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="11"
-      height="11"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }
 
@@ -467,6 +481,22 @@ export function TextInput({
   );
 }
 
+/**
+ * 设置面板里的按钮：复用 shadcn/ui 官方 Button，几何与状态在全面板统一。
+ *
+ * 之前 sm(30px 高 / 6px gap / 12px 字) 与 default(36px / 8px / 13px) 会同时
+ * 出现在一个页签里，圆角、内距、按压反馈也各说各话。这里把两档合并成一套：
+ * 32px 高、12px 内距、6px 图标间距、12.5px 字号、10px 圆角，
+ * hover / focus-visible / disabled 交给 buttonVariants，按压反馈统一叠加。
+ * `size` 保留在 API 里以兼容调用方，但不再制造第二种视觉。
+ */
+const BUTTON_VARIANT = {
+  primary: "default",
+  secondary: "secondary",
+  ghost: "ghost",
+  danger: "destructive",
+} as const;
+
 export function Button({
   children,
   onClick,
@@ -486,16 +516,6 @@ export function Button({
   testId?: string;
   ariaLabel?: string;
 }) {
-  const base =
-    "inline-flex shrink items-center justify-center gap-1.5 rounded-[var(--radius-sm)] font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 h-auto focus-visible:ring-0 focus-visible:border-transparent";
-  const sizes = size === "sm" ? "px-2.5 py-1.5 text-[12px]" : "px-3.5 py-2 text-[13px]";
-  const variants: Record<string, string> = {
-    primary: "text-white hover:brightness-110 active:brightness-95 hover:bg-transparent",
-    secondary:
-      "border border-[var(--glass-border)] bg-[var(--input-bg)] text-[var(--fg)] hover:bg-[var(--hover-bg)]",
-    ghost: "text-[var(--fg-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)]",
-    danger: "border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20",
-  };
   return (
     <ShadcnButton
       type={type}
@@ -503,10 +523,13 @@ export function Button({
       disabled={disabled}
       aria-label={ariaLabel}
       data-testid={testId}
-      variant="ghost"
-      size="sm"
-      className={cn("bg-transparent whitespace-normal", base, sizes, variants[variant])}
-      style={variant === "primary" ? { background: "var(--accent)" } : undefined}
+      variant={BUTTON_VARIANT[variant]}
+      size={size === "sm" ? "sm" : "default"}
+      className={cn(
+        "sp-btn h-8 gap-1.5 rounded-[10px] px-3 text-[12.5px]",
+        "transition-[background-color,box-shadow,transform] duration-150 ease-out",
+        "active:scale-[0.98] disabled:active:scale-100",
+      )}
     >
       {children}
     </ShadcnButton>

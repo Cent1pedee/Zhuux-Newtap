@@ -1,14 +1,11 @@
 "use client";
 
-import { PROVINCES, citiesOf } from "@/config/cities";
-import { Button, ChevronDown, Field, Segmented, Switch, TextInput } from "@/components/ui/primitives";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Field, Segmented, Switch, TextInput } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
 
-/** 模块页签：时间 / 问候 / 便签 / 天气 / 一言 */
+/** 模块页签：时间 / 问候 / 便签 / 一言 */
 export function ModulesTab({ s }: { s: SettingsController }) {
-  const { config, update, setProvinceDraft, draftProvince, selectCity, locateWeather } = s;
-  const cities = citiesOf(draftProvince);
+  const { config, update } = s;
 
   return (
     <div className="settings-body">
@@ -56,97 +53,6 @@ export function ModulesTab({ s }: { s: SettingsController }) {
           description="默认开启。纯文本，直接保存在本机配置里，随导出/导入与一键清除一起处理，不会上传。"
           testId="note-enable"
         />
-      </section>
-
-      <section className="settings-section">
-        <h3 className="settings-h3">天气</h3>
-        <Switch
-          checked={config.weather.enabled}
-          onChange={(v) => update("weather", { enabled: v })}
-          label="显示天气"
-          description="默认开启。首次打开会尝试一次浏览器定位；不授权就选城市。坐标只发给 api.open-meteo.com（已在内置白名单），不带任何本地数据。"
-          testId="weather-enable"
-        />
-        {config.weather.enabled ? (
-          <div className="space-y-2 pt-1">
-            <div className="py-1">
-              <span className="mb-1.5 block text-[13px] font-medium">温度单位</span>
-              <Segmented
-                options={[
-                  { value: "c", label: "摄氏 °C" },
-                  { value: "f", label: "华氏 °F" },
-                ]}
-                value={config.weather.unit}
-                onChange={(v) => update("weather", { unit: v })}
-                label="温度单位"
-                testId="weather-unit"
-              />
-            </div>
-            {/*
-              省份 + 城市两个原生下拉，不再让用户手填经纬度：
-              经纬度是机器坐标，人不知道自己家的两位小数是多少。
-              省份只是「切城市列表」的草稿，选城市才写回坐标 ——
-              否则一选省份就被强行改成该省第一个城市。
-            */}
-            <div className="py-1">
-              <span className="mb-1.5 block text-[13px] font-medium">城市</span>
-              <div className="grid grid-cols-2 gap-1.5">
-                <div className="weather-select-wrap">
-                  <NativeSelect
-                    withWrapper={false}
-                    aria-label="省份"
-                    data-testid="weather-province"
-                    value={draftProvince}
-                    onChange={(e) => setProvinceDraft(e.target.value)}
-                    className="weather-select"
-                  >
-                    <option value="">选择省份</option>
-                    {PROVINCES.map((p) => (
-                      <option key={p.name} value={p.name}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                  <ChevronDown />
-                </div>
-                <div className="weather-select-wrap">
-                  <NativeSelect
-                    withWrapper={false}
-                    aria-label="城市"
-                    data-testid="weather-city-select"
-                    value={cities.some((c) => c.name === config.weather.city) ? config.weather.city : ""}
-                    onChange={(e) => selectCity(e.target.value)}
-                    disabled={cities.length === 0}
-                    className="weather-select"
-                  >
-                    <option value="">{cities.length === 0 ? "先选省份" : "选择城市"}</option>
-                    {cities.map((c) => (
-                      <option key={c.name} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                  <ChevronDown />
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              <Button onClick={() => void locateWeather()} size="sm" testId="weather-locate">
-                使用我的定位
-              </Button>
-              {/* 状态用一枚小药丸表示，而不是再写一行「当前：省 · 市」——
-                  城市名已经在左侧下拉里明摆着，重复一遍只是噪音。 */}
-              <span className="weather-status" data-source={config.weather.source} data-testid="weather-status">
-                <span className="weather-status-dot" aria-hidden="true" />
-                {config.weather.source === "geo"
-                  ? "已定位"
-                  : config.weather.source === "manual"
-                    ? "手动选择"
-                    : "未选择"}
-              </span>
-            </div>
-          </div>
-        ) : null}
       </section>
 
       <section className="settings-section">

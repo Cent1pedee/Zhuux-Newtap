@@ -18,10 +18,10 @@ describe("快捷跳转 Dock（首页）", () => {
     window.localStorage.clear();
   });
 
-  it("把默认分组展平成一条，12 个快捷项全部渲染", async () => {
+  it("把默认分组展平成一条，13 个快捷项全部渲染", async () => {
     renderWithProviders(<ShortcutDock />);
     await waitFor(() => expect(screen.getByTestId("shortcut-total")).toBeTruthy());
-    expect(total()).toBe(12);
+    expect(total()).toBe(13);
     expect(screen.getByTestId("shortcut-dock")).toBeTruthy();
     // 不再有分组标题
     expect(screen.queryByText("自建服务")).toBeNull();
@@ -89,11 +89,11 @@ describe("快捷跳转管理（设置内）", () => {
     window.localStorage.clear();
   });
 
-  it("列表里能看到全部 12 项，并标明顺序即首页顺序", async () => {
+  it("列表里能看到全部 13 项，并标明顺序即首页顺序", async () => {
     renderWithProviders(<ShortcutManager />);
     await waitFor(() => expect(screen.getByTestId("shortcut-list")).toBeTruthy());
     const rows = screen.getByTestId("shortcut-list").querySelectorAll("[data-shortcut-id]");
-    expect(rows.length).toBe(12);
+    expect(rows.length).toBe(13);
   });
 
   it("新增快捷项：名称为空时报错，填写后保存成功", async () => {

@@ -74,3 +74,28 @@ body {
     --stack-gap: 10px;
   }
 }
+
+/* ------------------------------------------------------------
+   主题切换：只让 UI 组件换材质，背景层完全不动
+
+   背景层（图片 / 纯色兜底 / 暗角 / 薄纱）在亮暗两套主题下是同一张图，
+   所以主题切换不需要整页快照。这条规则放在 base 层：组件自己若定义了
+   transition（搜索胶囊三态、Dock hover 等）会覆盖它，没定义的表面则用它
+   做一次 320ms 的颜色过渡。旧版 `html.theme-animating *` 是给每个元素
+   强加过渡的通配规则，实测一次切换 67 次样式重算 + 50ms 长帧，已移除。
+   ------------------------------------------------------------ */
+/* 只给「有底色的面板」过渡，不碰 transform：Dock 图标与顶栏按钮的位移
+   由 Motion 的 spring 驱动，再叠一层 CSS transform 过渡会二次回弹。 */
+.search-panel,
+.dock-pill,
+.bar-dock,
+.bar-action,
+.card-panel,
+.settings-modal,
+.settings-nav,
+.settings-section,
+.settings-menu {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: var(--dur-theme);
+  transition-timing-function: var(--ease-out-cubic);
+}

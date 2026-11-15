@@ -33,11 +33,9 @@ const TAB_ANCHOR: Record<string, string> = {
   shortcuts: "shortcut-manager",
   modules: "clock-seconds",
   background: "background-edge",
-  privacy: "whitelist-input",
-  about: "about-copy-url",
 };
 
-const TAB_IDS = ["search", "appearance", "shortcuts", "modules", "background", "privacy", "about"];
+const TAB_IDS = ["appearance", "modules", "shortcuts", "background", "search"];
 
 /** 页签内容由 AnimatePresence 切换，需等待新面板挂载 */
 async function openTab(id: string) {
@@ -55,15 +53,28 @@ describe("设置面板：基础", () => {
     window.localStorage.clear();
   });
 
-  it("渲染七个分类页签且可切换", async () => {
+  it("渲染五个分类页签且可切换，隐私与关于不再占页签", async () => {
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
     for (const id of TAB_IDS) {
       expect(screen.getByTestId(`settings-tab-${id}`)).toBeTruthy();
     }
-    await openTab("privacy");
-    await waitFor(() => expect(screen.getByText("请求白名单")).toBeTruthy());
+    expect(document.querySelectorAll(".settings-tab")).toHaveLength(5);
+    expect(screen.queryByTestId("settings-tab-privacy")).toBeNull();
+    expect(screen.queryByTestId("settings-tab-about")).toBeNull();
     await openTab("search");
     await waitFor(() => expect(screen.getByTestId("suggest-toggle")).toBeTruthy());
+  });
+
+  it("导航按「首页 / 外观与服务」两组分层", () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    const labels = Array.from(document.querySelectorAll(".settings-nav-label")).map((el) => el.textContent);
+    expect(labels).toEqual(["首页", "外观与服务"]);
+  });
+
+  it("站点图标开关归到「快捷跳转」，不再埋在隐私页", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    await openTab("shortcuts");
+    expect(screen.getByTestId("icons-autofetch").getAttribute("aria-checked")).toBe("true");
   });
 
   it("完成按钮触发 onClose", () => {
@@ -175,7 +186,8 @@ describe("设置面板：外观", () => {
 
   it("暗角滤镜开关写入 background.vignette", async () => {
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("appearance");
+    // 暗角跟着壁纸走，已从「常规」挪到「背景 → 显示效果」
+    await openTab("background");
     const toggle = screen.getByTestId("background-vignette");
     expect(toggle.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(toggle);
@@ -202,35 +214,6 @@ describe("设置面板：模块", () => {
     await openTab("modules");
     fireEvent.change(screen.getByTestId("greeting-custom"), { target: { value: "欢迎回来" } });
     await waitFor(() => expect(readConfig().greeting.custom).toBe("欢迎回来"));
-  });
-
-  it("天气：开启后展示单位与省市下拉（不再暴露经纬度输入）", async () => {
-    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ weather: { enabled: true } }));
-    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("modules");
-    await waitFor(() => expect(screen.getByTestId("weather-unit")).toBeTruthy());
-    expect(screen.getByTestId("weather-province")).toBeTruthy();
-    expect(screen.getByTestId("weather-city-select")).toBeTruthy();
-    // 经纬度是机器坐标，不该让人手填
-    expect(screen.queryByTestId("weather-lat")).toBeNull();
-    expect(screen.queryByTestId("weather-lon")).toBeNull();
-  });
-
-  it("天气：选省份与城市后把坐标一并写进配置", async () => {
-    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ weather: { enabled: true } }));
-    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("modules");
-    fireEvent.change(screen.getByTestId("weather-province"), { target: { value: "浙江省" } });
-    // 选省份只切城市列表，不写库也不收起面板
-    expect(readConfig().weather.province).toBe("");
-    fireEvent.change(screen.getByTestId("weather-city-select"), { target: { value: "杭州" } });
-    await waitFor(() => {
-      const w = readConfig().weather;
-      expect(w.city).toBe("杭州");
-      expect(w.source).toBe("manual");
-      expect(w.lat).toBeCloseTo(30.27);
-      expect(w.lon).toBeCloseTo(120.15);
-    });
   });
 
   it("一言来源切换为远程写入配置", async () => {
@@ -402,27 +385,37 @@ describe("设置面板：快捷跳转", () => {
   });
 });
 
-describe("设置面板：关于", () => {
+describe("二级菜单直达：关于", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
-  it("关于页展示快捷键与版本信息", async () => {
-    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("about");
+  it("关于弹窗展示版本、复制地址与快捷键入口", () => {
+    renderWithProviders(<SettingsPanel open view="about" onClose={() => {}} />);
     expect(screen.getByTestId("about-copy-url")).toBeTruthy();
     expect(screen.getByText(/版本 1\.0\.0/)).toBeTruthy();
+    expect(screen.queryByTestId("settings-tab-about")).toBeNull();
+    expect(screen.queryByText("可在「隐私与数据」里导出")).toBeNull();
   });
 });
 
-describe("设置面板：隐私与数据", () => {
+describe("二级菜单直达：隐私与数据", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
+  const renderPrivacy = () =>
+    renderWithProviders(<SettingsPanel open view="privacy" onClose={() => {}} />);
+
+  it("独立弹窗承载白名单与数据管理，主面板不再有该页签", () => {
+    renderPrivacy();
+    expect(screen.getByTestId("whitelist-input")).toBeTruthy();
+    expect(screen.getByTestId("export-config")).toBeTruthy();
+    expect(screen.queryByTestId("settings-tab-privacy")).toBeNull();
+  });
+
   it("添加与移除白名单域名", async () => {
-    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("privacy");
+    renderPrivacy();
     fireEvent.change(screen.getByTestId("whitelist-input"), { target: { value: "mysite.dev" } });
     fireEvent.click(screen.getByTestId("whitelist-add"));
     await waitFor(() => expect(readConfig().privacy.whitelist).toContain("mysite.dev"));
@@ -432,8 +425,7 @@ describe("设置面板：隐私与数据", () => {
   });
 
   it("非法白名单域名被拒绝", async () => {
-    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("privacy");
+    renderPrivacy();
     fireEvent.change(screen.getByTestId("whitelist-input"), { target: { value: "nope" } });
     fireEvent.click(screen.getByTestId("whitelist-add"));
     await waitFor(() => expect(screen.getByTestId("toast").textContent).toContain("有效域名"));
@@ -443,8 +435,7 @@ describe("设置面板：隐私与数据", () => {
     const createObjectURL = vi.fn(() => "blob:mock");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL }));
-    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("privacy");
+    renderPrivacy();
     fireEvent.click(screen.getByTestId("export-config"));
     await waitFor(() => expect(screen.getByTestId("toast").textContent).toContain("配置已导出"));
     expect(createObjectURL).toHaveBeenCalled();
@@ -453,12 +444,17 @@ describe("设置面板：隐私与数据", () => {
 
   it("一键清除需二次确认，确认后恢复默认", async () => {
     window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ theme: { accent: "#10B981" } }));
-    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
-    await openTab("privacy");
+    renderPrivacy();
     fireEvent.click(screen.getByTestId("clear-data"));
     await waitFor(() => expect(screen.getByTestId("confirm-ok")).toBeTruthy());
     fireEvent.click(screen.getByTestId("confirm-ok"));
     await waitFor(() => expect(readConfig().theme.accent).toBe("#2F6FED"));
+  });
+});
+
+describe("设置面板：恢复出厂", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
   });
 
   it("恢复出厂需二次确认", async () => {
@@ -492,6 +488,14 @@ describe("设置面板：搜索设置项", () => {
     expect(visible).toHaveLength(1);
     expect(visible[0].textContent).toContain("模糊");
     expect(screen.getByTestId("settings-search-count").textContent).toBe("1 项");
+  });
+
+  it("搜不到时给出空状态与清空入口，不再是一块空白面板", async () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    fireEvent.change(screen.getByTestId("settings-search"), { target: { value: "zzzz不存在" } });
+    await waitFor(() => expect(screen.getByTestId("settings-search-empty")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("settings-search-clear"));
+    await waitFor(() => expect(screen.queryByTestId("settings-search-empty")).toBeNull());
   });
 
   it("清空搜索后恢复全部分区", async () => {

@@ -4,12 +4,10 @@ import {
   effectiveWhitelist,
   fetchSuggestions,
   fetchUserImage,
-  fetchWeather,
   hostOf,
   isAllowed,
   normalizeHost,
   safeFetch,
-  weatherLabel,
 } from "@/lib/services";
 import { DEFAULT_WHITELIST } from "@/config/site";
 
@@ -33,7 +31,7 @@ describe("域名归一化", () => {
 describe("白名单校验（隐私基线）", () => {
   it("默认白名单包含三个可选服务域名", () => {
     expect(DEFAULT_WHITELIST).toEqual(
-      expect.arrayContaining(["v1.hitokoto.cn", "api.bing.com", "api.open-meteo.com"]),
+      expect.arrayContaining(["v1.hitokoto.cn", "api.bing.com"]),
     );
   });
 
@@ -123,17 +121,6 @@ describe("fetchSuggestions", () => {
     const list = await fetchSuggestions("bing", "react", [], "https://api.bing.com/osjson.aspx?query={q}");
     expect(list).toHaveLength(8);
     expect(list[0]).toBe("react");
-  });
-});
-
-describe("weatherLabel", () => {
-  it("按 WMO 代码返回中文描述", () => {
-    expect(weatherLabel(0)).toBe("晴");
-    expect(weatherLabel(2)).toBe("多云");
-    expect(weatherLabel(45)).toBe("雾");
-    expect(weatherLabel(61)).toBe("雨");
-    expect(weatherLabel(73)).toBe("雪");
-    expect(weatherLabel(95)).toBe("雷雨");
   });
 });
 
@@ -255,42 +242,3 @@ describe("fetchUserImage（自定义壁纸）", () => {
   });
 });
 
-describe("天气：未来三天", () => {
-  const payload = {
-    current: { temperature_2m: 17.4, weather_code: 1, is_day: 1 },
-    daily: {
-      time: ["2026-11-14", "2026-11-15", "2026-11-16", "2026-11-17"],
-      weather_code: [0, 1, 2, 3],
-      temperature_2m_max: [20.4, 18.2, 16.6, 14.1],
-      temperature_2m_min: [10.2, 8.4, 6.1, 5.0],
-    },
-  };
-
-  it("跳过今天，给出明天 / 后天 / 周几", async () => {
-    const spy = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => payload }));
-    vi.stubGlobal("fetch", spy);
-
-    const weather = await fetchWeather(30.27, 120.15, "c", ["api.open-meteo.com"]);
-    expect(weather.temperature).toBe(17);
-    expect(weather.daily.map((d) => d.label)).toEqual(["明天", "后天", "周二"]);
-    expect(weather.daily[0]).toMatchObject({ max: 18, min: 8, code: 1 });
-  });
-
-  it("请求带 daily 与 forecast_days 参数", async () => {
-    const spy = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => payload }));
-    vi.stubGlobal("fetch", spy);
-    await fetchWeather(30.27, 120.15, "c", ["api.open-meteo.com"]);
-    const url = String(spy.mock.calls[0][0]);
-    expect(url).toContain("daily=weather_code");
-    expect(url).toContain("forecast_days=4");
-  });
-
-  it("没有 daily 字段时只返回当前天气", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ current: payload.current }) })),
-    );
-    const weather = await fetchWeather(30.27, 120.15, "c", ["api.open-meteo.com"]);
-    expect(weather.daily).toEqual([]);
-  });
-});

@@ -9,6 +9,7 @@
  */
 
 import { createDefaultConfig } from "@/config/defaults";
+import { DEFAULT_GROUPS } from "@/config/site";
 import type { AppConfig } from "@/config/types";
 import { mergeConfig as mergeWithSchema } from "@/lib/config-schema";
 
@@ -16,6 +17,70 @@ export const CONFIG_KEY = "startpage.config.v1";
 const DB_NAME = "startpage";
 const DB_VERSION = 1;
 const STORE_IMAGES = "images";
+
+/**
+ * 一次性迁移标记。
+ *
+ * 默认值改了（快捷项换成可访问的公网站点），但默认值只对「从没保存过配置」
+ * 的人生效 —— 只要动过一次设置，localStorage 里就存着一整份旧配置，
+ * 新默认永远盖不上去。这里只做一次、且只在「快捷项还是旧默认」时动手，
+ * 说明整份配置没被编辑过；用户改过的任何一项都不会被覆盖。
+ */
+const MIGRATION_KEY = "startpage.migrate.v3";
+
+/** 早期默认（内网 4 项 + 首批公网站点） */
+const LEGACY_SHORTCUTS_A = [
+  "sc-nas",
+  "sc-grafana",
+  "sc-uptime",
+  "sc-jellyfin",
+  "sc-github",
+  "sc-bili",
+  "sc-zhihu",
+  "sc-weibo",
+  "sc-mdn",
+  "sc-npm",
+  "sc-vercel",
+  "sc-canIuse",
+];
+
+/** 上一版默认（GitHub / npm / SO / Figma / Vercel 那一套） */
+const LEGACY_SHORTCUTS_B = [
+  "sc-github",
+  "sc-mdn",
+  "sc-npm",
+  "sc-stackoverflow",
+  "sc-canIuse",
+  "sc-figma",
+  "sc-juejin",
+  "sc-bili",
+  "sc-zhihu",
+  "sc-weibo",
+  "sc-douban",
+  "sc-vercel",
+];
+
+function sameIds(ids: string[], expected: string[]): boolean {
+  return ids.length === expected.length && ids.every((id, i) => id === expected[i]);
+}
+
+function applyMigrations(config: AppConfig, storage: Storage): AppConfig {
+  if (storage.getItem(MIGRATION_KEY)) return config;
+  storage.setItem(MIGRATION_KEY, "1");
+
+  const ids = config.groups.flatMap((g) => g.items.map((i) => i.id));
+  const untouched = sameIds(ids, LEGACY_SHORTCUTS_A) || sameIds(ids, LEGACY_SHORTCUTS_B);
+  // 只有「快捷项还是旧默认」才认为整份配置没被编辑过；动过任何一项都不碰
+  if (!untouched) return config;
+
+  const next: AppConfig = {
+    ...config,
+    // 深拷贝，别把模块级的默认数组直接挂到运行时状态上
+    groups: DEFAULT_GROUPS.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i })) })),
+  };
+
+  return next;
+}
 
 /**
  * 配置写盘失败时广播的事件。
@@ -57,7 +122,10 @@ export function loadConfig(): AppConfig {
     const raw = storage.getItem(CONFIG_KEY);
     if (!raw) return defaults;
     const parsed = JSON.parse(raw) as unknown;
-    return mergeConfig(defaults, parsed);
+    const merged = mergeConfig(defaults, parsed);
+    const migrated = applyMigrations(merged, storage);
+    if (migrated !== merged) saveConfig(migrated);
+    return migrated;
   } catch {
     return defaults;
   }

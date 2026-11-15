@@ -38,7 +38,7 @@ describe("CSP：生产环境", () => {
 describe("CSP：两条容易被误删的指令", () => {
   const csp = buildCsp(false);
 
-  it("connect-src 必须显式存在 —— 省略会回退到 default-src 'self'，掐断一言/天气/壁纸", () => {
+  it("connect-src 必须显式存在 —— 省略会回退到 default-src 'self'，掐断一言/壁纸", () => {
     expect(csp).toMatch(/connect-src 'self' https:/);
   });
 
@@ -74,9 +74,9 @@ describe("安全响应头", () => {
     expect(headers.find((h) => h.key === "Referrer-Policy")?.value).toBe("no-referrer");
   });
 
-  it("Permissions-Policy 只放行同源定位", () => {
+  it("Permissions-Policy 一律拒绝设备能力", () => {
     const value = headers.find((h) => h.key === "Permissions-Policy")?.value ?? "";
-    expect(value).toContain("geolocation=(self)");
+    expect(value).toContain("geolocation=()");
     expect(value).toContain("camera=()");
     expect(value).toContain("microphone=()");
   });

@@ -9,8 +9,8 @@ function NativeSelect({
   ...props
 }: Omit<React.ComponentProps<"select">, "size"> & {
   size?: "sm" | "default"
-  /** false 只输出 <select>：外层已有 .weather-select-wrap 和自绘箭头。
-      官方 wrapper 的 w-fit 会压掉宽度，还会多出一个箭头。 */
+  /** false 只输出 <select>：外层已有自己的容器与自绘箭头时用它，
+      避免官方 wrapper 的 w-fit 压掉宽度、还多出一个箭头。 */
   withWrapper?: boolean
 }) {
   const select = (

@@ -25,46 +25,71 @@
   transition: none !important;
 }
 
-/* Switch：官方默认 18.4×32 / 14px 滑块，这里还原成原来的 34×20 / 16px 滑块 */
-.sp-switch {
-  /* 官方根节点没有 relative，Thumb 会跑到弹窗左上角 */
+/* Switch：几何由这一层独占，避免官方 Tailwind 与项目 CSS 双重变换叠加。
+ *
+ * Tailwind v4 的 `translate-x-*` 写的是独立的 CSS `translate` 属性，
+ * 而下面用 `transform` 控制位移 —— 两者会叠加：开启态滑块实际走 28px，
+ * 从 34px 的轨道里跑出去 14px，正是「开关开启时错位」的根因。
+ * 修复放在源头：ui/switch.tsx 的 Thumb 已移除那两个 translate-x 类，
+ * 位移只由这里的 transform 一处负责（构建压缩器会删掉任何 `translate: 0`
+ * 的兜底声明，所以不要在下方再加）。轨道与滑块共用同一条 200ms 曲线。 */
+.sp-switch[data-slot="switch"] {
   position: relative;
-  margin-top: 0;
-  border: 0 !important;
-  box-shadow: none !important;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--fg) 16%, transparent) !important;
+  box-shadow: none !important;
+  transition: background-color 200ms var(--ease-out-cubic) !important;
 }
+
 .sp-switch--md {
-  height: 20px !important;
   width: 34px !important;
-  margin-top: 2px !important;
+  height: 20px !important;
 }
+
 .sp-switch--sm {
-  height: 18px !important;
   width: 32px !important;
+  height: 18px !important;
 }
+
 .sp-switch[data-state="checked"] {
   background: var(--accent) !important;
 }
+
+.sp-switch:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 2px;
+}
+
 .sp-switch [data-slot="switch-thumb"] {
   position: absolute;
   top: 2px;
   left: 2px;
-  height: 16px;
-  width: 16px;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 999px;
   background: #fff !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  transform: translateX(0);
-  transition: transform 200ms ease-out;
+  transform: translateX(0) !important;
+  transition: transform 200ms var(--ease-out-cubic) !important;
 }
+
 .sp-switch--sm [data-slot="switch-thumb"] {
-  height: 14px;
-  width: 14px;
+  width: 14px !important;
+  height: 14px !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
+
 .sp-switch[data-state="checked"] [data-slot="switch-thumb"] {
-  transform: translateX(14px);
+  transform: translateX(14px) !important;
 }
+
 .sp-switch:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -107,17 +132,26 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-/* toast 走 toast.custom，去掉官方卡片底 */
+/* toast 走 toast.custom，去掉官方卡片底；宽度统一由 sonner 的 --width 决定，
+   多条同时出现时不再按文字长短各占一个宽度、也不缩放叠成参差的一摞。 */
 [data-sonner-toaster] [data-sonner-toast][data-styled="false"] {
   background: transparent;
   border: 0;
   box-shadow: none;
   padding: 0;
-  width: auto;
+  width: 100%;
   min-height: 0;
 }
 [data-sonner-toaster][data-sonner-toaster] {
-  z-index: 60;
+  /* 高于设置弹窗（z-50）与二级菜单（z-70）：在弹窗里操作也要看得见反馈 */
+  z-index: 80;
+  --width: min(92vw, 380px) !important;
+  max-width: 92vw;
+}
+/* sonner 用 transform 排布堆叠，不能覆写；这里只压掉它默认的缩放，
+   让三条提示保持同一尺寸，展开时是一列而不是一摞参差的碎片。 */
+[data-sonner-toaster] [data-sonner-toast] {
+  --scale: 1;
 }
 
 /* 复位官方 Textarea 默认样式；field-sizing:content 会让便签自动长高算错 */

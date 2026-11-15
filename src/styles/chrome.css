@@ -1,3 +1,84 @@
+/* ------------------------------------------------------------
+   Toast：与设置面板同一套玻璃材质的 14px 卡片
+
+   位置固定在 top-center（见 ToastProvider），不再随 Dock 高度浮动，
+   因此不会压住一言、不会落在设置弹窗的页脚按钮上。
+   语气靠图标 + 色块表达，文字与描边统一取玻璃 token，两个主题自动换色。
+   ------------------------------------------------------------ */
+.sp-toast {
+  --toast-tone: var(--accent);
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--shadow-2), inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.sp-toast[data-tone="success"] { --toast-tone: var(--tone-success); }
+.sp-toast[data-tone="error"]   { --toast-tone: var(--tone-error); }
+
+.sp-toast-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--toast-tone) 18%, transparent);
+  color: var(--toast-tone);
+}
+
+.sp-toast-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sp-toast-action {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 160ms var(--ease-out-cubic),
+    border-color 160ms var(--ease-out-cubic),
+    transform 160ms var(--ease-out-cubic);
+}
+
+.sp-toast-action:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.sp-toast-action:active { transform: scale(0.96); }
+.sp-toast-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 图标轻微弹入：只是 200ms 的 transform/opacity，不产生常驻合成层 */
+.sp-toast-icon svg { animation: toast-icon-in 260ms var(--ease-out-cubic) both; }
+@keyframes toast-icon-in {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.toaster--reduce [data-sonner-toast],
+.toaster--reduce [data-sonner-toast] > *,
+.toaster--reduce .sp-toast-icon svg {
+  animation: none !important;
+  transition: none !important;
+}
+
 /* 搜索框、设置面板、引擎徽标、底部 Dock */
 
 /* ------------------------------------------------------------
@@ -161,9 +242,47 @@
 }
 
 /* ------------------------------------------------------------
+   按钮：样式全部来自 shadcn/ui 的 buttonVariants（见 ui/button.tsx）。
+   primitives.tsx 的 Button 只做语义映射和圆角对齐，这里不再有第二套按钮 CSS。
+   ------------------------------------------------------------ */
+
+/* ------------------------------------------------------------
    设置面板：分类导航 + 内容分组
    这是上一版的样式：左侧窄导航 + 滑动胶囊底 + 卡片式分组。
    ------------------------------------------------------------ */
+
+/* 设置弹窗比通用 fixedHeight 高一档：五个页签里「常规」「背景」都有 4 组卡片，
+   640px 会在页脚上方把最后一行切掉半截。 */
+.settings-modal {
+  height: min(712px, 88dvh);
+}
+
+@media (max-width: 639px) {
+  .settings-modal {
+    height: min(780px, 94dvh);
+  }
+}
+
+/* 隐私与数据 / 关于从二级菜单直达，内容比五分类面板短，
+   固定 712px 会在卡片下方留一大块空白；按内容收高、只在真的超高时滚动。 */
+.settings-modal.settings-modal--compact {
+  height: auto;
+  max-height: min(88dvh, 700px);
+}
+
+/* 面板自身获得焦点时不画全局焦点环：打开弹窗时焦点落在面板上（读屏可播报标题），
+   但一圈 2px 强调色描边会把整个弹窗框成「选中状态」，看起来像渲染错误。 */
+.settings-modal:focus-visible,
+.settings-modal.settings-modal--compact:focus-visible {
+  outline: none;
+}
+
+/* 独立弹窗正文底部留一道 14px 渐隐：内容刚好放得下时只淡到 padding，
+   真的超高时给出「下面还有」的提示，不会把最后一行切在半空。 */
+.settings-compact-body {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+}
 
 .settings-nav {
   display: flex;
@@ -171,8 +290,14 @@
   gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding-bottom: 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+  /*
+   * 导航自己是一块「浅槽」：一列按钮落在一条不带分隔线的圆角底上，
+   * 比原来「一条竖线 + 飘着的文字」更像一组分类，也省掉那条和卡片打架的 1px 线。
+   */
+  padding: 4px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 4%, transparent);
 }
 
 .settings-nav::-webkit-scrollbar {
@@ -181,13 +306,52 @@
 
 @media (min-width: 640px) {
   .settings-nav {
-    width: 132px;
+    width: 150px;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 14px;
+  }
+}
+
+/* 窄屏：五个分类用 3 列网格排成 3 + 2。必须写在 .settings-nav 的基础规则之后，
+   否则同特异度下会被前面的 display:flex 覆盖（媒体查询不增加优先级）。 */
+@media (max-width: 639px) {
+  .settings-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
     overflow-x: visible;
-    padding: 0 8px 0 0;
-    border-bottom: 0;
-    border-right: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+
+  .settings-tab {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* 五分类按「首页 / 外观与服务」分层。标签只是说明，窄屏横排时隐藏，
+   让五个按钮仍是同一行（用 display:contents 会打乱 layoutId 胶囊底的定位上下文）。 */
+.settings-nav-label,
+.settings-nav-sep {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .settings-nav-label {
+    display: block;
+    padding: 7px 10px 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--fg-subtle);
+  }
+
+  .settings-nav-sep {
+    display: block;
+    height: 1px;
+    margin: 7px 8px 2px;
+    background: color-mix(in srgb, var(--fg) 9%, transparent);
   }
 }
 
@@ -199,9 +363,9 @@
   gap: 8px;
   width: 100%;
   /* 左右内边距对称，胶囊底与文字始终居中对齐 —— 不会再出现「边线漂在左边」 */
-  padding: 7px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
   line-height: 1.3;
   text-align: left;
   color: var(--fg-muted);
@@ -237,7 +401,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   background: var(--hover-bg);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 6%, transparent);
 }
@@ -245,22 +409,78 @@
 .settings-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-bottom: 8px;
+  gap: 12px;
+  padding-bottom: 6px;
 }
 
-.settings-section {
-  padding: 11px 12px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--fg) 3.5%, transparent);
+/* 内容真的溢出时，底边 20px 渐隐：提示「下面还有」，
+   而不是让最后一行被页脚齐刷刷切断。 */
+.settings-content[data-scrollable="true"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
 }
 
-.settings-h3 {
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+/* 搜索无结果：旧版只剩一块空白面板，没有任何「搜不到了」的反馈 */
+.settings-search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 34px 16px 40px;
+  text-align: center;
+}
+
+.settings-search-empty-title {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--fg);
+}
+
+.settings-search-empty-note {
+  max-width: 320px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--fg-subtle);
+}
+
+/* 设置面板里的按钮组：统一 8px 间距、统一垂直居中。
+   之前各页签分别写 gap-1.5 / gap-2 / gap-3 / gap-0.5，同一套按钮在不同页签里
+   挨得忽紧忽松；--row 变体给「输入框 + 按钮」用，不换行以免输入框被挤掉。 */
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-actions--row {
+  flex-wrap: nowrap;
+}
+
+/* 分组卡片：一层极淡的底 + 一圈更淡的描边。
+   亮色主题下 3.5% 黑几乎看不见，补上描边才有「一块」的形状。 */
+.settings-section {
+  padding: 12px 14px 13px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 4.5%, transparent);
+}
+
+/* 分组标题是「说明」而不是「内容」：字号比行标题小、颜色更淡，
+   让 13px 的开关标题始终是每块里最重的一行。 */
+.settings-h3 {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--fg-subtle);
+}
+
+.settings-note {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--fg-subtle);
 }
 
 /* ------------------------------------------------------------
@@ -300,6 +520,16 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* 二级菜单的组名：与菜单项同一材质，只降一档字重与亮度 */
+.settings-menu-label {
+  padding: 6px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--fg-subtle);
+  user-select: none;
 }
 
 .settings-menu-item {

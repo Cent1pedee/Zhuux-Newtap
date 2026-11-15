@@ -10,6 +10,9 @@
   --accent: #2f6fed;
   --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 34%, transparent);
+  /* 提示语气色：只用在 toast 图标与小色块上，亮暗各自保证对比度 */
+  --tone-success: #34d399;
+  --tone-error: #f87171;
 
   /* —— 前景 / 背景 —— */
   --bg-base: #05070c;
@@ -111,6 +114,8 @@
   --fg: #101828;
   --fg-muted: rgba(16, 24, 40, 0.78);
   --fg-subtle: rgba(16, 24, 40, 0.62);
+  --tone-success: #059669;
+  --tone-error: #dc2626;
 
   --glass-bg: rgba(255, 255, 255, 0.55);
   --glass-bg-strong: rgba(255, 255, 255, 0.82);
@@ -171,7 +176,9 @@
   --color-secondary-foreground: var(--fg);
   --color-muted: var(--input-bg);
   --color-muted-foreground: var(--fg-muted);
-  --color-destructive: #ef4444;
+  /* destructive 是实心红底 + 白字：#ef4444 只有 3.76:1，过不了 WCAG AA。
+     调深到 #dc2626 后约 4.8:1，官方 Button / AlertDialog 都能通过 axe。 */
+  --color-destructive: #dc2626;
   --color-border: var(--glass-border);
   --color-input: var(--glass-border);
   --color-ring: var(--accent);

@@ -4,7 +4,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 type Props = {
   children: ReactNode;
-  /** 降级文案里的模块名，例如「天气」 */
+  /** 降级文案里的模块名，例如「快捷跳转」 */
   label: string;
   /** 浮层类模块崩了就直接不渲染，不要弹一块占位出来 */
   silent?: boolean;
@@ -17,7 +17,7 @@ type State = { failed: boolean };
  * 模块级错误边界。
  *
  * React 19 在渲染期抛错时会卸载整棵树 —— app/error.tsx 只能兜到整页，
- * 于是一个天气组件的数据结构错误就能让时钟、搜索、Dock 一起消失。
+ * 于是一个模块的数据结构错误就能让时钟、搜索、Dock 一起消失。
  * 这里按模块隔离：谁的渲染炸了谁降级，其余照常。
  *
  * 注意边界只拦渲染 / 生命周期错误，拦不住事件回调与异步 rejection，

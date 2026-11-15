@@ -11,6 +11,7 @@ const ROWS: { keys: string[]; text: string }[] = [
   { keys: ["Enter"], text: "搜索，或打开选中的建议" },
   { keys: ["Esc"], text: "关闭浮层；搜索框里则清空输入" },
   { keys: ["?"], text: "打开这份快捷键说明" },
+  { keys: ["右键"], text: "在页面任意位置唤出或收起快捷网站" },
 ];
 
 /**
@@ -23,10 +24,13 @@ export function ShortcutHelp({
   open,
   onOpen,
   onClose,
+  returnFocusTo,
 }: {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  /** 关闭后焦点回到哪 —— 从「关于」里点进来时，入口按钮随弹窗一起卸载了 */
+  returnFocusTo?: HTMLElement | null;
 }) {
   const reduce = useReducedMotionPref();
 
@@ -52,6 +56,7 @@ export function ShortcutHelp({
       description="首页与浮层里可用的键盘操作。"
       size="sm"
       reduceMotion={reduce}
+      returnFocusTo={returnFocusTo}
       footer={
         <Button onClick={onClose} variant="primary" testId="shortcut-help-close">
           知道了

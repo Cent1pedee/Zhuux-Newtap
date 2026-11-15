@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { openSettings } from "./helpers";
+import { openSettings, openSettingsDialog } from "./helpers";
 
 /**
  * 无障碍扫描（PRD 6.2 / 6.4）：axe-core 在真实浏览器里扫首页与三个浮层，
@@ -74,17 +74,25 @@ test.describe("无障碍扫描", () => {
   });
 
   test("设置面板无 serious/critical 问题", async ({ page }) => {
-    // 七个分类逐个跑一次 axe，并行执行时容易顶到全局 30s 上限（实测单跑约 20s，
-    // 并行时被 CPU 抢占会超时），这里单独放宽
-    test.setTimeout(90_000);
+    // 五个分类逐个跑一次 axe，并行执行时容易顶到全局 30s 上限（实测单跑约 20s，
+    // 并行时被 CPU 抢占会超时），这里单独放宽；隐私与关于改由二级菜单直达的
+    // 独立弹窗，单独打开再扫。
+    test.setTimeout(120_000);
     await fresh(page);
     await openSettings(page);
     await expect(page.getByTestId("settings-done")).toBeVisible();
     await page.waitForTimeout(400);
-    for (const tab of ["search", "appearance", "modules", "background", "privacy", "about"]) {
+    for (const tab of ["appearance", "modules", "shortcuts", "background", "search"]) {
       await page.getByTestId(`settings-tab-${tab}`).click();
       await page.waitForTimeout(350);
       await scan(page, `settings-${tab}`);
+    }
+    await page.keyboard.press("Escape");
+    for (const dialog of ["privacy", "about"] as const) {
+      await openSettingsDialog(page, dialog);
+      await page.waitForTimeout(350);
+      await scan(page, `settings-${dialog}`);
+      await page.keyboard.press("Escape");
     }
   });
 

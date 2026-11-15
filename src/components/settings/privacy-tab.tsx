@@ -1,7 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
-import { Button, Switch, TextInput } from "@/components/ui/primitives";
+import { Button, TextInput } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
 
 /** 隐私与数据页签：请求白名单、站点图标、导入导出与一键清除 */
@@ -47,7 +47,7 @@ export function PrivacyTab({ s, onClear }: { s: SettingsController; onClear: () 
             </li>
           ))}
         </ul>
-        <div className="flex gap-1.5">
+        <div className="settings-actions settings-actions--row">
           <div className="min-w-0 flex-1">
             <TextInput
               value={whitelistDraft}
@@ -64,26 +64,8 @@ export function PrivacyTab({ s, onClear }: { s: SettingsController; onClear: () 
       </section>
 
       <section className="settings-section">
-        <h3 className="settings-h3">站点图标</h3>
-        <Switch
-          checked={config.icons.autoFetch}
-          onChange={(v) => update("icons", { autoFetch: v })}
-          label="自动抓取站点图标（favicon）"
-          /* 这条曾经写「默认关闭，仅白名单域名」，与「Dock 显示站点图标」直接冲突：
-             favicon 的域名恰恰就是每个站点自己，永远不可能预先列进白名单。
-             现在默认开启，白名单只管 safeFetch 的接口请求（一言 / 天气 / 壁纸元数据）。 */
-          description="默认开启。Dock 与引擎徽标用它显示真实图标；失败或缺图时自动降级为首字母。取图只读 /favicon.ico，不带 Cookie、不带 referrer，内网地址一律跳过。"
-          testId="icons-autofetch"
-        />
-        <p className="mt-1 text-[11px] leading-relaxed text-[var(--fg-subtle)]">
-          白名单只约束「一言 / 天气 / 壁纸元数据」这类接口请求；站点图标是浏览器直接加载的静态图片，
-          不经过白名单——两者不会互相限制。
-        </p>
-      </section>
-
-      <section className="settings-section">
         <h3 className="settings-h3">数据管理</h3>
-        <div className="flex flex-wrap gap-2 py-1">
+        <div className="settings-actions py-1">
           <Button onClick={exportConfig} size="sm" testId="export-config">
             导出配置
           </Button>
@@ -104,13 +86,18 @@ export function PrivacyTab({ s, onClear }: { s: SettingsController; onClear: () 
         </div>
       </section>
 
+      {/*
+        隐私说明只保留这一份。旧版「关于」页里另有一段几乎逐字相同的
+        「数据与隐私」，两处都要跟着改、还互相指来指去；现在关于页只留一行
+        指向本弹窗的说明，不再复述。
+      */}
       <section className="settings-section">
         <h3 className="settings-h3">隐私说明</h3>
         <div className="space-y-1 text-[11.5px] leading-relaxed text-[var(--fg-muted)]">
           <p>· 本地存储：配置（localStorage）与图片缓存（IndexedDB），仅存本机，不上传。</p>
           <p>
-            · 远程请求：一言与天气默认开启、搜索建议默认关闭；接口请求受白名单约束，不带 Cookie、不带
-            referrer。站点图标由浏览器直接加载，可在「站点图标」里关闭。
+            · 远程请求：一言默认开启、搜索建议默认关闭；接口请求受白名单约束，不带 Cookie、不带
+            referrer。站点图标由浏览器直接加载，在「设置 → 快捷跳转 → 站点图标」里关闭。
           </p>
           <p>· 统计：本版本未接入任何第三方统计，默认第三方请求数为 0。</p>
           <p>· 你可以随时导出配置或一键清除全部本地数据。</p>

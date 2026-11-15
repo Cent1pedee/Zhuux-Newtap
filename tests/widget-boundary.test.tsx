@@ -26,7 +26,7 @@ describe("WidgetBoundary", () => {
     render(
       <div>
         <span>兄弟节点</span>
-        <WidgetBoundary label="天气">
+        <WidgetBoundary label="快捷跳转">
           <Bomb />
         </WidgetBoundary>
       </div>,
@@ -34,13 +34,13 @@ describe("WidgetBoundary", () => {
 
     expect(screen.getByText("兄弟节点")).toBeTruthy();
     expect(screen.getByTestId("widget-fallback")).toBeTruthy();
-    expect(screen.getByText("天气暂时不可用")).toBeTruthy();
+    expect(screen.getByText("快捷跳转暂时不可用")).toBeTruthy();
     expect(screen.queryByText("恢复了")).toBeNull();
   });
 
   it("点重试后重新渲染子模块", () => {
     render(
-      <WidgetBoundary label="天气">
+      <WidgetBoundary label="快捷跳转">
         <Bomb />
       </WidgetBoundary>,
     );

@@ -1,8 +1,8 @@
 "use client";
 
 import { DropdownMenu } from "radix-ui";
-import { Fragment, type ReactElement } from "react";
-import type { SettingsTab } from "@/components/settings-panel";
+import type { ReactElement } from "react";
+import type { SettingsTarget } from "@/components/settings-panel";
 import {
   IconGrid,
   IconImage,
@@ -14,20 +14,35 @@ import {
 } from "@/components/settings/tab-icons";
 
 /**
- * 右上角设置的二级菜单。
+ * 右上角齿轮的二级菜单 —— 现在也是「隐私与数据」「关于」的唯一入口。
  *
- * 点击齿轮先出这一层，而不是直接把整套设置拍在用户脸上：
- * 菜单只负责「去哪一页」，真正的设置项仍在完整弹窗里。
- * 顺序对齐参考图：常规 → 搜索 → 壁纸 → 快捷跳转 → 模块，分隔线之后是隐私与关于。
+ * 旧版这两类既出现在菜单里、又在主设置面板占一个页签，导航重复了一遍；
+ * 菜单和面板的标签还各写各的（「常规设置 / 壁纸偏好 / 模块显示」对
+ * 「常规 / 背景 / 模块」），同一件事两个名字。现在：
+ *   · 五个分类项 → 打开主设置面板的对应页签，标签与面板逐字一致；
+ *   · 隐私与数据 / 关于 → 直接打开各自的独立弹窗，不再经过主面板；
+ *   · 两组各有一个 11px 组名，层级一眼可读。
  */
-const ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode; separated?: boolean }[] = [
-  { id: "appearance", label: "常规设置", icon: <IconPalette /> },
-  { id: "search", label: "搜索引擎偏好", icon: <IconSearch /> },
-  { id: "background", label: "壁纸偏好", icon: <IconImage /> },
-  { id: "shortcuts", label: "快捷跳转", icon: <IconGrid /> },
-  { id: "modules", label: "模块显示", icon: <IconLayers /> },
-  { id: "privacy", label: "隐私与数据", icon: <IconShield />, separated: true },
-  { id: "about", label: "关于", icon: <IconInfo /> },
+type MenuItem = { id: SettingsTarget; label: string; icon: React.ReactNode };
+
+const GROUPS: { label: string; items: MenuItem[] }[] = [
+  {
+    label: "设置分类",
+    items: [
+      { id: "appearance", label: "常规", icon: <IconPalette /> },
+      { id: "modules", label: "模块", icon: <IconLayers /> },
+      { id: "shortcuts", label: "快捷跳转", icon: <IconGrid /> },
+      { id: "background", label: "背景", icon: <IconImage /> },
+      { id: "search", label: "搜索引擎", icon: <IconSearch /> },
+    ],
+  },
+  {
+    label: "数据与信息",
+    items: [
+      { id: "privacy", label: "隐私与数据", icon: <IconShield /> },
+      { id: "about", label: "关于", icon: <IconInfo /> },
+    ],
+  },
 ];
 
 export function SettingsMenu({
@@ -38,7 +53,7 @@ export function SettingsMenu({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (tab: SettingsTab) => void;
+  onSelect: (target: SettingsTarget) => void;
   /** 触发按钮由调用方提供：简洁首页是悬浮齿轮，经典布局是顶栏动作 */
   trigger: ReactElement;
 }) {
@@ -55,20 +70,26 @@ export function SettingsMenu({
           data-testid="settings-menu"
           className="settings-menu"
         >
-          {ITEMS.map((item) => (
-            <Fragment key={item.id}>
-              {item.separated ? <DropdownMenu.Separator className="settings-menu-sep" /> : null}
-              <DropdownMenu.Item
-                className="settings-menu-item"
-                data-testid={`settings-menu-${item.id}`}
-                onSelect={() => onSelect(item.id)}
-              >
-                <span className="settings-menu-icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-                {item.label}
-              </DropdownMenu.Item>
-            </Fragment>
+          {GROUPS.map((group, index) => (
+            <div key={group.label}>
+              {index > 0 ? <DropdownMenu.Separator className="settings-menu-sep" /> : null}
+              <DropdownMenu.Label className="settings-menu-label">{group.label}</DropdownMenu.Label>
+              <DropdownMenu.Group>
+                {group.items.map((item) => (
+                  <DropdownMenu.Item
+                    key={item.id}
+                    className="settings-menu-item"
+                    data-testid={`settings-menu-${item.id}`}
+                    onSelect={() => onSelect(item.id)}
+                  >
+                    <span className="settings-menu-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Group>
+            </div>
           ))}
           <DropdownMenu.Arrow className="settings-menu-arrow" />
         </DropdownMenu.Content>

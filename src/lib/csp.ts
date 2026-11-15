@@ -30,7 +30,7 @@ export function buildCsp(isDev: boolean): string {
     "font-src 'self' data:",
     /**
      * 必须显式写出来：省略 connect-src 时它会回退到 default-src 'self'，
-     * 那样一言、天气、壁纸元数据三个接口会被浏览器直接掐断（而应用代码里的白名单照样放行，
+     * 那样一言与壁纸元数据两个接口会被浏览器直接掐断（而应用代码里的白名单照样放行，
      * 排查起来极其割裂）。
      *
      * 这里给 `https:` 而不是四个白名单域名，是因为两处功能允许用户自己填域名：
@@ -57,10 +57,10 @@ export function buildSecurityHeaders(isDev: boolean): Header[] {
     { key: "X-Content-Type-Options", value: "nosniff" },
     // 任何出站请求都不带 referrer（与 safeFetch / <img> 的 no-referrer 保持一致）
     { key: "Referrer-Policy", value: "no-referrer" },
-    // 只留定位（天气需要），其余一律拒绝
+    // 页面不需要任何设备能力，一律拒绝（天气模块移除后连定位也不再用）
     {
       key: "Permissions-Policy",
-      value: "geolocation=(self), camera=(), microphone=(), payment=(), usb=()",
+      value: "geolocation=(), camera=(), microphone=(), payment=(), usb=()",
     },
     // frame-ancestors 的旧浏览器兜底
     { key: "X-Frame-Options", value: "DENY" },

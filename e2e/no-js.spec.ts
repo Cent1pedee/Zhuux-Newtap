@@ -24,13 +24,13 @@ test.describe("无 JS 环境", () => {
     await expect(page.getByTestId("clock-text")).toHaveText("--:--");
     await expect(page.getByTestId("search-form")).toBeVisible();
     await expect(page.getByTestId("shortcut-dock")).toBeVisible();
-    await expect(page.getByTestId("shortcut-total")).toHaveText("12");
+    await expect(page.getByTestId("shortcut-total")).toHaveText("13");
     await expect(page.getByTestId("quote-card")).toBeVisible();
     await expect(page.getByTestId("wallpaper")).toBeAttached();
     // 展开态依赖 JS（点时间），无 JS 时不该出现方块与设置入口
     await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
     await expect(page.getByTestId("settings-trigger")).toHaveCount(0);
-    // 天气与便签仍收在经典布局里
+    // 便签仍收在经典布局里；天气模块已整体移除
     await expect(page.getByTestId("note-card-panel")).toHaveCount(0);
 
     // 表单具备原生提交所需的 action / method / name

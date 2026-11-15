@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { openSettings } from "./helpers";
+import { openSettings, openSettingsDialog } from "./helpers";
 
 /**
  * E2E：按 PRD 的五个 P0 要素逐条验证「真实浏览器里的可操作性」。
@@ -74,7 +74,7 @@ test.describe("首屏与布局", () => {
     await expect(page.getByTestId("clock")).toBeVisible();
     await expect(page.getByTestId("search-form")).toBeVisible();
     await expect(page.getByTestId("shortcut-dock")).toBeVisible();
-    await expect(page.getByTestId("shortcut-total")).toHaveText("12");
+    await expect(page.getByTestId("shortcut-total")).toHaveText("13");
     await expect(page.getByTestId("quote-card")).toBeVisible();
     await expect(page.getByTestId("wallpaper")).toBeAttached();
     await expect(page.getByTestId("wallpaper-vignette")).toBeVisible();
@@ -82,9 +82,10 @@ test.describe("首屏与布局", () => {
     await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
     await expect(page.getByTestId("settings-trigger")).toHaveCount(0);
     await expect(page.getByTestId("wallpaper")).toHaveAttribute("data-blurred", "false");
-    // 天气与便签仍收在经典布局里，不占首屏
-    await expect(page.getByTestId("note-card-panel")).toHaveCount(0);
+    // 天气模块已整体移除：DOM 里不能留下胶囊、占位或残留的空盒子
     await expect(page.getByTestId("weather-card")).toHaveCount(0);
+    await expect(page.getByTestId("weather")).toHaveCount(0);
+    await expect(page.getByTestId("note-card-panel")).toHaveCount(0);
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -110,12 +111,20 @@ test.describe("首屏与布局", () => {
     expect(before).not.toBeNull();
     await expect.poll(clockY).toBeLessThan(before!.y - 40);
 
-    // 壁纸图片可能因为网络不可达而缺失，有节点时再核对真实滤镜值
-    const filter = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="wallpaper-image"]');
-      return el ? getComputedStyle(el).filter : "";
-    });
-    if (filter) expect(filter).toContain("blur(18px)");
+    // 壁纸图片可能因为网络不可达而缺失；有节点时核对真实滤镜。
+    // 滤镜由 Motion 逐帧插值，点击后第一帧读到的可能还是 none —— 用轮询等它到位。
+    if ((await page.locator('[data-testid="wallpaper-image"]').count()) > 0) {
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const el = document.querySelector('[data-testid="wallpaper-image"]');
+              return el ? getComputedStyle(el).filter : "";
+            }),
+          { timeout: 3000 },
+        )
+        .toContain("blur(18px)");
+    }
 
     // Esc 收起：方块与齿轮退场，壁纸恢复清晰
     await page.keyboard.press("Escape");
@@ -146,7 +155,7 @@ test.describe("首屏与布局", () => {
     // 二级菜单：先选「去哪一页」，不直接把整套设置拍出来
     await expect(page.getByTestId("settings-menu")).toBeVisible();
     await expect(page.getByTestId("settings-done")).toHaveCount(0);
-    await expect(page.getByTestId("settings-menu-search")).toContainText("搜索引擎偏好");
+    await expect(page.getByTestId("settings-menu-search")).toContainText("搜索引擎");
     await page.getByTestId("settings-menu-search").click();
     await expect(page.getByTestId("settings-done")).toBeVisible();
     await expect(page.getByTestId("settings-tab-search")).toHaveAttribute("aria-current", "page");
@@ -200,13 +209,11 @@ test.describe("首屏与布局", () => {
     expect(ratio).toBeGreaterThan(0.5);
   });
 
-  test("每个模块各自独立成层：左上天气 → 时钟 → 搜索框 → 便签卡 → 一言 → 底部 Dock", async ({ page }) => {
+  test("每个模块各自独立成层：时钟 → 搜索框 → 便签卡 → 一言 → 底部 Dock", async ({ page }) => {
     // 回归测试：改造前所有次级模块塞在同一块 Bento 玻璃板里；
-    // 现在天气钉在左上角（环境读数，不进主列），便签是独立卡片，
-    // 一言单独一条贴着 Dock，时钟与搜索框直接压在壁纸上（无容器）。
+    // 现在便签是独立卡片，一言单独一条贴着 Dock，时钟与搜索框直接压在壁纸上（无容器）。
     await fresh(page, {
       home: { simple: false },
-      weather: { enabled: true },
       note: { enabled: true },
       quote: { show: true, source: "local" },
     });
@@ -218,7 +225,6 @@ test.describe("首屏与布局", () => {
         return { top: r.top, left: r.left, right: r.right, bottom: r.bottom };
       };
       return {
-        weather: box('[data-testid="weather-card"]'),
         clock: box('[data-testid="clock"]'),
         search: box('[data-testid="search-form"]'),
         note: box('[data-testid="note-card-panel"]'),
@@ -232,9 +238,6 @@ test.describe("首屏与布局", () => {
       if (key === "viewportH" || key === "viewportW") continue;
       expect(value, `${key} 应存在`).not.toBeNull();
     }
-    // 天气在左上角：纵向比时钟更靠上，横向贴左侧
-    expect(order.weather!.top).toBeLessThan(order.clock!.top);
-    expect(order.weather!.left).toBeLessThan(order.viewportW / 2);
     // 主列仍然自上而下
     expect(order.clock!.top).toBeLessThan(order.search!.top);
     expect(order.search!.top).toBeLessThan(order.note!.top);
@@ -243,24 +246,19 @@ test.describe("首屏与布局", () => {
     // Dock 落在视口底部附近（底部悬浮，而不是跟着内容流走）
     expect(order.viewportH - order.dock!.top).toBeLessThan(140);
 
-    // 旧的 Bento 玻璃板已彻底移除；天气不再占用独立卡片层
+    // 旧的 Bento 玻璃板已彻底移除
     const legacy = await page.evaluate(() => ({
       board: document.querySelectorAll('[data-testid="board"]').length,
       bento: document.querySelectorAll(".bento-grid").length,
-      weatherInsideNote:
-        document.querySelector('[data-testid="note-card-panel"] [data-testid="weather"]') !== null,
-      weatherInStage: document.querySelector('.stage [data-testid="weather"]') !== null,
+      weatherLeftovers: document.querySelectorAll('[data-testid^="weather"]').length,
     }));
     expect(legacy.board).toBe(0);
     expect(legacy.bento).toBe(0);
-    expect(legacy.weatherInsideNote).toBe(false);
-    expect(legacy.weatherInStage).toBe(false);
+    expect(legacy.weatherLeftovers).toBe(0);
   });
 
   test("两处玻璃面板都启用了 backdrop-filter 且底色半透明", async ({ page }) => {
     // 一言与时钟已按青柠起始页的做法去掉容器（只剩文字压在壁纸上），不再参与此断言。
-    // 天气胶囊也不再属于这一组：它已改成和右上角动作组同一套「板」材质（近实心 + 描边），
-    // 由下面「天气胶囊与动作组同材质」那条单独守。
     await fresh(page);
     const panels = await page.evaluate(() => {
       const read = (sel: string) => {
@@ -293,36 +291,419 @@ test.describe("首屏与布局", () => {
     }
   });
 
-  test("天气胶囊与右上角动作组同高、同材质", async ({ page }) => {
-    // 回归测试：天气胶囊原先用 --panel-bg（通明玻璃），和旁边的 --board-bg 实心胶囊
-    // 并排，一眼就是两块不同来源的控件。现在两者共用同一套板材质与同一个高度。
-    await fresh(page, { home: { simple: false }, weather: { enabled: true } });
-    const m = await page.evaluate(() => {
-      const read = (sel: string) => {
-        const el = document.querySelector(sel) as HTMLElement | null;
+  test("主题切换只改组件材质，壁纸层保持不变", async ({ page }) => {
+    await fresh(page);
+    const read = () =>
+      page.evaluate(() => {
+        const bg = (sel: string) => {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          return el ? getComputedStyle(el).backgroundImage : "missing";
+        };
+        const panel = document.querySelector(".search-panel") as HTMLElement | null;
+        return {
+          layer: bg(".wallpaper-layer"),
+          scrim: bg(".wallpaper-scrim"),
+          vignette: bg(".wallpaper-vignette"),
+          home: bg(".home-scrim"),
+          searchColor: panel ? getComputedStyle(panel).backgroundColor : "missing",
+        };
+      });
+
+    const dark = await read();
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "light";
+    });
+    await page.waitForTimeout(400);
+    const light = await read();
+
+    // 背景四层一个字节都不该变
+    expect(light.layer).toBe(dark.layer);
+    expect(light.scrim).toBe(dark.scrim);
+    expect(light.vignette).toBe(dark.vignette);
+    expect(light.home).toBe(dark.home);
+    // 组件自己按 data-theme 换材质
+    expect(light.searchColor).not.toBe(dark.searchColor);
+  });
+
+  test("五个分类页签的按钮尺寸、间距与状态表现一致", async ({ page }) => {
+    await fresh(page);
+    await openSettings(page);
+
+    // 逐页签收集全部官方 Button 的几何；每个页签都不该出现第二种高度/内距/间距
+    const summary: { tab: string; heights: number[]; pads: string[]; gaps: string[]; fonts: string[]; radii: string[] }[] = [];
+    for (const tab of ["appearance", "modules", "shortcuts", "background", "search"]) {
+      await page.getByTestId(`settings-tab-${tab}`).click();
+      await expect(page.getByTestId(`settings-tab-${tab}`)).toHaveAttribute("aria-current", "page");
+      summary.push(
+        await page.evaluate((name) => {
+          const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="button"]')).map((el) => {
+            const cs = getComputedStyle(el);
+            return {
+              h: Math.round(el.getBoundingClientRect().height),
+              pad: `${cs.paddingLeft}/${cs.paddingRight}`,
+              gap: cs.gap,
+              font: cs.fontSize,
+              radius: cs.borderTopLeftRadius,
+            };
+          });
+          return {
+            tab: name,
+            heights: [...new Set(rows.map((r) => r.h))],
+            pads: [...new Set(rows.map((r) => r.pad))],
+            gaps: [...new Set(rows.map((r) => r.gap))],
+            fonts: [...new Set(rows.map((r) => r.font))],
+            radii: [...new Set(rows.map((r) => r.radius))],
+          };
+        }, tab),
+      );
+    }
+    for (const row of summary) {
+      expect(row.heights, `${row.tab} 按钮高度`).toHaveLength(1);
+      expect(row.pads, `${row.tab} 按钮内距`).toHaveLength(1);
+      expect(row.gaps, `${row.tab} 按钮图标间距`).toHaveLength(1);
+      expect(row.fonts, `${row.tab} 按钮字号`).toHaveLength(1);
+      expect(row.radii, `${row.tab} 按钮圆角`).toHaveLength(1);
+      expect(row.heights[0]).toBeGreaterThanOrEqual(30);
+    }
+
+    const footer = await page.evaluate(() => {
+      const read = (id: string) => {
+        const el = document.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
         if (!el) return null;
         const cs = getComputedStyle(el);
-        const bg = cs.backgroundColor;
-        const rgba = bg.match(/rgba?\([^)]*?,\s*([\d.]+)\)/);
-        const slash = bg.match(/\/\s*([\d.]+)\)/);
         return {
-          height: el.getBoundingClientRect().height,
-          alpha: Number(rgba?.[1] ?? slash?.[1] ?? 1),
-          blur: (cs.backdropFilter || "").match(/blur\(([\d.]+)px\)/)?.[1] ?? "0",
+          slot: el.getAttribute("data-slot"),
+          variant: el.getAttribute("data-variant"),
+          h: Math.round(el.getBoundingClientRect().height),
           radius: cs.borderTopLeftRadius,
         };
       };
-      return { weather: read(".weather-row"), dock: read(".bar-dock") };
+      return { done: read("settings-done"), reset: read("settings-reset") };
     });
-    expect(m.weather, "天气胶囊应存在").not.toBeNull();
-    expect(m.dock, "动作组应存在").not.toBeNull();
-    // 同一行左右并排，高度差超过 1px 就会看出来
-    expect(Math.abs(m.weather!.height - m.dock!.height)).toBeLessThanOrEqual(1);
-    // 同一套「板」材质：近实心 + 同样的胶囊圆角 + 同样的毛玻璃
-    expect(m.weather!.alpha).toBeGreaterThanOrEqual(0.9);
-    expect(m.dock!.alpha).toBeGreaterThanOrEqual(0.9);
-    expect(Number(m.weather!.blur)).toBeGreaterThanOrEqual(12);
-    expect(m.weather!.radius).toBe(m.dock!.radius);
+    expect(footer.done?.slot).toBe("button");
+    expect(footer.done?.variant).toBe("default");
+    expect(footer.reset?.variant).toBe("ghost");
+    expect(footer.done?.radius).toBe(footer.reset?.radius);
+    expect(footer.done?.h).toBe(footer.reset?.h);
+  });
+
+  test("开关关闭 / 开启 / 连续切换 / 滚动时对齐稳定", async ({ page }) => {
+    await fresh(page);
+    await openSettings(page);
+    // 用「显示秒」而不是「减少动效」：后者会切全局动效模式、连带页面布局位移，
+    // 前者只改首页时钟，设置面板内的几何应当完全静止。
+    // 注意 clock-seconds 这个 testid 还被首页时钟的秒位复用，必须限定在设置内容区。
+    await page.getByTestId("settings-tab-modules").click();
+    const sw = page.locator('[data-testid="settings-content"] [data-testid="clock-seconds"]');
+    await expect(sw).toBeVisible();
+
+    const read = () =>
+      sw.evaluate((el) => {
+        const root = el as HTMLElement;
+        const thumb = root.querySelector('[data-slot="switch-thumb"]') as HTMLElement;
+        const r = root.getBoundingClientRect();
+        const t = thumb.getBoundingClientRect();
+        return {
+          state: root.getAttribute("data-state"),
+          root: [r.x, r.y, r.width, r.height],
+          thumb: [t.x, t.y, t.width, t.height],
+          thumbRight: t.right,
+          rootRight: r.right,
+          scrollTop: document.querySelector('[data-testid="settings-content"]')?.scrollTop ?? 0,
+        };
+      });
+
+    const closed = await read();
+    expect(closed.state).toBe("unchecked");
+    await sw.click();
+    await page.waitForTimeout(280);
+    const opened = await read();
+    expect(opened.state).toBe("checked");
+
+    /*
+     * 「减少动效」开启会改全局 data-motion，页面自身的入场动画被关掉，
+     * 行的绝对 y 本来就会变。要守的是轨道内部对齐：尺寸恒定、滑块相对轨道
+     * 的上下留白恒定、水平位移精确 14px、绝不越出轨道。
+     */
+    expect(opened.root[2]).toBe(closed.root[2]); // 轨道宽
+    expect(opened.root[3]).toBe(closed.root[3]); // 轨道高
+    expect(opened.thumb[2]).toBe(closed.thumb[2]); // 滑块宽
+    expect(opened.thumb[3]).toBe(closed.thumb[3]); // 滑块高
+    expect(opened.thumbRight).toBeLessThanOrEqual(opened.rootRight - 1);
+    expect(closed.thumbRight).toBeLessThanOrEqual(closed.rootRight - 1);
+    expect(Math.round(opened.thumb[1] - opened.root[1])).toBe(2);
+    expect(Math.round(closed.thumb[1] - closed.root[1])).toBe(2);
+    expect(Math.round(opened.thumb[0] - opened.root[0])).toBe(16);
+    expect(Math.round(closed.thumb[0] - closed.root[0])).toBe(2);
+
+    // 连续快速切换：每次落位都回到同样的两个相对坐标，不累积偏移
+    const offsets: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      await sw.click();
+      await page.waitForTimeout(260);
+      const s = await read();
+      expect(s.root[2]).toBe(closed.root[2]);
+      expect(s.root[3]).toBe(closed.root[3]);
+      expect(Math.round(s.thumb[1] - s.root[1])).toBe(2);
+      expect(s.thumbRight).toBeLessThanOrEqual(s.rootRight - 1);
+      offsets.push(Math.round(s.thumb[0] - s.root[0]));
+    }
+    expect(offsets).toEqual([2, 16, 2, 16]);
+
+    // 滚动只改变纵向位置：控件宽度与横向坐标不漂移
+    const beforeScroll = await read();
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="settings-content"]') as HTMLElement;
+      el.scrollTop = 60;
+    });
+    await page.waitForTimeout(120);
+    const afterScroll = await read();
+    expect(afterScroll.thumb[2]).toBe(beforeScroll.thumb[2]);
+    expect(afterScroll.root[0]).toBe(beforeScroll.root[0]);
+  });
+
+  test("整页任意区域右键都能唤出隐藏内容，输入框与浮层保留原生语义", async ({ page }) => {
+    await fresh(page);
+    await expect(page.locator(".app-shell")).toHaveAttribute("data-revealed", "false");
+
+    // 壁纸、中轴、右侧空白、底部 Dock —— 四个完全不同的区域，手势一致
+    const zones = [
+      [90, 170],
+      [720, 300],
+      [1250, 620],
+      [700, 830],
+    ] as const;
+    for (const [x, y] of zones) {
+      await page.mouse.click(x, y, { button: "right" });
+      await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+      await expect(page.locator(".app-shell")).toHaveAttribute("data-revealed", "true");
+      // 展开后中轴整体上移，原来的坐标可能落到搜索输入框上（那里要保留原生菜单）。
+      // 收起统一用左上角固定空白点，测的仍是「右键」这个手势而不是坐标。
+      await page.mouse.click(90, 170, { button: "right" });
+      await expect(page.getByTestId("shortcut-grid")).toHaveCount(0);
+      await expect(page.locator(".app-shell")).toHaveAttribute("data-revealed", "false");
+    }
+
+    // 输入框保留浏览器原生菜单（复制 / 粘贴），右键不该把页面一起切了
+    await page.getByTestId("search-input").click({ button: "right" });
+    await expect(page.locator(".app-shell")).toHaveAttribute("data-revealed", "false");
+
+    // 浮层打开时右键不改动被遮住的那层页面
+    await openSettings(page);
+    const before = await page.locator(".app-shell").getAttribute("data-revealed");
+    await page.mouse.click(120, 120, { button: "right" });
+    expect(await page.locator(".app-shell").getAttribute("data-revealed")).toBe(before);
+  });
+
+  test("toast 固定顶部居中：多条几何一致、不压一言与 Dock、浮层之上可见", async ({ page }) => {
+    await fresh(page);
+    // 远程一言失败时首屏也会推一条提示，等它自然消失再采样
+    await page.waitForTimeout(3200);
+    await page.evaluate(() => {
+      window.open = () => null;
+    });
+    await page.keyboard.press("Control+1");
+    await expect(page.getByTestId("toast")).toContainText("打开");
+    await page.keyboard.press("Control+2");
+    await page.keyboard.press("Control+3");
+    await expect.poll(() => page.getByTestId("toast").count()).toBeGreaterThanOrEqual(2);
+
+    const info = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('[data-testid="toast"]')).map((el) => {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        return {
+          x: Math.round(r.x),
+          y: Math.round(r.y),
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+          radius: cs.borderTopLeftRadius,
+          tone: el.getAttribute("data-tone"),
+          icon: el.querySelector(".sp-toast-icon") !== null,
+        };
+      });
+      const quote = document.querySelector('[data-testid="quote-slot"]')?.getBoundingClientRect();
+      const dock = document.querySelector(".dock-shell")?.getBoundingClientRect();
+      const toaster = document.querySelector("[data-sonner-toaster]");
+      return {
+        cards,
+        quoteTop: quote?.top ?? 0,
+        dockTop: dock?.top ?? 0,
+        z: toaster ? Number(getComputedStyle(toaster).zIndex) : 0,
+      };
+    });
+
+    // 全部固定顶部居中，且几何完全一致（旧版宽度随文字变、堆叠还会缩放）
+    for (const c of info.cards) {
+      expect(c.y).toBeLessThan(160);
+      expect(c.x).toBe(info.cards[0]!.x);
+      expect(c.w).toBe(info.cards[0]!.w);
+      expect(c.h).toBe(info.cards[0]!.h);
+      expect(c.radius).toBe(info.cards[0]!.radius);
+      expect(c.icon).toBe(true);
+      expect(c.tone).toBeTruthy();
+    }
+    expect(info.cards.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(info.cards.map((c) => c.y)).size).toBe(info.cards.length);
+    // 不再压住一言与 Dock
+    const bottom = Math.max(...info.cards.map((c) => c.y + c.h));
+    expect(info.quoteTop).toBeGreaterThan(0);
+    expect(info.dockTop).toBeGreaterThan(0);
+    expect(bottom).toBeLessThan(info.quoteTop);
+    expect(bottom).toBeLessThan(info.dockTop);
+    // 高于设置弹窗（z-50）与二级菜单（z-70）
+    expect(info.z).toBeGreaterThanOrEqual(80);
+  });
+
+  test("快捷图标统一为同一套浅色 squircle，Dock 与网格比例一致", async ({ page }) => {
+    await fresh(page);
+    const collect = (root: string) =>
+      page.evaluate((sel) => {
+        return Array.from(document.querySelectorAll(`${sel} .shortcut-plate`)).map((el) => {
+          const r = el.getBoundingClientRect();
+          const cs = getComputedStyle(el);
+          // Chrome 对百分比圆角可能原样返回 "28%"，也可能解析成 px
+          const raw = cs.borderTopLeftRadius;
+          const ratio = raw.endsWith("%")
+            ? Number.parseFloat(raw) / 100
+            : Number.parseFloat(raw) / r.width;
+          const img = el.querySelector(".shortcut-icon-img");
+          return {
+            ratio: Number(ratio.toFixed(3)),
+            tinted: cs.backgroundImage.includes("gradient"),
+            imgFilter: img ? getComputedStyle(img).filter : "none",
+          };
+        });
+      }, root);
+
+    const dock = await collect(".shortcut-dock");
+    expect(dock.length).toBeGreaterThanOrEqual(13);
+    for (const plate of dock) {
+      expect(plate.ratio).toBeGreaterThan(0.26);
+      expect(plate.ratio).toBeLessThan(0.3);
+      expect(plate.tinted).toBe(true);
+      // 浅底本身提供对比度，不再给 favicon 硬叠白边滤镜
+      expect(plate.imgFilter).toBe("none");
+    }
+
+    await page.getByTestId("clock").click();
+    await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    const grid = await collect(".shortcut-grid");
+    expect(grid.length).toBeGreaterThanOrEqual(13);
+    expect(new Set(grid.map((p) => p.ratio))).toEqual(new Set(dock.map((p) => p.ratio)));
+  });
+
+  test("隐私与数据 / 关于 从二级菜单直达独立弹窗，主面板只剩五个分类", async ({ page }) => {
+    await fresh(page);
+    await page.getByTestId("clock").click();
+    await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    await page.getByTestId("settings-trigger").click();
+    await expect(page.getByTestId("settings-menu")).toBeVisible();
+
+    // 二级菜单分「设置分类 / 数据与信息」两组，标签与面板逐字一致
+    const labels = await page.evaluate(() => ({
+      groups: Array.from(document.querySelectorAll(".settings-menu-label")).map((el) => el.textContent?.trim()),
+      items: Array.from(document.querySelectorAll('[data-testid^="settings-menu-"]')).map((el) => el.textContent?.trim()),
+    }));
+    expect(labels.groups).toEqual(["设置分类", "数据与信息"]);
+    expect(labels.items).toEqual(["常规", "模块", "快捷跳转", "背景", "搜索引擎", "隐私与数据", "关于"]);
+
+    await page.getByTestId("settings-menu-appearance").click();
+    await expect(page.getByTestId("settings-done")).toBeVisible();
+    expect(await page.locator(".settings-tab").count()).toBe(5);
+    await expect(page.getByTestId("settings-tab-privacy")).toHaveCount(0);
+    await expect(page.getByTestId("settings-tab-about")).toHaveCount(0);
+    const groups = await page.locator(".settings-nav-label").allTextContents();
+    expect(groups).toEqual(["首页", "外观与服务"]);
+
+    // 站点图标开关跟着站点列表走，不再埋在隐私页
+    await page.getByTestId("settings-tab-shortcuts").click();
+    await expect(page.getByTestId("icons-autofetch")).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await openSettingsDialog(page, "privacy");
+    await expect(page.getByRole("dialog")).toContainText("隐私与数据");
+    await expect(page.getByTestId("whitelist-input")).toBeVisible();
+    await expect(page.getByTestId("export-config")).toBeVisible();
+    await expect(page.getByTestId("settings-tab-privacy")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    await openSettingsDialog(page, "about");
+    await expect(page.getByRole("dialog")).toContainText("关于");
+    await expect(page.getByTestId("about-copy-url")).toBeVisible();
+    await expect(page.getByTestId("about-open-help")).toBeVisible();
+    await expect(page.getByTestId("settings-tab-about")).toHaveCount(0);
+  });
+
+  test("设置搜索：陈旧关键词不再留空白面板，无结果给出空状态", async ({ page }) => {
+    await fresh(page);
+    await openSettings(page);
+    const search = page.getByTestId("settings-search");
+
+    // 「暗角」原先写在常规页的关键词里、实际已迁到背景页，搜索会停在原地隐藏全部卡片
+    await search.fill("暗角");
+    await expect(page.getByTestId("settings-tab-background")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("settings-search-count")).not.toHaveText("0 项");
+    await expect(page.getByTestId("background-vignette")).toBeVisible();
+
+    // 「快捷键」原先只在关于页的关键词里、正文却没有，跳转后是一整块空白
+    await search.fill("快捷键");
+    await expect(page.getByTestId("settings-search-empty")).toBeVisible();
+    await page.getByTestId("settings-search-clear").click();
+    await expect(page.getByTestId("settings-search-empty")).toHaveCount(0);
+
+    await search.fill("zzzz不存在");
+    await expect(page.getByTestId("settings-search-empty")).toBeVisible();
+    await expect(page.getByTestId("settings-search-empty")).toContainText("没有找到");
+    await page.getByTestId("settings-search-clear").click();
+    await expect(page.getByTestId("settings-search")).toHaveValue("");
+  });
+
+  test("设置内容区的滚动渐隐标记与实际溢出始终一致", async ({ page }) => {
+    await fresh(page);
+    await openSettings(page);
+    const read = () =>
+      page.evaluate(() => {
+        const el = document.querySelector('[data-testid="settings-content"]') as HTMLElement;
+        return { flag: el.getAttribute("data-scrollable"), real: el.scrollHeight - el.clientHeight > 4 };
+      });
+
+    // 来回切换长短页签：旧版只观察滚动容器，标记会反过来（不滚的标 true、要滚的标 false）
+    for (const tab of ["shortcuts", "appearance", "shortcuts", "background", "appearance"]) {
+      await page.getByTestId(`settings-tab-${tab}`).click();
+      await expect.poll(async () => {
+        const r = await read();
+        return r.flag === String(r.real);
+      }).toBe(true);
+    }
+  });
+
+  test("时钟阴影是宽而无边界的环境光，没有暗圆盘与黑雾投影", async ({ page }) => {
+    await fresh(page);
+    const styles = await page.evaluate(() => {
+      const clock = document.querySelector(".home-clock") as HTMLElement;
+      const after = getComputedStyle(clock, "::after");
+      const before = getComputedStyle(clock, "::before");
+      const digits = document.querySelector(".home-clock .clock-digits") as HTMLElement;
+      const cs = getComputedStyle(digits);
+      return {
+        veil: after.backgroundImage,
+        veilFilter: after.filter,
+        veilWidth: parseFloat(after.width) / clock.getBoundingClientRect().width,
+        hoverPeak: before.backgroundImage,
+        shadow: cs.textShadow,
+      };
+    });
+    // 四个色标一路衰减到全透明、且范围远大于时钟本体 —— 人眼找不到边界
+    expect(styles.veil).toContain("rgba(6, 10, 18, 0) 100%");
+    expect(styles.veilWidth).toBeGreaterThan(2);
+    expect(styles.veilFilter).toBe("none");
+    // 不再有 0.5 的深色盘与 24/56px 的高不透明度黑晕
+    expect(styles.veil).not.toContain("0.5");
+    expect(styles.shadow).not.toContain("56px");
+    expect(styles.shadow).not.toContain("24px");
+    expect(styles.shadow.split("rgba").length - 1).toBe(2);
+    expect(styles.hoverPeak).not.toContain("0.68");
   });
 
   test("多种视口下页面不滚动，内容等比缩放到一屏", async ({ page }) => {
@@ -386,7 +767,7 @@ test.describe("首屏与布局", () => {
     await fresh(page);
     await page.waitForTimeout(1500);
 
-    const whitelist = ["v1.hitokoto.cn", "api.bing.com", "api.open-meteo.com", "bing.biturl.top", "www.bing.com"];
+    const whitelist = ["v1.hitokoto.cn", "api.bing.com", "bing.biturl.top", "www.bing.com"];
     const allowedHost = (url: string) => {
       try {
         const host = new URL(url).hostname;
@@ -413,7 +794,7 @@ test.describe("首屏与布局", () => {
     await openSettings(page);
     await page.getByTestId("settings-tab-background").click();
     await page.getByTestId("background-edge").click();
-    await page.getByTestId("settings-tab-privacy").click();
+    await page.getByTestId("settings-tab-shortcuts").click();
     await page.getByTestId("icons-autofetch").click();
     await page.getByTestId("settings-tab-modules").click();
     await page.getByTestId("quote-source").getByText("内置语录库").click();
@@ -812,8 +1193,7 @@ test.describe("设置与数据", () => {
 
   test("一键清除全部数据需二次确认，且清空后回到出厂配置", async ({ page }) => {
     await fresh(page, { theme: { mode: "light", accent: "#12A150" } });
-    await openSettings(page);
-    await page.getByTestId("settings-tab-privacy").click();
+    await openSettingsDialog(page, "privacy");
     await page.getByTestId("clear-data").click();
     await expect(page.getByTestId("confirm-ok")).toBeVisible();
     await page.getByTestId("confirm-ok").click();
@@ -825,8 +1205,7 @@ test.describe("设置与数据", () => {
 
   test("导出配置生成 JSON 文件", async ({ page }) => {
     await fresh(page);
-    await openSettings(page);
-    await page.getByTestId("settings-tab-privacy").click();
+    await openSettingsDialog(page, "privacy");
     const downloadPromise = page.waitForEvent("download");
     await page.getByTestId("export-config").click();
     const download = await downloadPromise;

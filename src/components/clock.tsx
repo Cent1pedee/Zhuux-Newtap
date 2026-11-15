@@ -171,7 +171,7 @@ export function Clock({
       aria-controls={active ? "home-reveal" : undefined}
       data-interactive="true"
       className="clock-trigger flex flex-col items-center text-center"
-      title="点击或右键显示快捷网站与设置"
+      title="点击显示快捷网站与设置（页面任意位置右键同样有效）"
     >
       {content}
       {/* 可见文字参与可访问名（axe: label-content-name-mismatch），不能只用 aria-label 覆盖 */}

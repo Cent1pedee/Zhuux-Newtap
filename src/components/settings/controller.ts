@@ -3,8 +3,8 @@
 /**
  * 设置面板的「控制器」。
  *
- * 拆分动因：原来 1192 行的单文件把 7 个页签的 UI、6 组表单草稿、导入导出、
- * 白名单、定位全部堆在一个组件里。真正的耦合点不是 UI，而是**草稿状态** ——
+ * 拆分动因：原来 1192 行的单文件把 7 个分类的 UI、6 组表单草稿、导入导出、
+ * 白名单全部堆在一个组件里。真正的耦合点不是 UI，而是**草稿状态** ——
  * 它们必须活得比页签长（切走再切回来，刚填了一半的指令不该被清空）。
  *
  * 所以草稿与副作用统一放这里，页签组件只做渲染。这样：
@@ -14,7 +14,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { findCity, nearestCity } from "@/config/cities";
 import { createDefaultConfig } from "@/config/defaults";
 import { ENGINES, LIMITS } from "@/config/site";
 import { accentContrast, isAccentAcceptable } from "@/lib/color";
@@ -34,8 +33,6 @@ export function useSettingsController() {
 
   /* ------------------------------ 草稿 ------------------------------ */
 
-  /** 选省份只切城市列表，不立刻写库（否则城市会被强行改成第一个） */
-  const [provinceDraft, setProvinceDraft] = useState("");
   const [cmdDraft, setCmdDraft] = useState({ key: "", label: "", url: "", siteUrl: "" });
   const [whitelistDraft, setWhitelistDraft] = useState("");
   const [customAccent, setCustomAccent] = useState(config.theme.accent);
@@ -253,54 +250,6 @@ export function useSettingsController() {
     reader.readAsText(file);
   };
 
-  /* ------------------------------ 天气定位 ------------------------------ */
-
-  const locateWeather = async () => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      push("当前浏览器不支持定位，请手动选择城市", "error");
-      return;
-    }
-    push("正在获取定位…", "info");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = Number(pos.coords.latitude.toFixed(3));
-        const lon = Number(pos.coords.longitude.toFixed(3));
-        /*
-          反查最近的城市再写回：只写经纬度的话，
-          下拉框会一直是空值（用户看到的「没选中任何城市」）。
-        */
-        const near = nearestCity(lat, lon);
-        update("weather", {
-          lat,
-          lon,
-          province: near ? near.province : "",
-          city: near ? near.city.name : "",
-          source: "geo",
-        });
-        setProvinceDraft(near ? near.province : "");
-        push(near ? `已定位到 ${near.city.name}` : "已使用当前位置", "success");
-      },
-      () => push("定位失败或未授权，请手动选择城市", "error"),
-      { timeout: 8000, maximumAge: 600000 },
-    );
-  };
-
-  /* ------------------------------ 天气城市 ------------------------------ */
-
-  const draftProvince = provinceDraft || config.weather.province;
-
-  const selectCity = (next: string) => {
-    if (!next) return;
-    const hit = findCity(draftProvince, next);
-    update("weather", {
-      province: draftProvince,
-      city: next,
-      lat: hit ? hit.lat : null,
-      lon: hit ? hit.lon : null,
-      source: hit ? "manual" : "none",
-    });
-  };
-
   return {
     // 配置
     config,
@@ -337,12 +286,6 @@ export function useSettingsController() {
     importRef,
     exportConfig,
     onImportFile,
-    // 天气
-    provinceDraft,
-    setProvinceDraft,
-    draftProvince,
-    selectCity,
-    locateWeather,
   };
 }
 

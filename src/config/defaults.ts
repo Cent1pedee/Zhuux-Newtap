@@ -35,9 +35,6 @@ export function createDefaultConfig(): AppConfig {
     },
     wallpaper: { source: "none", value: "" },
     suggest: { enabled: false },
-    // 天气默认开启，但坐标留空 —— 首屏看到的是「选择城市 / 使用定位」两个入口，
-    // 选过一次就记住（localStorage），此后开箱即显示。
-    weather: { enabled: false, unit: "c", province: "", city: "", lat: null, lon: null, source: "none" },
     // 站点 favicon 默认开启：Dock 与引擎徽标都靠它显示真实图标，
     // 关掉就全部退回首字母（见 site.ts 里关于白名单模型的说明）
     icons: { autoFetch: true },

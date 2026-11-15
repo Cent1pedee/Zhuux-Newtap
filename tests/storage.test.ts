@@ -37,6 +37,60 @@ describe("配置读写", () => {
     // 缺失字段保留默认
     expect(loaded.theme.accent).toBe("#2F6FED");
     expect(loaded.groups.length).toBeGreaterThan(0);
+    // 新默认：13 个可访问站点，含 nav.zhuux.cn
+    expect(loaded.groups[0].items).toHaveLength(13);
+    expect(loaded.groups[0].items[0].url).toBe("https://nav.zhuux.cn");
+  });
+
+  it("一次性迁移：旧默认快捷项换成新默认", () => {
+    window.localStorage.setItem(
+      CONFIG_KEY,
+      JSON.stringify({
+        groups: [
+          {
+            id: "grp-main",
+            name: "快捷跳转",
+            items: [
+              { id: "sc-nas", title: "NAS", url: "http://192.168.1.10:5000" },
+              { id: "sc-grafana", title: "Grafana", url: "http://192.168.1.10:3000" },
+              { id: "sc-uptime", title: "Uptime", url: "http://192.168.1.10:3001" },
+              { id: "sc-jellyfin", title: "Jellyfin", url: "http://192.168.1.10:8096" },
+              { id: "sc-github", title: "GitHub", url: "https://github.com" },
+              { id: "sc-bili", title: "哔哩哔哩", url: "https://www.bilibili.com" },
+              { id: "sc-zhihu", title: "知乎", url: "https://www.zhihu.com" },
+              { id: "sc-weibo", title: "微博", url: "https://weibo.com" },
+              { id: "sc-mdn", title: "MDN", url: "https://developer.mozilla.org" },
+              { id: "sc-npm", title: "npm", url: "https://www.npmjs.com" },
+              { id: "sc-vercel", title: "Vercel", url: "https://vercel.com" },
+              { id: "sc-canIuse", title: "Can I use", url: "https://caniuse.com" },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const loaded = loadConfig();
+    expect(loaded.groups[0].items).toHaveLength(13);
+    expect(loaded.groups[0].items.some((i) => i.id === "sc-nas")).toBe(false);
+    expect(loaded.groups[0].items[0].url).toBe("https://nav.zhuux.cn");
+  });
+
+  it("迁移不碰用户自己编辑过的快捷项", () => {
+    window.localStorage.setItem(
+      CONFIG_KEY,
+      JSON.stringify({
+        groups: [
+          {
+            id: "grp-main",
+            name: "快捷跳转",
+            items: [{ id: "mine-1", title: "我的站点", url: "https://example.org" }],
+          },
+        ],
+      }),
+    );
+    const loaded = loadConfig();
+    expect(loaded.groups[0].items).toHaveLength(1);
+    expect(loaded.groups[0].items[0].id).toBe("mine-1");
   });
 });
 

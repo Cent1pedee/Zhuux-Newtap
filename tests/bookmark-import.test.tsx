@@ -7,7 +7,7 @@ import { loadConfig } from "@/lib/storage";
 const BOOKMARKS = `<DL><p>
   <DT><H3>工作</H3>
   <DL><p>
-    <DT><A HREF="https://github.com">GitHub</A>
+    <DT><A HREF="https://juejin.cn">掘金</A>
     <DT><A HREF="https://example.com/docs">文档</A>
     <DT><A HREF="https://example.com/docs/">文档重复</A>
     <DT><A HREF="javascript:void(0)">脚本</A>
@@ -28,8 +28,7 @@ describe("快捷项：导入浏览器书签", () => {
     });
 
     await waitFor(() => expect(screen.getByTestId("bookmark-preview-list")).toBeTruthy());
-    // 默认配置里已有 github.com，预览应说明跳过 2 条（重复 + 文件内重复）
-    // 文件内重复已在解析阶段去掉，这里只剩「与现有 github.com 重复」这一条
+    // 默认配置里已有 juejin.cn，预览应说明跳过 1 条（文件内的重复在解析阶段已去掉）
     expect(screen.getByText(/跳过 1 条/)).toBeTruthy();
     expect(screen.getByTestId("bookmark-preview-list").textContent).toContain("文档");
 

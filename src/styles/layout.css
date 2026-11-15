@@ -57,8 +57,8 @@
   display: grid;
   place-items: center;
   /* 位移与缩放由 motion 的 spring 驱动（相邻图标一起轻轻抬起来），
-     这里不能再挂 transition，否则 CSS 过渡会和 spring 互相拉扯、出现二次回弹。 */
-  will-change: transform;
+     这里不能挂 transition，也不能常驻 will-change：13 个图标各占一个合成层，
+     A/B 实测让滚动的主线程任务从 43ms 涨到 68ms。Motion 会在动画期间自行提升。 */
 }
 
 /*
@@ -102,10 +102,10 @@
   left: 50%;
   padding: 3px 8px;
   border-radius: var(--radius-pill);
-  /* 气泡会盖在一言上方，必须把底下的字彻底糊掉 —— 否则两层文字会读成一团 */
+  /* 气泡会盖在一言上方，底色用不透明板；模糊只在真正浮出时才开。
+     13 个气泡若常驻 backdrop-filter，即使 opacity:0 也各占一个合成层，
+     主题切换时全部要重画 —— 这是实测「20 个模糊层」里最大的一块。 */
   background: var(--board-bg);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
   box-shadow:
     var(--shadow-1),
     inset 0 0 0 1px var(--board-ring);
@@ -128,6 +128,8 @@
 .shortcut-item:focus-within .shortcut-item-label {
   opacity: 1;
   transform: translate(-50%, 0);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* 空态：整条 dock 没有快捷项时的引导 */
@@ -263,6 +265,13 @@
 .home-settings svg {
   width: 18px;
   height: 18px;
+  transition: transform 460ms var(--ease-out-cubic);
+}
+
+/* 齿轮转 1/4 圈：比单纯放大更能说明「这里会打开一层设置」 */
+.home-settings:hover svg,
+.home-settings:focus-visible svg {
+  transform: rotate(90deg);
 }
 
 [data-theme="light"] .home-settings {
@@ -289,25 +298,27 @@
   z-index: -1;
   pointer-events: none;
   /*
-   * 默认态壁纸保持清晰，只在中轴压一层很淡的暗，托住时间与一言。
+   * 中轴压暗 + 上下两端的薄纱。
+   * 只做一层椭圆的话，中轴够暗了，但一言落在椭圆边缘、Dock 之外，
+   * 遇到亮壁纸仍然读不清；补一条竖向渐变，把顶部与底部一起兜住。
    * 真正的「高斯模糊」交给点击后的 Wallpaper blurred 态：
    * 那一下要让用户明确感到「进入了另一层」，不能靠常驻柔焦冒充。
    */
-  background: radial-gradient(
-    ellipse 68% 62% at 50% 42%,
-    rgba(3, 6, 12, 0.4) 0%,
-    rgba(3, 6, 12, 0.17) 56%,
-    rgba(3, 6, 12, 0) 82%
-  );
-}
-
-[data-theme="light"] .home-scrim {
-  background: radial-gradient(
-    ellipse 68% 62% at 50% 42%,
-    rgba(3, 6, 12, 0.36) 0%,
-    rgba(3, 6, 12, 0.15) 56%,
-    rgba(3, 6, 12, 0) 82%
-  );
+  background:
+    radial-gradient(
+      ellipse 72% 66% at 50% 42%,
+      rgba(3, 6, 12, 0.44) 0%,
+      rgba(3, 6, 12, 0.17) 60%,
+      rgba(3, 6, 12, 0) 90%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(3, 6, 12, 0.24) 0%,
+      rgba(3, 6, 12, 0.04) 22%,
+      rgba(3, 6, 12, 0) 46%,
+      rgba(3, 6, 12, 0.16) 76%,
+      rgba(3, 6, 12, 0.34) 100%
+    );
 }
 
 .home-main {
@@ -353,27 +364,81 @@
 }
 
 /*
- * 悬停/聚焦时在时间背后点一团极淡的光：告诉指针「这里可以按」，
- * 又不给时间加任何底板。径向渐变从中心向外淡出，边缘没有可辨认的边界。
+ * 时钟阴影：只留「一层环境光 + 两层极轻的文字投影」。
+ *
+ * 旧版叠了四层压暗（壁纸薄纱 / .home-scrim 中轴椭圆 / .home-clock::after 的
+ * 0.5 深椭圆 / 三层 24px+56px 黑色 text-shadow），在雪地、霜花这类亮壁纸上
+ * 会读成一枚**边界可辨的暗圆盘**，数字周围再套一圈黑雾 —— 这就是「生硬」的来源。
+ *
+ * 现在：
+ *   · ::after 是一层比时钟宽近 3 倍、峰值仅 0.17 的椭圆环境光，四个色标一路
+ *     衰减到 0（最后一段 66%→100% 完全透明），人眼找不到边界；中心略高于
+ *     数字（40%），像自然光从上方落下来的接触阴影，而不是贴着文字的圆盘；
+ *   · 文字只保留「1px 接触 + 16px 环境」两层，峰值都压到 0.34 以下，
+ *     细笔画不再被黑边包住；
+ *   · ::before 的悬停反馈从「背后开一盏灯」改成极淡的整体提亮（0.055），
+ *     亮色主题也从 0.68 收到 0.10，指针移上去是「时间亮了一点」而非一个白圆斑。
+ * 没有 filter / backdrop-filter / 额外合成层，性能与减少动效偏好都不变。
  */
+.home-clock::after {
+  content: "";
+  position: absolute;
+  inset: -150% -85%;
+  z-index: -1;
+  pointer-events: none;
+  /*
+   * 六个色标拟合一条钟形衰减曲线：中心 0.13，前 20% 几乎不掉，
+   * 40% 之后才快速淡出，最后 15% 收到 0。线性两段式会留下一个
+   * 「圆锥」边界，人眼对二阶突变很敏感；钟形曲线看不出中心在哪，
+   * 只会觉得这一带比四周稍暗。
+   */
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 42%,
+    rgba(6, 10, 18, 0.13) 0%,
+    rgba(6, 10, 18, 0.12) 18%,
+    rgba(6, 10, 18, 0.088) 38%,
+    rgba(6, 10, 18, 0.045) 60%,
+    rgba(6, 10, 18, 0.014) 80%,
+    rgba(6, 10, 18, 0) 100%
+  );
+}
+
 .home-clock::before {
   content: "";
   position: absolute;
-  inset: -28px -40px;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.16), transparent 72%);
+  inset: -150% -85%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 42%,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.035) 30%,
+    rgba(255, 255, 255, 0.012) 62%,
+    rgba(255, 255, 255, 0) 100%
+  );
   opacity: 0;
   transition: opacity 360ms var(--ease-out-cubic);
-  pointer-events: none;
 }
 
 [data-theme="light"] .home-clock::before {
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.68), transparent 72%);
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 42%,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.06) 30%,
+    rgba(255, 255, 255, 0.02) 62%,
+    rgba(255, 255, 255, 0) 100%
+  );
 }
 
 .home-clock:hover::before,
 .home-clock:focus-within::before {
   opacity: 1;
+}
+
+/* 触屏没有 hover，点完时间那团提亮会一直粘着 —— 只保留键盘聚焦的反馈 */
+@media (hover: none) {
+  .home-clock:hover::before {
+    opacity: 0;
+  }
 }
 
 [data-motion="reduce"] .home-clock::before {
@@ -530,62 +595,106 @@
 }
 
 /*
- * 图标片：Dock 与快捷网格共用。
- * 参考站的 Dock / 应用抽屉都是「白方块 + 深色 logo」，暗色主题换成 #2b2f38，
- * 而不是透明玻璃 —— 玻璃片在模糊壁纸上会糊成一团，图标边缘先消失。
+ * 图标片：Dock 与快捷网格共用同一枚「浅色 squircle」。
+ *
+ * 旧版是暗色中性片 + 品牌色小字，favicon 抓到的站点却是彩色 logo ——
+ * 13 个格子读起来像两套图标，黑色 logo 还会直接消失在深色片里。
+ * 现在所有来源（自定义图片 / emoji / favicon / 首字母）都躺在同一材质上：
+ *   · 28% 相对圆角，两档尺寸视觉比例一致；
+ *   · 顶部高光 + 很轻的品牌色渐变 + 一圈内描边，做出「一枚片」的厚度；
+ *   · 浅底同时解决了深色 logo 的对比度，不再需要给图片叠白边滤镜。
  */
 .shortcut-plate {
+  --tile: var(--accent);
   position: relative;
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  background: #ffffff;
+  overflow: hidden;
+  border-radius: 28%;
+  background:
+    radial-gradient(128% 118% at 20% 8%, rgba(255, 255, 255, 0.92), transparent 62%),
+    linear-gradient(
+      158deg,
+      color-mix(in srgb, var(--tile) 8%, #ffffff) 0%,
+      color-mix(in srgb, var(--tile) 22%, #e7ecf5) 100%
+    );
   box-shadow:
-    0 2px 8px rgba(15, 23, 42, 0.14),
-    inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+    0 4px 12px -5px color-mix(in srgb, var(--tile) 42%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.07);
   transition:
-    box-shadow 220ms var(--ease-out-cubic),
-    background-color 220ms var(--ease-out-cubic);
+    transform 240ms var(--ease-out-cubic),
+    box-shadow 240ms var(--ease-out-cubic),
+    background-color 320ms var(--ease-out-cubic);
 }
 
 [data-theme="dark"] .shortcut-plate {
-  background: #2b2f38;
+  /* 暗色主题只把片调冷一档，仍保持浅底 —— 深色片会让黑色站点标识消失 */
+  background:
+    radial-gradient(128% 118% at 20% 8%, rgba(255, 255, 255, 0.62), transparent 62%),
+    linear-gradient(
+      158deg,
+      color-mix(in srgb, var(--tile) 12%, #e9eef7) 0%,
+      color-mix(in srgb, var(--tile) 30%, #c6d1e2) 100%
+    );
   box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.34),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    0 5px 14px -5px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.1);
 }
 
-.shortcut-tile-icon {
-  border-radius: 14px;
-  flex-shrink: 0;
+.shortcut-plate-glyph {
+  display: grid;
+  place-items: center;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-/* Dock 里的片小一档，圆角也跟着收：42px / 12px */
+/* 用户自己的图片铺满整片，用 object-fit 保持比例，不拉伸 */
+.shortcut-plate--image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shortcut-tile-icon,
 .shortcut-dock-icon {
-  border-radius: 12px;
-  flex-shrink: 0;
+  border-radius: 28%;
 }
 
+/* 悬停：片轻轻抬起并放大一档，和网格项本身的 -3px 位移叠成一层层次 */
 .shortcut-tile:hover .shortcut-tile-icon,
 .shortcut-tile:focus-visible .shortcut-tile-icon {
+  transform: translateY(-2px) scale(1.045);
   box-shadow:
-    0 10px 22px -8px rgba(15, 23, 42, 0.42),
-    inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+    0 12px 24px -10px color-mix(in srgb, var(--tile) 65%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.09);
+}
+
+.shortcut-item:hover .shortcut-dock-icon,
+.shortcut-item:focus-within .shortcut-dock-icon {
+  transform: translateY(-1px) scale(1.035);
 }
 
 [data-theme="dark"] .shortcut-tile:hover .shortcut-tile-icon,
 [data-theme="dark"] .shortcut-tile:focus-visible .shortcut-tile-icon {
   box-shadow:
-    0 10px 22px -8px rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    0 14px 26px -10px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.12);
 }
 
 /*
- * favicon 直接落在方块上：白片（亮色）本身就托得住深色 logo；
- * 深色主题的片是 #2b2f38，黑色标识需要一圈极淡的白色描边勾出轮廓。
+ * favicon 落在同一枚浅片上：黑色 / 深色标识本身就有对比度，
+ * 不再用 drop-shadow 硬描一圈白边（那会让彩色 logo 发虚）。
  */
 .shortcut-icon-img {
-  width: 54%;
-  height: 54%;
+  width: 60%;
+  height: 60%;
   object-fit: contain;
   transition: opacity var(--dur-fast) var(--ease-out-cubic);
 }
@@ -596,22 +705,12 @@
   margin: auto;
 }
 
-[data-theme="dark"] .shortcut-icon-img {
-  /* 深色片上的黑色标识（GitHub / Vercel）靠两圈极细白边勾出轮廓：
-     单圈 1px 太虚，叠到 1.2px 才看得出是「一只猫」而不是一块空片 */
-  filter:
-    drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.9))
-    drop-shadow(0 0 1.2px rgba(255, 255, 255, 0.5))
-    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
-}
-
 .shortcut-icon-img[data-loaded="false"] {
   opacity: 0;
 }
 
 .shortcut-tile-letter {
-  font-weight: 600;
-  line-height: 1;
+  font-weight: 650;
 }
 
 /* 「添加」：虚线留白，明确告诉用户这里可以继续长 */
@@ -621,7 +720,8 @@
   height: 52px;
   place-items: center;
   border: 1px dashed rgba(15, 23, 42, 0.22);
-  border-radius: 14px;
+  /* 与图标片同一个相对圆角，添加位不会读成另一种控件 */
+  border-radius: 28%;
   background: rgba(255, 255, 255, 0.32);
   color: rgba(15, 23, 42, 0.55);
   transition:
@@ -636,15 +736,17 @@
   color: #0f172a;
 }
 
+/* 图标片统一改成浅色后，「添加」位也跟着做成一枚浅色磨砂空片：
+   原来的深色半透明方格在这一排里会读成一个洞，而不是一个空位。 */
 [data-theme="dark"] .shortcut-tile-add-icon {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(233, 238, 247, 0.22);
+  color: #fff;
 }
 
 [data-theme="dark"] .shortcut-tile--add:hover .shortcut-tile-add-icon {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(233, 238, 247, 0.34);
   color: #fff;
 }
 
@@ -668,6 +770,7 @@
 
 .shortcut-tile-label {
   max-width: 80px;
+  transition: color 220ms var(--ease-out-cubic);
   overflow: hidden;
   font-size: 11.5px;
   line-height: 1.35;
@@ -680,8 +783,19 @@
 }
 
 [data-theme="light"] .shortcut-tile-label {
-  color: rgba(15, 23, 42, 0.88);
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.75);
+  /* 名称落在照片上而不是白片上：亮色主题同样用白字，别按「浅色界面」推成深色 */
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.7),
+    0 0 8px rgba(0, 0, 0, 0.45);
+}
+
+.shortcut-tile:hover .shortcut-tile-label,
+.shortcut-tile:focus-visible .shortcut-tile-label {
+  color: #fff;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.82),
+    0 0 12px rgba(0, 0, 0, 0.58);
 }
 
 /*
@@ -690,24 +804,22 @@
  * 这里不再重复一套覆盖。
  */
 [data-layout="simple"] .home-clock .clock-digits {
-  color: #fff;
+  color: #f9fbff;
+  /*
+   * 两层：1px 的接触阴影保证笔画边缘不发飘，16px 的环境阴影负责把白字
+   * 从亮部里托出来。删掉 24px / 56px 那两层高不透明度的黑晕 —— 它们在
+   * 300 字重的细笔画外会形成一圈可辨的「黑雾」，是生硬观感的主要来源。
+   */
   text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.55),
-    0 2px 22px rgba(0, 0, 0, 0.45);
+    0 1px 2px rgba(6, 10, 18, 0.34),
+    0 3px 16px rgba(6, 10, 18, 0.24);
 }
 
 [data-layout="simple"] .home-clock [data-testid="date-label"] {
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.88);
   text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.72),
-    0 0 8px rgba(0, 0, 0, 0.55);
-}
-
-[data-theme="light"] [data-layout="simple"] .home-clock [data-testid="date-label"] {
-  color: rgba(255, 255, 255, 0.94);
-  text-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.78),
-    0 0 10px rgba(0, 0, 0, 0.55);
+    0 1px 2px rgba(6, 10, 18, 0.44),
+    0 2px 10px rgba(6, 10, 18, 0.26);
 }
 
 /* ------------------------------------------------------------
@@ -740,19 +852,23 @@
     0 0 10px rgba(0, 0, 0, 0.5);
 }
 
-/* 亮色主题的一言落在照片下缘，白字在亮叶子上读不出来，翻成深色 + 白色柔光 */
+/*
+ * 一言同样压在照片下缘，跟时钟一样用白字 + 暗投影。
+ * 早先亮色主题把它翻成深色，遇到深色壁纸（夜景）就彻底看不见了；
+ * 统一成白字之后，两个主题只差界面层的材质，不再赌壁纸明暗。
+ */
 [data-theme="light"] .home-quote .text-quote {
-  color: rgba(16, 24, 40, 0.95);
+  color: #fff;
   text-shadow:
-    0 1px 2px rgba(255, 255, 255, 0.92),
-    0 0 10px rgba(255, 255, 255, 0.78);
+    0 1px 2px rgba(0, 0, 0, 0.68),
+    0 0 12px rgba(0, 0, 0, 0.55);
 }
 
 [data-theme="light"] .home-quote .quote-from {
-  color: rgba(16, 24, 40, 0.68);
+  color: rgba(255, 255, 255, 0.7);
   text-shadow:
-    0 1px 2px rgba(255, 255, 255, 0.92),
-    0 0 8px rgba(255, 255, 255, 0.72);
+    0 1px 2px rgba(0, 0, 0, 0.68),
+    0 0 10px rgba(0, 0, 0, 0.55);
 }
 
 /* 矮屏：方块行距收一档，保证展开后仍能在首屏里放下 */
@@ -777,6 +893,33 @@
   }
 }
 
+/* ------------------------------------------------------------
+   整页右键的落点反馈
+   一次手势只有一枚临时元素、520ms 后自动移除；只动 transform / opacity，
+   不产生常驻合成层，也不碰布局。
+   ------------------------------------------------------------ */
+.reveal-ripple {
+  position: fixed;
+  z-index: 65;
+  width: 88px;
+  height: 88px;
+  margin: -44px 0 0 -44px;
+  border: 1px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 26%, transparent);
+  pointer-events: none;
+  animation: reveal-ripple 520ms var(--ease-out-cubic) forwards;
+}
+
+@keyframes reveal-ripple {
+  from { transform: scale(0.25); opacity: 0.95; }
+  to   { transform: scale(1.55); opacity: 0; }
+}
+
+[data-motion="reduce"] .reveal-ripple { animation-duration: 1ms; }
+[data-motion="reduce"] .home-settings svg { transition: none; transform: none; }
+
 [data-motion="reduce"] .shortcut-tile,
 [data-motion="reduce"] .home-settings,
 [data-motion="reduce"] .shortcut-tile-icon {
@@ -784,6 +927,16 @@
 }
 
 [data-motion="reduce"] .shortcut-tile:hover {
+  transform: none;
+}
+
+[data-motion="reduce"] .shortcut-tile:hover .shortcut-tile-icon,
+[data-motion="reduce"] .shortcut-item:hover .shortcut-dock-icon {
+  transform: none;
+}
+
+[data-motion="reduce"] .home-settings:hover svg,
+[data-motion="reduce"] .home-settings:focus-visible svg {
   transform: none;
 }
 

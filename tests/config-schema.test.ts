@@ -11,29 +11,10 @@ import { mergeConfig } from "@/lib/config-schema";
 describe("mergeConfig：可空字段", () => {
   const base = createDefaultConfig();
 
-  it("weather.lat 被写成字符串时回退 null（否则 fetchWeather 里 toFixed 抛错）", () => {
-    const merged = mergeConfig(base, { weather: { lat: "39.9", lon: "116.4" } });
-    expect(merged.weather.lat).toBeNull();
-    expect(merged.weather.lon).toBeNull();
-  });
-
-  it("weather.lat 显式传 null 是合法值（表示未选择）", () => {
-    const seeded = { ...createDefaultConfig(), weather: { ...base.weather, lat: 1, lon: 2 } };
-    const merged = mergeConfig(seeded, { weather: { lat: null } });
-    expect(merged.weather.lat).toBeNull();
-    expect(merged.weather.lon).toBe(2);
-  });
-
-  it("坐标越界被 clamp 到合法区间", () => {
-    const merged = mergeConfig(base, { weather: { lat: 999, lon: -999 } });
-    expect(merged.weather.lat).toBe(90);
-    expect(merged.weather.lon).toBe(-180);
-  });
-
-  it("a11y.reducedMotion 只接受 boolean 与 null", () => {
+  it("a11y.reducedMotion 是可空布尔：字符串回退 null，显式 null 合法", () => {
     expect(mergeConfig(base, { a11y: { reducedMotion: "yes" } }).a11y.reducedMotion).toBeNull();
-    expect(mergeConfig(base, { a11y: { reducedMotion: true } }).a11y.reducedMotion).toBe(true);
     expect(mergeConfig(base, { a11y: { reducedMotion: null } }).a11y.reducedMotion).toBeNull();
+    expect(mergeConfig(base, { a11y: { reducedMotion: false } }).a11y.reducedMotion).toBe(false);
   });
 });
 

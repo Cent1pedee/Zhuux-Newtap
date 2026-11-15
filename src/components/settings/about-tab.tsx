@@ -4,8 +4,16 @@ import { SITE } from "@/config/site";
 import { Button } from "@/components/ui/primitives";
 import type { SettingsController } from "@/components/settings/controller";
 
-/** 关于页签：站点信息、技术栈、隐私边界、复制地址 */
-export function AboutTab({ s }: { s: SettingsController }) {
+/** 关于弹窗：站点信息、技术栈、版本、复制地址与快捷键入口 */
+export function AboutTab({
+  s,
+  onOpenHelp,
+  onClose,
+}: {
+  s: SettingsController;
+  onOpenHelp?: () => void;
+  onClose?: () => void;
+}) {
   const { config, push } = s;
 
   return (
@@ -37,17 +45,21 @@ export function AboutTab({ s }: { s: SettingsController }) {
       <section className="settings-section">
         <h3 className="settings-h3">数据与隐私</h3>
         <p className="text-[11.5px] leading-relaxed text-[var(--fg-muted)]">
-          配置存 localStorage、图片缓存存 IndexedDB，全部只在本机。默认第三方请求数为 0；
-          任何远程请求都必须命中白名单。可在「隐私与数据」里导出、导入或一键清除。
+          配置与图片缓存只存本机，完整说明和备份 / 清理入口在右上角菜单的「隐私与数据」。
         </p>
       </section>
 
       <section className="settings-section">
-        <div className="flex flex-wrap gap-2">
+        <div className="settings-actions">
           <Button
             onClick={() => {
+              // 非 HTTPS / 隐私模式下 clipboard 可能整个不可用：旧版会静默无反应
+              if (!navigator.clipboard?.writeText) {
+                push("当前环境不支持剪贴板，请手动复制地址栏", "error");
+                return;
+              }
               void navigator.clipboard
-                ?.writeText(window.location.href)
+                .writeText(window.location.href)
                 .then(() => push("站点地址已复制", "success"))
                 .catch(() => push("复制失败，请手动复制地址栏", "error"));
             }}
@@ -56,6 +68,18 @@ export function AboutTab({ s }: { s: SettingsController }) {
           >
             复制站点地址
           </Button>
+          {onOpenHelp ? (
+            <Button
+              onClick={() => {
+                onClose?.();
+                onOpenHelp();
+              }}
+              size="sm"
+              testId="about-open-help"
+            >
+              查看快捷键
+            </Button>
+          ) : null}
         </div>
         <p className="mt-2 text-[11px] text-[var(--fg-subtle)]">版本 1.0.0 · 配置结构 v{config.version}</p>
       </section>
