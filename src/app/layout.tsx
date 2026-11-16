@@ -30,9 +30,11 @@ export const metadata: Metadata = {
     description: SITE.description,
   },
   robots: { index: true, follow: true },
-  icons: {
-    icon: [{ url: "/favicon.ico" }],
-  },
+  /*
+   * 图标交回 Next 的文件约定：`src/app/icon.svg` 会自动产出
+   * `<link rel="icon" href="/icon.svg?<hash>">`（带内容哈希，换图即失效缓存）。
+   * 这里不再手写 icons —— 两边同时声明会输出两个 link，浏览器只会用最后一个。
+   */
   formatDetection: { telephone: false, email: false, address: false },
 };
 

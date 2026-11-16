@@ -353,6 +353,7 @@ src/
     robots.ts         # /robots.txt
     not-found.tsx     # 404
     error.tsx         # 段级错误边界（重试 / 回首页），避免异常时整页纯白
+    icon.svg          # 站点图标（Next 文件约定，自动注入带哈希的 <link rel=icon>）
   components/
     clock.tsx  search-box.tsx  daily-quote.tsx  shortcut-dock.tsx  shortcut-icon.tsx
     shortcut-grid.tsx          # 点击时间后浮出的快捷托板（标题 + 管理 + 站点方块 + 添加方块）
