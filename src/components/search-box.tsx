@@ -15,7 +15,7 @@ import {
   removeSearchHistory,
   subscribeSearchHistory,
 } from "@/lib/search-history";
-import { useToast } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast";
 import { EngineBadge } from "@/components/engine-glyph";
 
 type Suggestion = { id: string; text: string; kind: "suggest" | "command" | "direct" | "history" };

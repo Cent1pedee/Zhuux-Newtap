@@ -9,7 +9,7 @@ import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { EASE_OUT_CUBIC } from "@/lib/motion";
 import { lockBodyScroll } from "@/lib/scroll-lock";
 import { resolveSearchUrl } from "@/lib/commands";
-import { useToast } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast";
 import type { SettingsTarget } from "@/components/settings-panel";
 import { clearSearchHistory } from "@/lib/search-history";
 

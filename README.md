@@ -176,7 +176,15 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 - `radio-group.tsx` / `slider.tsx` 支持 `children` / `thumbLabel`；
 - `native-select.tsx` 增加 `withWrapper`，`false` 时只渲染 `<select>`。
 
-`/` 页 First Load JS 从 177 kB 增至当前 **229 kB**（Radix + sonner；后期统一 `cn`、按需加载与样式拆分又收回一部分）。
+`/` 页 First Load JS：177 kB（纯自建）→ 229 kB（接入 shadcn 后）→ 当前 **198 kB**（webpack 产物，gzip 传输 202.6 kB）。
+
+回落靠两件事，都是「别让第一屏加载用不到的东西」：
+
+- **Toast 从兼容层剥离**：`ui/toast.tsx` 只依赖 sonner，`layout.tsx` 只引它。此前 `layout → primitives → Dialog/AlertDialog/Slider/Switch/RadioGroup`，整套路 UI kit 都被拖进首屏；
+- **快捷键帮助改为按需加载**：它内部是 Radix Dialog，原来常驻挂载；`?` 的监听随之上移到 `lib/use-help-shortcut.ts`，首次按下才下载那一段。
+
+实测首屏 JS gzip **202.6 kB**（解码 641.6 kB，12 个文件），首屏 chunk 里已无 `data-radix-*` 痕迹；
+对比改造前（turbopack 同条件 A/B）传输 246.7 → 218.5 kB，webpack 侧 229 → 198 kB。
 
 ### 3.2 选型边界
 
@@ -358,7 +366,8 @@ src/
       dialog.tsx  alert-dialog.tsx  switch.tsx  radio-group.tsx  slider.tsx
       label.tsx  input.tsx  button.tsx  sonner.tsx
       textarea.tsx  native-select.tsx   # 同标签官方组件（便签 / 省市下拉）
-      primitives.tsx          # 兼容层：把官方组件包装成项目原有 API（签名/testid 不变）
+      toast.tsx               # ToastProvider + useToast（只依赖 sonner，首屏唯一需要的一块）
+      primitives.tsx          # 兼容层：Modal / 表单控件（含 Radix），只随设置与帮助按需加载
     settings/                  # 设置面板的分区与控制器（壳留在 settings-panel.tsx）
       controller.ts            # 草稿状态 + 引擎排序 / 指令 / 背景 / 白名单 / 导入导出 / 定位
       search-tab.tsx  appearance-tab.tsx  shortcuts-tab.tsx  modules-tab.tsx
@@ -384,14 +393,15 @@ src/
     favicon.ts     # favicon URL 拼装 + 内网地址识别（不经过白名单）
     motion.ts      # 统一动效变体与入场时序
     config-store.tsx  # 配置 Context + 减少动效偏好
+    use-help-shortcut.ts  # 全局 ? 监听（帮助弹窗按需加载后上移到这里）
   styles/
     globals.css    # 只留 @import 与 dark 变体；顺序即层叠顺序
     tokens.css     # 设计 token（间距/圆角/阴影/模糊/时长）+ 主题变量 + shadcn 语义映射
     base.css  panels.css  widgets.css  chrome.css
     layout.css  effects.css  responsive.css  utilities.css  shadcn-compat.css
-tests/             # Vitest 单元 / 组件测试（28 文件 277 项，有覆盖率门禁）
+tests/             # Vitest 单元 / 组件测试（29 文件 279 项，有覆盖率门禁）
 .github/workflows/ci.yml  # CI：typecheck → lint → 覆盖率 → build → e2e
-scripts/           # capture-shots.mjs：视觉验收截图脚本
+scripts/           # capture-shots.mjs：视觉验收截图；perf-probe.mjs：主线程/布局/样式重算量化探针
 e2e/               # Playwright 端到端测试（5 文件 61 项，含 axe 无障碍扫描）
 ```
 
@@ -417,7 +427,7 @@ pnpm lint            # ESLint（next/core-web-vitals + next/typescript）
 
 期望：`typecheck` 无输出；`lint` 输出 `0 problems`。
 
-### 5.2 单元 / 组件测试（Vitest，277 项）
+### 5.2 单元 / 组件测试（Vitest，279 项）
 
 ```bash
 pnpm test              # 单次运行
@@ -483,6 +493,22 @@ Playwright 会自动执行 `pnpm run build && pnpm run start --port 3100`（见 
 | `e2e/reduced-motion.spec.ts` | 1 | 系统 `prefers-reduced-motion: reduce` 时，四个入场模块首帧即 `opacity:1`、无位移，一言的入场 `animation: none`、聚焦渐隐只淡出不位移，逐字动画降级 |
 | `e2e/note.spec.ts` | 3 | 待办便签默认可见、可输入并在刷新后保留、关闭后便签卡整体退场且不留空盒子、清空按钮清内容且写回存储 |
 
+### 5.3.1 性能预算（可选，本地随时可跑）
+
+```bash
+pnpm exec next build && pnpm exec next start --port 3100
+pnpm run perf        # = node scripts/perf-probe.mjs --budget
+```
+
+探针用 CDP 的 `Performance` 指标 + 页面内长任务/长动画帧（LoAF）观察器，量化四个场景
+（静息、聚焦搜索、展开快捷方块、打开设置）的主线程耗时、布局次数与样式重算，
+并自动从 `shots/` 复制一张大图作为压力壁纸（`public/__perf-bg.png`，已进 .gitignore）。
+
+本地 2026-11-16 基线：**静息 5–6 ms/s、3–5 次样式重算/s；展开 45 次布局；首屏 202.6 kB gzip**。
+
+> 一个容易踩的坑：探针里的帧采样必须按需启停。常驻 `requestAnimationFrame` 循环会让
+> Chrome 每帧都走一遍动画帧更新，把「静息样式重算」从 0–2 次/秒抬到 60 次/秒 —— 观测者效应。
+
 ### 5.4 一条命令跑完
 
 ```bash
@@ -497,6 +523,7 @@ pnpm test:all   # typecheck → lint → 覆盖率 → playwright
 |---|---|---|
 | `quality` | `typecheck` → `lint` → `test:coverage` → `build` | 按失败速度排序；覆盖率低于阈值直接失败，不进入构建 |
 | `e2e` | `test:e2e` | `needs: quality`；失败时上传 `test-results/` 作为 artifact，保留 7 天 |
+| `perf` | `pnpm run build` → 起服务 → `node scripts/perf-probe.mjs --budget` | `needs: quality`；只卡**结构性指标**（首屏 JS ≤240 kB、静息样式重算 ≤20 次/s、展开布局 ≤80 次、玻璃层 ≤10），毫秒数只打印不判定，避免 CI 机器差异导致误杀 |
 
 pnpm 版本不写死，由 `pnpm/action-setup@v4` 读 `package.json` 的 `packageManager` 字段，避免 CI 与本地装出两套依赖树。E2E 复用 `ubuntu-latest` 自带的 Google Chrome（与 `playwright.config.ts` 的 `channel: "chrome"` 对齐），不额外下载内核。
 
@@ -592,6 +619,19 @@ Lighthouse 目标（PRD 6.1）：LCP < 1.2s、FCP < 0.8s、CLS < 0.1、TBT < 100
 ---
 
 ## 七、故障排查
+
+### 页面能打开，但所有 `/_next/static/*` 返回 400/404、样式与脚本都不生效
+
+**原因**：服务已经在跑，之后又在另一个终端执行了 `next build`。运行中的 server 仍按**旧的
+chunk 哈希**去找文件，而磁盘上的 `.next` 已经换成新哈希 —— 每个静态资源都命中不到，
+浏览器拿到的是 404/400 的 HTML，于是 `Refused to execute script ... MIME type ('text/html')`。
+
+**处理**：改完代码先停掉旧 server（`lsof -ti:3100 | xargs kill -9`）再 `pnpm build`，
+或者干脆别自己起服务 —— `pnpm test:e2e` 的 Playwright 会自己 build + start。
+
+> 同一条规则也适用于性能探针：先 build、再 `next start`、再 `node scripts/perf-probe.mjs`，
+> 中间不要再 build。
+
 
 ### `Error: [safe-delete] broker denied delete: path=.../.next/xxx`
 

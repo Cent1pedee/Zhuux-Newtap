@@ -3,7 +3,8 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Fragment, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
-import { Button, ConfirmDialog, Modal, TextInput, useToast } from "@/components/ui/primitives";
+import { Button, ConfirmDialog, Modal, TextInput } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast";
 import { useSettingsController } from "@/components/settings/controller";
 import { AboutTab } from "@/components/settings/about-tab";
 import { AppearanceTab } from "@/components/settings/appearance-tab";

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { ConfigProvider, useConfig } from "@/lib/config-store";
 import { CONFIG_KEY, saveConfig } from "@/lib/storage";
-import { ToastProvider } from "@/components/ui/primitives";
+import { ToastProvider } from "@/components/ui/toast";
 import { createDefaultConfig } from "@/config/defaults";
 
 function Probe() {

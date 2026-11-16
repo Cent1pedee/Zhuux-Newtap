@@ -3,9 +3,7 @@
 /* 把 shadcn 官方组件包装成项目原有的 API：导出名、props、data-testid、类名都不变。
    Slider 的 DOM 变成 Radix thumb，E2E 设值改用键盘；弹窗动画换成 data-[state] CSS 动画。 */
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
-import { toast } from "sonner";
-import { Toaster } from "@/components/ui/sonner";
+import { useId, useRef } from "react";
 import {
   Dialog,
   DialogClose,
@@ -32,7 +30,6 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button as ShadcnButton } from "@/components/ui/button";
-import { PERSIST_ERROR_EVENT } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 /* ==========================================================================
@@ -197,148 +194,6 @@ export function Modal({
       </DialogContent>
     </Dialog>
   );
-}
-
-/* ==========================================================================
-   Toast：shadcn 官方方案 sonner + 项目自己的一张卡片
-
-   之前的 toast 是「34px 小胶囊 + 6px 圆点」，和页面里 12~18px 圆角的卡片、
-   13px 正文完全不是一套语言；位置又挂在 bottom-center 上、靠实测 Dock 高度
-   抬起来，于是：窄屏 Dock 折行时偏移会滞后、设置弹窗打开时气泡正好压在
-   「恢复出厂 / 完成」那排按钮上、一言那行文字也会被盖住。多条同时出现时
-   sonner 默认把旧的气泡缩小叠在后面，宽度随文字变，堆成一摞参差的碎片。
-
-   现在统一成：
-     · 位置固定 top-center + 20px，与 Dock / 一言 / 弹窗页脚彻底无关；
-     · 一张 14px 圆角卡片，底色与描边取和设置面板相同的玻璃 token；
-     · 语气用「同尺寸图标 + 同尺寸色块」表达，不再靠一颗小圆点；
-     · 宽度由 sonner 的 --width 统一，多条展开堆叠，不再缩放错位。
-   ========================================================================== */
-
-type ToastTone = "info" | "success" | "error";
-type ToastAction = { label: string; onClick: () => void };
-type ToastContextValue = { push: (text: string, tone?: ToastTone, action?: ToastAction) => void };
-
-const ToastContext = createContext<ToastContextValue | null>(null);
-
-/** 三种语气共用同一套 14px 线性图标：尺寸、线宽、圆角一致，只有路径不同 */
-function ToastToneIcon({ tone }: { tone: ToastTone }) {
-  const shape = (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      {tone === "success" ? (
-        <path d="m8 12 2.7 2.7L16 9.4" strokeLinecap="round" strokeLinejoin="round" />
-      ) : tone === "error" ? (
-        <path d="M15 9l-6 6M9 9l6 6" strokeLinecap="round" />
-      ) : (
-        <path d="M12 11.2v5M12 7.9h.01" strokeLinecap="round" />
-      )}
-    </>
-  );
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
-      {shape}
-    </svg>
-  );
-}
-
-/**
- * 系统级「减少动效」偏好兜底（layout 里没给 ToastProvider 传 reduceMotion，
- * 所以必须自己读一次，否则页面其它动画停了、气泡还在弹）。
- */
-function useSystemReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const apply = () => setReduce(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
-
-  return reduce;
-}
-
-export function ToastProvider({
-  children,
-  reduceMotion,
-}: {
-  children: React.ReactNode;
-  reduceMotion?: boolean;
-}) {
-  const systemReduce = useSystemReduceMotion();
-  const reduce = reduceMotion ?? systemReduce;
-
-  const push = useCallback((text: string, tone: ToastTone = "info", action?: ToastAction) => {
-    toast.custom(
-      (t) => (
-        <div className="sp-toast" data-testid="toast" data-tone={tone} role="status">
-          <span className="sp-toast-icon" aria-hidden="true">
-            <ToastToneIcon tone={tone} />
-          </span>
-          <span className="sp-toast-text">{text}</span>
-          {action ? (
-            <button
-              type="button"
-              onClick={() => {
-                action.onClick();
-                toast.dismiss(t);
-              }}
-              data-testid="toast-action"
-              className="sp-toast-action"
-            >
-              {action.label}
-            </button>
-          ) : null}
-        </div>
-      ),
-      { duration: action ? 6000 : 2800, unstyled: true },
-    );
-  }, []);
-
-  /** 配置写盘失败的提示：ConfigProvider 自己拿不到 UI，只广播事件 */
-  useEffect(() => {
-    const onPersistError = () => {
-      push("本地存储写入失败，设置可能无法保存：请清理浏览器存储，或改用图片地址而非本地上传", "error");
-    };
-    window.addEventListener(PERSIST_ERROR_EVENT, onPersistError);
-    return () => window.removeEventListener(PERSIST_ERROR_EVENT, onPersistError);
-  }, [push]);
-
-  /*
-   * sonner 的 toast 队列是模块级全局状态，不会随组件卸载清空。
-   * 原先 ToastProvider 用局部 state，组件一卸载气泡自然消失；换成官方方案后
-   * 不清会在下一次挂载（尤其是组件测试之间）把上一轮的提示重新渲染出来。
-   */
-  useEffect(
-    () => () => {
-      toast.dismiss();
-    },
-    [],
-  );
-
-  return (
-    <ToastContext.Provider value={{ push }}>
-      {children}
-      <Toaster
-        position="top-center"
-        visibleToasts={3}
-        duration={2800}
-        offset={20}
-        gap={10}
-        expand
-        className={reduce ? "toaster toaster--reduce" : "toaster"}
-      />
-    </ToastContext.Provider>
-  );
-}
-
-export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast 必须在 ToastProvider 内使用");
-  return ctx;
 }
 
 /* ==========================================================================

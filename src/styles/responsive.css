@@ -425,3 +425,26 @@ input[type="color"]::-moz-color-swatch {
     mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
   }
 }
+
+/* ============================================================
+   移动端性能降级：玻璃层半径减半
+   ============================================================
+
+   backdrop-filter 的开销大致随「面积 × 半径」增长。手机上屏幕小、但 GPU 更弱，
+   原样的 20–32px 半径在低端安卓上会让滚动/展开掉到 40fps。
+   把三个模糊 token 减半（观感几乎不变，因为面板本来就半透明），
+   再把搜索胶囊那两处写死的 10px 收到 8px。 */
+@media (max-width: 639px) {
+  :root {
+    --blur-1: 8px;
+    --blur-2: 12px;
+    --blur-3: 14px;
+    --panel-blur: 18px;
+  }
+
+  .search-panel[data-focused="true"],
+  .search-panel {
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    backdrop-filter: blur(8px) saturate(120%);
+  }
+}

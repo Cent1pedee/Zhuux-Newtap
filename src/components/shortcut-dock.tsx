@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { ENTRANCE_DELAY, fadeUp, staggerContainer } from "@/lib/motion";
-import { useToast } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast";
 import { ShortcutIcon } from "@/components/shortcut-icon";
 
 /**

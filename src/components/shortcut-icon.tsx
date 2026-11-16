@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import type { Shortcut } from "@/config/site";
 import { useConfig } from "@/lib/config-store";
 import { useFaviconChain } from "@/lib/use-favicon";
@@ -32,7 +32,12 @@ import { useStoredImage } from "@/lib/use-stored-image";
  * 字母 / Emoji 一律用同一档墨色；颜色只留给 favicon 与 Emoji 本身。
  */
 
-export function ShortcutIcon({
+/**
+ * 纯展示组件：Dock / 网格 / 设置列表里同一份数据会被渲染多份，
+ * 上层任何状态变化（hover、展开、输入）都不该让它重新走一遍图标降级链。
+ * props 都是原始值或稳定引用，memo 的默认浅比较足够。
+ */
+export const ShortcutIcon = memo(function ShortcutIcon({
   item,
   size = 40,
   variant = "dock",
@@ -152,4 +157,4 @@ export function ShortcutIcon({
       </span>
     </span>
   );
-}
+});

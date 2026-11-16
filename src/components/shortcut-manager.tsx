@@ -13,8 +13,8 @@ import {
   Modal,
   Segmented,
   TextInput,
-  useToast,
 } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast";
 import { ShortcutIcon } from "@/components/shortcut-icon";
 import { parseBookmarksHtml, toShortcuts } from "@/lib/bookmarks";
 import { faviconCapability } from "@/lib/favicon";

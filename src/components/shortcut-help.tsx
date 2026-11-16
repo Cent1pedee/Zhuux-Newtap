@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { Button, Modal } from "@/components/ui/primitives";
 import { useReducedMotionPref } from "@/lib/config-store";
 
@@ -17,36 +16,20 @@ const ROWS: { keys: string[]; text: string }[] = [
 /**
  * 快捷键说明。
  *
- * `?` 的监听放在组件内部：它需要「不在输入框里」这个判断，
- * 放在 page.tsx 会让页面再多一段与渲染无关的键盘逻辑。
+ * `?` 的监听不在这里 —— 本组件按需加载（page.tsx 用 dynamic 引入），
+ * 没挂载时快捷键就不存在了。监听放在 page 层，见 `lib/use-help-shortcut.ts`。
  */
 export function ShortcutHelp({
   open,
-  onOpen,
   onClose,
   returnFocusTo,
 }: {
   open: boolean;
-  onOpen: () => void;
   onClose: () => void;
   /** 关闭后焦点回到哪 —— 从「关于」里点进来时，入口按钮随弹窗一起卸载了 */
   returnFocusTo?: HTMLElement | null;
 }) {
   const reduce = useReducedMotionPref();
-
-  useEffect(() => {
-    if (open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "?" || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target;
-      // 在输入框里问号是正文，不是快捷键
-      if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable='true']")) return;
-      event.preventDefault();
-      onOpen();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpen]);
 
   return (
     <Modal

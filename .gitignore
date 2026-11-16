@@ -46,3 +46,5 @@ next-env.d.ts
 
 # workbuddy
 .workbuddy
+# perf probe 生成的压力壁纸
+/public/__perf-bg.png

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
 import { ConfigProvider } from "@/lib/config-store";
-import { ToastProvider } from "@/components/ui/primitives";
+import { ToastProvider } from "@/components/ui/toast";
 import { ThemeSync } from "@/components/theme-sync";
 import { SITE } from "@/config/site";
 

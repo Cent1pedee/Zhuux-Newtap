@@ -20,7 +20,7 @@ import { accentContrast, isAccentAcceptable } from "@/lib/color";
 import { useConfig } from "@/lib/config-store";
 import { deleteStoredImage, IMAGE_REF_PREFIX, putStoredImage } from "@/lib/image-store";
 import { mergeConfig } from "@/lib/storage";
-import { useToast } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast";
 
 /** 导入文件上限：超过 1MB 的 JSON 只可能是被塞了二进制 */
 const IMPORT_MAX_BYTES = 1024 * 1024;

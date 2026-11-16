@@ -10,10 +10,10 @@ import { NotePad } from "@/components/note-pad";
 import { SearchBox } from "@/components/search-box";
 import { ShortcutDock } from "@/components/shortcut-dock";
 import { ShortcutGrid } from "@/components/shortcut-grid";
-import { ShortcutHelp } from "@/components/shortcut-help";
 import { Wallpaper } from "@/components/wallpaper";
 import { WidgetBoundary } from "@/components/widget-boundary";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
+import { useHelpShortcut } from "@/lib/use-help-shortcut";
 import type { SettingsTab, SettingsTarget, SettingsView } from "@/components/settings-panel";
 import { EASE_OUT_CUBIC } from "@/lib/motion";
 
@@ -22,6 +22,15 @@ import { EASE_OUT_CUBIC } from "@/lib/motion";
  * 它体量最大且只在点击设置后出现；命令面板因持有全局 ⌘K 监听，保持常驻挂载。
  */
 const SettingsPanel = dynamic(() => import("@/components/settings-panel").then((m) => m.SettingsPanel), {
+  ssr: false,
+});
+
+/*
+ * 快捷键说明同样按需加载：它内部用到 Radix Dialog，常驻挂载会把整套 UI kit
+ * 拖进首屏 bundle（实测首屏 246 kB gzip，其中一大半是弹窗/表单控件）。
+ * `?` 的监听因此上移到本页（useHelpShortcut），组件首次打开才下载。
+ */
+const ShortcutHelp = dynamic(() => import("@/components/shortcut-help").then((m) => m.ShortcutHelp), {
   ssr: false,
 });
 
@@ -103,6 +112,7 @@ export default function Home() {
   const [settingsView, setSettingsView] = useState<SettingsView>("settings");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  useHelpShortcut(() => setHelpOpen(true), !helpOpen);
   // 设置面板一旦打开过就保持挂载，保留退出动画
   const [settingsMounted, setSettingsMounted] = useState(false);
   // 打开设置前记下触发它的按钮：关闭弹窗后焦点要回到原处
@@ -571,12 +581,13 @@ export default function Home() {
           />
         </WidgetBoundary>
 
-        <ShortcutHelp
-          open={helpOpen}
-          onOpen={() => setHelpOpen(true)}
-          onClose={() => setHelpOpen(false)}
-          returnFocusTo={settingsTriggerRef.current}
-        />
+        {helpOpen ? (
+          <ShortcutHelp
+            open
+            onClose={() => setHelpOpen(false)}
+            returnFocusTo={settingsTriggerRef.current}
+          />
+        ) : null}
       </div>
     </>
   );

@@ -23,6 +23,34 @@
   z-index: 0;
   overflow: hidden;
   background: linear-gradient(135deg, #0b1220, #05070c 60%, #0a0f1c);
+  /*
+   * 视差：--wall-px / --wall-py 由 wallpaper.tsx 在 rAF 里写入（-1 ~ 1）。
+   * 只做 translate + 轻微放大，全部走合成器 —— 不触发重排/重绘。
+   * 放大 4% 是为了让 6px 的位移不会露出容器边缘。
+   */
+  transform: translate3d(
+      calc(var(--wall-px, 0) * 6px),
+      calc(var(--wall-py, 0) * 6px),
+      0
+    )
+    scale(1.04);
+  will-change: transform;
+}
+
+/*
+ * 极淡的颗粒：一张 160×160 的内联 SVG 噪点，平铺、静态、只栅格化一次。
+ * 作用是让大面积渐变/照片有「胶片」质感，压掉 8bit 色带；
+ * 不用 mix-blend-mode —— 那会让每一帧都重新混合整屏，得不偿失。
+ */
+.wallpaper-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }
 
 .wallpaper-media {
@@ -32,7 +60,37 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
-  will-change: transform;
+  transform-origin: center;
+  will-change: transform, opacity;
+  /* 模糊/亮度改由 CSS 过渡：Motion 不再逐帧写 filter（见 wallpaper.tsx 注释） */
+  transition: filter 300ms var(--ease-out-cubic);
+}
+
+/*
+ * Ken Burns：12s 缓慢归位。
+ * 关键在「CSS 动画跑在合成线程」—— 之前由 Motion 逐帧写内联 transform，
+ * 空闲状态就有 60 次/秒样式重算；换成 keyframes 后主线程完全消失。
+ */
+@keyframes wallpaper-settle {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.wallpaper-media[data-kenburns="true"][data-decoded="true"] {
+  animation: wallpaper-settle 12s linear both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wallpaper-media[data-kenburns="true"] {
+    animation: none;
+  }
+  .wallpaper-layer {
+    transform: none;
+  }
 }
 
 /*

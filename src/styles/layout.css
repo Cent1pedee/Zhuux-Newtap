@@ -198,8 +198,13 @@
     color-mix(in srgb, var(--fg) 18%, transparent),
     transparent
   );
-  transform: skewX(-18deg);
-  transition: left 520ms var(--ease-out-cubic);
+  /*
+   * 位移只用 transform：`left` 是布局属性，每一次 hover 都会让按钮内部
+   * 重新布局（哪怕只有一像素）。translateX 的百分比相对自身宽度（90% 按钮宽），
+   * 从 -140% 走到 140% 的行程约等于 311% 自身宽度。
+   */
+  transform: translateX(0) skewX(-18deg);
+  transition: transform 520ms var(--ease-out-cubic);
   pointer-events: none;
 }
 
@@ -210,7 +215,7 @@
 
 .bar-action:hover::after,
 .bar-action:focus-visible::after {
-  left: 140%;
+  transform: translateX(311%) skewX(-18deg);
 }
 
 .bar-action:hover,
@@ -859,6 +864,9 @@
 
 .home-quote .text-quote {
   color: #fff;
+  /* 中文引言的断行更均衡；避开末行只剩一两个字的「孤字」 */
+  text-wrap: pretty;
+  hanging-punctuation: allow-end;
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.62),
     0 0 12px rgba(0, 0, 0, 0.5);

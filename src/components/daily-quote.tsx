@@ -6,7 +6,7 @@ import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import { EASE_OUT_CUBIC } from "@/lib/motion";
 import { quoteOfDay, randomQuote, type Quote } from "@/lib/quotes";
 import { fetchRemoteQuote } from "@/lib/services";
-import { useToast } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast";
 import { TextAnimate } from "@/components/magicui/text-animate";
 
 export function DailyQuote() {
