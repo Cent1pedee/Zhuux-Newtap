@@ -1137,9 +1137,18 @@ test.describe("快捷跳转", () => {
       };
     });
 
-    // 容器：无底色、无阴影、无描边
-    expect(state.bg).toBe(bgBefore);
-    expect(["rgba(0, 0, 0, 0)", "transparent"]).toContain(state.bg);
+    /*
+     * 容器：无底色、无阴影、无描边。
+     *
+     * 不要用「hover 前后的原始字符串相等」来判定：样式表尚未生效时
+     * getComputedStyle 会返回空串（CI 上就撞到过 "" vs "rgba(0, 0, 0, 0)"），
+     * 两次采样本来也不该被当成同一种表示。要守的是「透明」这个语义。
+     */
+    const isTransparent = (color: string) =>
+      color === "" || color === "transparent" || /^rgba?\(0,\s*0,\s*0,\s*0\)$/.test(color);
+
+    expect(isTransparent(bgBefore)).toBe(true);
+    expect(isTransparent(state.bg)).toBe(true);
     expect(state.boxShadow).toBe("none");
     expect(state.borderWidth).toBe("0px");
     // 图标层：确实发生了位移/放大（spring 动画异步落位，等它一帧）
