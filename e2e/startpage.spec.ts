@@ -430,10 +430,21 @@ test.describe("首屏与布局", () => {
     expect(opened.thumb[3]).toBe(closed.thumb[3]); // 滑块高
     expect(opened.thumbRight).toBeLessThanOrEqual(opened.rootRight - 1);
     expect(closed.thumbRight).toBeLessThanOrEqual(closed.rootRight - 1);
-    expect(Math.round(opened.thumb[1] - opened.root[1])).toBe(2);
-    expect(Math.round(closed.thumb[1] - closed.root[1])).toBe(2);
-    expect(Math.round(opened.thumb[0] - opened.root[0])).toBe(16);
-    expect(Math.round(closed.thumb[0] - closed.root[0])).toBe(2);
+
+    /*
+     * 首页的 fit-scale 会给 main 加 `zoom`，所以这里的坐标是「设计像素 × 缩放比」。
+     * 缩放比由内容高度决定，而内容高度取决于字体度量 —— macOS 与 Linux runner
+     * 的字体不同，16px 会被缩成 15.x，Math.round 之后就成了 15（CI 上报的就是这个）。
+     * 用轨道宽度（34 设计像素）反推 1 个设计像素的实际长度，断言就和平台无关了。
+     */
+    const designUnit = (snap: typeof closed) => snap.root[2] / 34;
+    const dx = (snap: typeof closed) => Math.round((snap.thumb[0] - snap.root[0]) / designUnit(snap));
+    const dy = (snap: typeof closed) => Math.round((snap.thumb[1] - snap.root[1]) / designUnit(snap));
+
+    expect(dy(opened)).toBe(2);
+    expect(dy(closed)).toBe(2);
+    expect(dx(opened)).toBe(16);
+    expect(dx(closed)).toBe(2);
 
     // 连续快速切换：每次落位都回到同样的两个相对坐标，不累积偏移
     const offsets: number[] = [];
@@ -442,9 +453,9 @@ test.describe("首屏与布局", () => {
       const s = await readSettled(read);
       expect(s.root[2]).toBe(closed.root[2]);
       expect(s.root[3]).toBe(closed.root[3]);
-      expect(Math.round(s.thumb[1] - s.root[1])).toBe(2);
+      expect(dy(s)).toBe(2);
       expect(s.thumbRight).toBeLessThanOrEqual(s.rootRight - 1);
-      offsets.push(Math.round(s.thumb[0] - s.root[0]));
+      offsets.push(dx(s));
     }
     expect(offsets).toEqual([2, 16, 2, 16]);
 
