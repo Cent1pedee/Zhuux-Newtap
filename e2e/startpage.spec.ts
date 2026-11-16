@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { openSettings, openSettingsDialog, readSettled } from "./helpers";
+import { openSettings, openSettingsDialog, readSettled, settleAnimations } from "./helpers";
 
 /**
  * E2E：按 PRD 的五个 P0 要素逐条验证「真实浏览器里的可操作性」。
@@ -422,7 +422,8 @@ test.describe("首屏与布局", () => {
      * 后续 offsets 序列整体错位（CI 上报的 [2,16,2,16] ≠ 实际）。
      */
     await expect.poll(async () => (await read()).state, { timeout: 3_000 }).toBe("checked");
-    const opened = await readSettled(read);
+    await settleAnimations(page, '[data-testid="settings-content"]');
+    const opened = await read();
     expect(opened.state).toBe("checked");
 
     /*
@@ -458,14 +459,19 @@ test.describe("首屏与布局", () => {
     for (let i = 0; i < 4; i++) {
       await sw.click();
       await expect.poll(async () => (await read()).state, { timeout: 3_000 }).toBe(expectedStates[i]!);
-      const s = await readSettled(read);
+      await settleAnimations(page, '[data-testid="settings-content"]');
+      const s = await read();
       expect(s.root[2]).toBe(closed.root[2]);
       expect(s.root[3]).toBe(closed.root[3]);
       expect(dy(s)).toBe(2);
       expect(s.thumbRight).toBeLessThanOrEqual(s.rootRight - 1);
       offsets.push(dx(s));
     }
-    expect(offsets).toEqual([2, 16, 2, 16]);
+    /*
+     * 用字符串比较而不是数组：失败时 GitHub 注解里直接显示
+     * Received 的完整序列（数组 diff 会被折叠成「Array [ 2, ...」）。
+     */
+    expect(offsets.join(",")).toBe("2,16,2,16");
 
     // 滚动只改变纵向位置：控件宽度与横向坐标不漂移
     const beforeScroll = await read();

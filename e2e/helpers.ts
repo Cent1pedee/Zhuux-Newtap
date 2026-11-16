@@ -57,3 +57,26 @@ export async function readSettled<T>(
   }
   return prev;
 }
+
+/**
+ * 等到某个子树里没有正在运行的 CSS 动画/过渡。
+ *
+ * 比「两次采样一致」更硬：慢机上过渡会持续几百毫秒，而连续两次采样可能
+ * 都落在同一条缓动的同一段（页面被节流时甚至会冻在中间值），
+ * 直接问浏览器「动画跑完没有」才是准的。
+ */
+export async function settleAnimations(page: Page, selector: string) {
+  await page
+    .waitForFunction(
+      (sel) => {
+        const root = document.querySelector(sel);
+        if (!root) return true;
+        return root.getAnimations({ subtree: true }).every((a) => a.playState !== "running");
+      },
+      selector,
+      { timeout: 5_000 },
+    )
+    .catch(() => {
+      /* 拿不到动画列表时退回直接读取，由断言报数值 */
+    });
+}
