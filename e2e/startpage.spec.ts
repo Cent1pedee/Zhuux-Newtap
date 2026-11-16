@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { openSettings, openSettingsDialog } from "./helpers";
+import { openSettings, openSettingsDialog, readSettled } from "./helpers";
 
 /**
  * E2E：按 PRD 的五个 P0 要素逐条验证「真实浏览器里的可操作性」。
@@ -415,8 +415,8 @@ test.describe("首屏与布局", () => {
     const closed = await read();
     expect(closed.state).toBe("unchecked");
     await sw.click();
-    await page.waitForTimeout(280);
-    const opened = await read();
+    // 等过渡真正结束再采样（CI 上 280ms 会落在位移中间）
+    const opened = await readSettled(read);
     expect(opened.state).toBe("checked");
 
     /*
@@ -439,8 +439,7 @@ test.describe("首屏与布局", () => {
     const offsets: number[] = [];
     for (let i = 0; i < 4; i++) {
       await sw.click();
-      await page.waitForTimeout(260);
-      const s = await read();
+      const s = await readSettled(read);
       expect(s.root[2]).toBe(closed.root[2]);
       expect(s.root[3]).toBe(closed.root[3]);
       expect(Math.round(s.thumb[1] - s.root[1])).toBe(2);
@@ -455,8 +454,7 @@ test.describe("首屏与布局", () => {
       const el = document.querySelector('[data-testid="settings-content"]') as HTMLElement;
       el.scrollTop = 60;
     });
-    await page.waitForTimeout(120);
-    const afterScroll = await read();
+    const afterScroll = await readSettled(read);
     expect(afterScroll.thumb[2]).toBe(beforeScroll.thumb[2]);
     expect(afterScroll.root[0]).toBe(beforeScroll.root[0]);
   });
@@ -506,6 +504,25 @@ test.describe("首屏与布局", () => {
     await page.keyboard.press("Control+2");
     await page.keyboard.press("Control+3");
     await expect.poll(() => page.getByTestId("toast").count()).toBeGreaterThanOrEqual(2);
+
+    /*
+     * sonner 的入场是「缩放 + 淡入」，中间帧的 width/height 与最终值不同。
+     * 本地采样时动画早已结束，CI 慢一倍就会采到缩放中的卡片 —— 于是
+     * 「所有卡片几何一致」这条断言假红。等 toaster 内不再有运行中的动画再读。
+     */
+    await page
+      .waitForFunction(
+        () => {
+          const toaster = document.querySelector("[data-sonner-toaster]");
+          if (!toaster) return false;
+          return toaster.getAnimations({ subtree: true }).every((a) => a.playState !== "running");
+        },
+        undefined,
+        { timeout: 6_000 },
+      )
+      .catch(() => {
+        /* 拿不到动画列表时退回直接采样，由断言报具体数值 */
+      });
 
     const info = await page.evaluate(() => {
       const cards = Array.from(document.querySelectorAll('[data-testid="toast"]')).map((el) => {
@@ -880,13 +897,14 @@ test.describe("搜索引擎框", () => {
 
     // 悬停：底色变深（解析成 rgb 后比亮度）
     await shell.hover();
-    await page.waitForTimeout(320);
+    await expect.poll(async () => (await read()).bg, { timeout: 4_000 }).not.toBe(base.bg);
     const hover = await read();
     expect(hover.bg).not.toBe(base.bg);
 
     // 聚焦：图标淡入、胶囊放大、输入框收内距
     await input.click();
-    await page.waitForTimeout(340);
+    // 内距与缩放都在过渡里：等目标值真的到位
+    await expect.poll(async () => (await read()).inputPad, { timeout: 4_000 }).toBe("4px");
     const focus = await read();
     expect(focus.focused).toBe("true");
     expect(Number(focus.engineOpacity)).toBeGreaterThan(0.9);
@@ -896,7 +914,7 @@ test.describe("搜索引擎框", () => {
 
     // 失焦后回到隐身态
     await page.mouse.click(1200, 240);
-    await page.waitForTimeout(420);
+    await expect.poll(async () => (await read()).transform, { timeout: 4_000 }).toBe("none");
     const blurred = await read();
     expect(Number(blurred.engineOpacity)).toBe(0);
     expect(blurred.transform).toBe("none");
@@ -941,10 +959,16 @@ test.describe("搜索引擎框", () => {
     await fresh(page);
     await page.evaluate(() => {
       (window as unknown as { __opened: unknown[][] }).__opened = [];
-      const original = window.open.bind(window);
+      /*
+       * 只记录参数，不真开窗口。
+       * 早先这里调用原始 window.open，会真的弹出一个新标签并把本页焦点抢走 ——
+       * 而搜索键是「聚焦才可见」的控件（visibility:hidden + pointer-events:none），
+       * 于是后续点击经常打在一个不可见的按钮上，Playwright 一路重试到 30s 超时。
+       * 本用例要验的是「提交时把哪个 URL 交给了 window.open」，与是否真开窗无关。
+       */
       window.open = (...args: unknown[]) => {
         (window as unknown as { __opened: unknown[][] }).__opened.push(args);
-        return original(...(args as [string, string, string]));
+        return null;
       };
     });
     const readOpened = () => page.evaluate(() => (window as unknown as { __opened: string[][] }).__opened);
@@ -960,8 +984,9 @@ test.describe("搜索引擎框", () => {
     expect(page.url()).toBe(urlBefore);
 
     // ② 有内容 + 点搜索按钮 → 同样在新标签
-    // 新标签会抢走本页焦点，两端图标随之隐藏；先点回输入框再提交
+    // 图标随焦点显隐：等 data-focused 真的为 true 再点提交键
     await input.click();
+    await expect(page.getByTestId("search-shell")).toHaveAttribute("data-focused", "true");
     await page.getByTestId("search-submit").click();
     await expect.poll(readOpened).toHaveLength(2);
     expect((await readOpened())[1][0]).toContain("hello");
@@ -969,6 +994,7 @@ test.describe("搜索引擎框", () => {
 
     // ③ 清空后提交 → 直接打开当前引擎官网（不是拒绝）
     await input.click();
+    await expect(page.getByTestId("search-shell")).toHaveAttribute("data-focused", "true");
     await input.fill("");
     await page.getByTestId("search-submit").click();
     await expect.poll(readOpened).toHaveLength(3);

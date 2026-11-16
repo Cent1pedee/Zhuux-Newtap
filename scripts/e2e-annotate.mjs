@@ -43,10 +43,18 @@ for (const spec of failed) {
   const results = spec.tests?.flatMap((test) => test.results ?? []) ?? [];
   const bad = results.filter((r) => r.status !== "passed");
   const last = bad[bad.length - 1] ?? results[results.length - 1];
+  /*
+   * 取前 5 行而不是第 1 行：Playwright 的 expect 报错第一行永远是
+   * 「expect(received).toBe(expected)」，真正的 Expected / Received 在下面几行 ——
+   * 只留首行等于什么都看不见。
+   */
   const message = (last?.error?.message ?? last?.errors?.[0]?.message ?? "未知错误")
     .replace(/\u001b\[[0-9;]*m/g, "") // 去掉 ANSI 颜色
-    .split("\n")[0]
-    .slice(0, 220)
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .slice(0, 5)
+    .join(" ⏎ ")
+    .slice(0, 400)
     .replace(/%/g, "%25")
     .replace(/\r/g, "%0D")
     .replace(/\n/g, "%0A");

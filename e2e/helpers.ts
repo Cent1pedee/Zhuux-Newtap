@@ -35,3 +35,25 @@ export async function openSettingsDialog(page: Page, target: "privacy" | "about"
   await page.getByTestId(`settings-open-${target}`).click();
   await expect(page.getByTestId(`${target}-done`)).toBeVisible();
 }
+
+/**
+ * 反复读同一个快照，直到连续两次完全一致再返回。
+ *
+ * 为什么需要：CI runner 比本地慢 2–3 倍（同一套用例本地 1m12s、CI 3m33s）。
+ * `waitForTimeout(280)` 在本地够用，在 CI 上会落在过渡中间 ——
+ * 滑块还差 1px、toast 还在缩放，断言逐帧值就红。
+ * 等「值不再变化」比加大 sleep 稳，也比放宽阈值诚实。
+ */
+export async function readSettled<T>(
+  read: () => Promise<T>,
+  { step = 80, tries = 30 }: { step?: number; tries?: number } = {},
+): Promise<T> {
+  let prev = await read();
+  for (let i = 0; i < tries; i++) {
+    await new Promise((resolve) => setTimeout(resolve, step));
+    const next = await read();
+    if (JSON.stringify(next) === JSON.stringify(prev)) return next;
+    prev = next;
+  }
+  return prev;
+}
