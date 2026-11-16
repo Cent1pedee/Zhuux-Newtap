@@ -51,7 +51,16 @@ jobs:
       # playwright.config.ts 用的是 channel: "chrome"（复用已安装的 Chrome，不下载内核）；
       # ubuntu-latest 镜像自带 Google Chrome，所以这里不需要 playwright install。
       # 若哪天换成 bundled chromium，这里要补 `pnpm exec playwright install --with-deps chromium`。
-      - run: pnpm run test:e2e
+      # 日志要登录才能看，但注解是公开的：JSON 报告 → 每条失败一行 ::error::
+      # 顺带把失败用例写进 job summary，PR 页面直接可读
+      - name: 端到端测试
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/results.json
+        run: pnpm exec playwright test --reporter=list,json
+
+      - name: 失败用例转成注解
+        if: failure()
+        run: node scripts/e2e-annotate.mjs
 
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -80,19 +89,30 @@ jobs:
       # 探针自己会从 shots/ 复制一张大图当压力壁纸，不需要额外准备素材
       - name: 采集并断言预算
         run: |
-          pnpm exec next start --port 3100 &
+          set -euo pipefail
+          pnpm exec next start --port 3100 > perf-server.log 2>&1 &
           SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+
+          ready=0
           for i in $(seq 1 45); do
-            curl -sf http://127.0.0.1:3100/ >/dev/null && break
+            if curl -sf -o /dev/null http://127.0.0.1:3100/; then ready=1; break; fi
             sleep 2
           done
+          if [ "$ready" != "1" ]; then
+            echo "::error::next start 未在 90s 内就绪"
+            tail -40 perf-server.log
+            exit 1
+          fi
+
           node scripts/perf-probe.mjs --budget
-          kill $SERVER_PID
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: perf-probe-output
           path: |
+            perf-report.json
+            perf-server.log
             public/__perf-bg.png
           retention-days: 3

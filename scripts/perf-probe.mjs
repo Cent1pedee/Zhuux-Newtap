@@ -17,7 +17,7 @@
  * 注意：headless Chrome 没有 GPU 合成，rAF 恒定 60，帧率不可作为判据。
  */
 
-import { copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
 
@@ -27,16 +27,31 @@ const ENFORCE_BUDGET = process.argv.includes("--budget");
 /* ------------------------------ 压力壁纸 ------------------------------ */
 
 function ensureBackground() {
-  const target = join(process.cwd(), "public", "__perf-bg.png");
+  const publicDir = join(process.cwd(), "public");
+  const target = join(publicDir, "__perf-bg.png");
   if (existsSync(target)) return true;
 
+  /*
+   * `public/` 在本仓库里**没有跟踪任何文件**（构建产物才往里放），
+   * 所以全新克隆（CI）里这个目录根本不存在。
+   * 早先这里直接 copyFileSync，CI 上第一步就 ENOENT 崩掉 ——
+   * 本地因为历史遗留的目录一直在，永远复现不出来。
+   */
+  mkdirSync(publicDir, { recursive: true });
+
   const shotsDir = join(process.cwd(), "shots");
-  if (!existsSync(shotsDir)) return false;
+  if (!existsSync(shotsDir)) {
+    console.warn("[probe] 找不到 shots/，压力壁纸缺失：blur 相关指标仅供参考");
+    return false;
+  }
   const candidates = readdirSync(shotsDir)
     .filter((f) => f.endsWith(".png"))
     .map((f) => ({ f, size: statSync(join(shotsDir, f)).size }))
     .sort((a, b) => b.size - a.size);
-  if (!candidates.length) return false;
+  if (!candidates.length) {
+    console.warn("[probe] shots/ 里没有 png，压力壁纸缺失：blur 相关指标仅供参考");
+    return false;
+  }
 
   copyFileSync(join(shotsDir, candidates[0].f), target);
   console.log(`[probe] 已复制压力壁纸：shots/${candidates[0].f} → public/__perf-bg.png`);
@@ -300,6 +315,19 @@ for (const r of [results[1], expand]) {
 }
 
 await browser.close();
+
+/*
+ * 报告落盘：stdout 在 CI 里只能翻日志，失败时把结构化结果作为 artifact 上传更好查。
+ * 放在 exit 之前写，预算失败也能拿到现场。
+ */
+try {
+  writeFileSync(
+    join(process.cwd(), "perf-report.json"),
+    JSON.stringify({ backgroundReady, jsTransferKb: jsKb, auditHome, auditSettings, results, budgets }, null, 2),
+  );
+} catch (error) {
+  console.warn(`[probe] 报告写入失败：${error.message}`);
+}
 
 if (ENFORCE_BUDGET && failures.length) {
   console.error(`\n性能预算未通过：${failures.map((f) => `${f.key}=${f.value}${f.unit}`).join(", ")}`);

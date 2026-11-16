@@ -48,3 +48,7 @@ next-env.d.ts
 .workbuddy
 # perf probe 生成的压力壁纸
 /public/__perf-bg.png
+
+# 性能探针 / CI 现场文件
+/perf-report.json
+/perf-server.log
