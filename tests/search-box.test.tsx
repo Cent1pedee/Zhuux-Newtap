@@ -165,6 +165,35 @@ describe("搜索框：提交行为", () => {
   });
 });
 
+describe("搜索框：聚焦态", () => {
+  /*
+   * 焦点在输入框和胶囊里的其它控件之间移动时，面板不能闪回「未聚焦」：
+   * 引擎徽标与提交键本身是「聚焦才可见」的，一退回就等于把它们自己在
+   * 被点的那一瞬藏起来 —— 用户看到的是「点了一下没反应」。
+   */
+  it("焦点移进胶囊内的控件时不收起，真正离开才收起", async () => {
+    renderWithProviders(<SearchBox />);
+    const shell = screen.getByTestId("search-shell");
+
+    fireEvent.focus(input());
+    await waitFor(() => expect(shell.getAttribute("data-focused")).toBe("true"));
+
+    // 鼠标按下提交键：先 blur，焦点随后落到按钮上
+    fireEvent.blur(input());
+    screen.getByTestId("search-submit").focus();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(shell.getAttribute("data-focused")).toBe("true");
+
+    // 焦点真的离开面板（到 body）才允许收起：回到输入框再失焦出去
+    fireEvent.focus(input());
+    await waitFor(() => expect(shell.getAttribute("data-focused")).toBe("true"));
+    fireEvent.blur(input());
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(shell.getAttribute("data-focused")).toBe("false");
+  });
+});
+
 describe("搜索框：最近搜索", () => {
   beforeEach(() => {
     window.localStorage.clear();

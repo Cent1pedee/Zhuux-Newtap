@@ -414,6 +414,22 @@ test.describe("首屏与布局", () => {
 
     const closed = await read();
     expect(closed.state).toBe("unchecked");
+    /*
+     * 首页的 fit-scale 会给 main 加 `zoom`，所以这里的坐标是「设计像素 × 缩放比」。
+     * 缩放比由内容高度决定，而内容高度取决于字体度量 —— macOS 与 Linux runner
+     * 的字体不同，16px 会被缩成 15.x，Math.round 之后就成了 15（CI 上报的就是这个）。
+     * 用轨道宽度（34 设计像素）反推 1 个设计像素的实际长度，断言就和平台无关了。
+     */
+    const designUnit = (snap: typeof closed) => snap.root[2] / 34;
+    const dx = (snap: typeof closed) => Math.round((snap.thumb[0] - snap.root[0]) / designUnit(snap));
+    const dy = (snap: typeof closed) => Math.round((snap.thumb[1] - snap.root[1]) / designUnit(snap));
+
+    // 落位的定义是「位移等于目标值」，不是「动画列表里没有 running」
+    const waitOffset = (state: string) =>
+      expect
+        .poll(async () => dx(await read()), { timeout: 3_000 })
+        .toBe(state === "checked" ? 16 : 2);
+
     await sw.click();
     /*
      * 先等状态翻转，再等几何稳定。
@@ -422,7 +438,12 @@ test.describe("首屏与布局", () => {
      * 后续 offsets 序列整体错位（CI 上报的 [2,16,2,16] ≠ 实际）。
      */
     await expect.poll(async () => (await read()).state, { timeout: 3_000 }).toBe("checked");
-    await settleAnimations(page, '[data-testid="settings-content"]');
+    /*
+     * 不要用「等动画结束」来判定落位：点击后 React 重渲染与 CSS 过渡启动之间
+     * 有一帧空隙，此时 getAnimations() 里一条 running 都没有，会立刻返回**旧几何**。
+     * 直接轮询几何值本身，等到它等于目标值为止 —— 这才是「落位」的定义。
+     */
+    await waitOffset("checked");
     const opened = await read();
     expect(opened.state).toBe("checked");
 
@@ -438,15 +459,6 @@ test.describe("首屏与布局", () => {
     expect(opened.thumbRight).toBeLessThanOrEqual(opened.rootRight - 1);
     expect(closed.thumbRight).toBeLessThanOrEqual(closed.rootRight - 1);
 
-    /*
-     * 首页的 fit-scale 会给 main 加 `zoom`，所以这里的坐标是「设计像素 × 缩放比」。
-     * 缩放比由内容高度决定，而内容高度取决于字体度量 —— macOS 与 Linux runner
-     * 的字体不同，16px 会被缩成 15.x，Math.round 之后就成了 15（CI 上报的就是这个）。
-     * 用轨道宽度（34 设计像素）反推 1 个设计像素的实际长度，断言就和平台无关了。
-     */
-    const designUnit = (snap: typeof closed) => snap.root[2] / 34;
-    const dx = (snap: typeof closed) => Math.round((snap.thumb[0] - snap.root[0]) / designUnit(snap));
-    const dy = (snap: typeof closed) => Math.round((snap.thumb[1] - snap.root[1]) / designUnit(snap));
 
     expect(dy(opened)).toBe(2);
     expect(dy(closed)).toBe(2);
@@ -459,7 +471,7 @@ test.describe("首屏与布局", () => {
     for (let i = 0; i < 4; i++) {
       await sw.click();
       await expect.poll(async () => (await read()).state, { timeout: 3_000 }).toBe(expectedStates[i]!);
-      await settleAnimations(page, '[data-testid="settings-content"]');
+      await waitOffset(expectedStates[i]!);
       const s = await read();
       expect(s.root[2]).toBe(closed.root[2]);
       expect(s.root[3]).toBe(closed.root[3]);
@@ -1020,6 +1032,7 @@ test.describe("搜索引擎框", () => {
     // ③ 清空后提交 → 直接打开当前引擎官网（不是拒绝）
     await input.click();
     await expect(page.getByTestId("search-shell")).toHaveAttribute("data-focused", "true");
+    await settleAnimations(page, '[data-testid="search-shell"]');
     await input.fill("");
     await page.getByTestId("search-submit").click();
     await expect.poll(readOpened).toHaveLength(3);

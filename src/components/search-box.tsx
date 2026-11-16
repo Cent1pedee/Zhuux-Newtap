@@ -386,6 +386,20 @@ export function SearchBox() {
             }}
             onBlur={() => {
               window.setTimeout(() => {
+                /*
+                 * 焦点只是从输入框挪进胶囊里的另一个控件（提交键 / 引擎徽标）时，
+                 * 不能把面板退回「未聚焦」：那两个图标本身是「聚焦才可见」的，
+                 * 一退回就会把它们自己在被点的瞬间藏起来 —— 表现是「点了一下没反应」，
+                 * 指针用户尤其容易踩到（mousedown 先 blur，120ms 后按钮消失）。
+                 *
+                 * 两种情形都要放行：焦点还在面板内（键盘 Tab / 按钮获焦）、
+                 * 指针还在面板上（鼠标悬停准备点）。
+                 */
+                const active = document.activeElement;
+                const stillInside =
+                  (active instanceof HTMLElement && active.closest(".search-panel") !== null) ||
+                  formRef.current?.matches(":hover") === true;
+                if (stillInside) return;
                 setFocused(false);
                 setFocusedMode(false);
               }, 120);
