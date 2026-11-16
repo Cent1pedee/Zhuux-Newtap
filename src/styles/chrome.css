@@ -140,6 +140,18 @@
   transform: scale(1.015);
 }
 
+/*
+ * 引擎菜单展开时，把胶囊整体抬到搜索历史 / 建议列表（z-20）之上。
+ *
+ * 胶囊有 backdrop-filter，本身是层叠上下文：内部菜单的 z-30 只在这个上下文
+ * 内比较，胶囊自身 z-index:auto 时仍按文档顺序排在后面的历史面板之下。
+ * 表现就是「点引擎图标，菜单被历史挡住、选项点不动」。抬到 40 之后，
+ * 菜单整体盖在历史上方，历史照常淡出，两者互不抢指针。
+ */
+.search-panel[data-menu="true"] {
+  z-index: 40;
+}
+
 /* 暗色主题：参考站是一块 45 灰的半透明底，聚焦后压到 95% */
 [data-theme="dark"] .search-panel {
   --search-bg: rgba(45, 45, 45, 0.4);
@@ -192,7 +204,17 @@
   box-shadow: 0 4px 24px rgba(15, 23, 42, 0.16);
 }
 
-/* 输入区：文字色跟着胶囊走，空态居中、开始输入后回到左对齐 */
+/*
+ * 输入区：文字色跟着胶囊走；无论空态、聚焦还是已输入，一律居中。
+ *
+ * 旧规则只给「空态且未聚焦」居中，另外两种状态都是 text-align:left：
+ *   · 点进来时占位文字和光标停在最左边，和「居中」的视觉预期相反；
+ *   · 输入第一个字符时整块文字又跳到中间，光标跟着一起跳。
+ * 现在基础规则就是 center —— 空态聚焦时插入点直接落在内容盒正中，
+ * 输入过程中整段文字保持居中，光标跟随文字末尾（输入框的固有行为）。
+ * 居中范围是输入框自身的内容盒（左侧引擎键、右侧清空/搜索键之内），
+ * 不会压到两侧图标。失焦也保持居中，避免焦点移走时文字跳回左边。
+ */
 .search-input {
   height: 44px;
   /* 图标隐藏时文字不要贴边；聚焦后图标出现，padding 收回到 4px */
@@ -204,7 +226,7 @@
   font-size: 15px;
   line-height: 44px;
   color: var(--search-text);
-  text-align: left;
+  text-align: center;
   transition:
     color 250ms cubic-bezier(0.4, 0, 0.2, 1),
     padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -222,11 +244,6 @@
   color: var(--search-text-focus);
 }
 
-/* 空态且未聚焦：占位文字在整条胶囊里居中（两侧图标是隐藏的） */
-.search-panel[data-empty="true"]:not([data-focused="true"]) .search-input {
-  text-align: center;
-}
-
 .search-input::placeholder {
   color: var(--search-placeholder);
   transition: color 250ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -238,6 +255,16 @@
 
 .search-panel[data-focused="true"] .search-input::placeholder {
   color: var(--search-placeholder-focus);
+}
+
+/*
+ * 空态聚焦：占位文字会被正中位置的插入点从中间劈开（实测「搜|索」），
+ * 聚焦时先把它隐去，只留一枚居中的光标；失焦或有输入后自然恢复。
+ */
+.search-panel[data-focused="true"][data-empty="true"] .search-input::placeholder {
+  color: transparent;
+  /* 这里不要做颜色过渡：淡出的 250ms 里光标正好压在残影上，还是会看到「搜|索」 */
+  transition: none;
 }
 
 /* 清空键：只在有内容时出现，跟着胶囊的灰阶走 */
@@ -677,6 +704,16 @@ html[data-js="1"] .search-panel[data-focused="true"] .search-submit {
 
 .engine-menu-item[aria-checked="true"] {
   font-weight: 500;
+}
+
+/*
+ * 菜单压在搜索历史 / 建议之上时不能透出底下的文字。
+ * glass-strong 的 0.72 不透明度是给「压在壁纸上」设计的；这里底下可能还有
+ * 一层同样半透明的历史面板，两层字会糊在一起。改用接近不透明的面板底色
+ * （与 Dock 名称气泡同源），blur 仍保留，玻璃感不丢。
+ */
+.search-panel .engine-menu {
+  background-color: var(--board-bg);
 }
 
 /* ------------------------------------------------------------

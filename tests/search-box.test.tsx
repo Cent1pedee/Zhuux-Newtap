@@ -217,6 +217,25 @@ describe("搜索框：最近搜索", () => {
     vi.unstubAllGlobals();
   });
 
+  it("历史展开时打开引擎菜单，历史让位（同一时刻只留一层下拉）", async () => {
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+    renderWithProviders(<SearchBox />);
+
+    const el = input();
+    fireEvent.focus(el);
+    fireEvent.change(el, { target: { value: "vite" } });
+    fireEvent.keyDown(el, { key: "Enter" });
+    fireEvent.change(el, { target: { value: "" } });
+    await waitFor(() => expect(screen.getByTestId("search-history")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("engine-button"));
+    await waitFor(() => expect(screen.getByTestId("engine-menu")).toBeTruthy());
+    // 历史开始退场；菜单是此刻唯一的下拉层，不会被历史盖住
+    await waitFor(() => expect(screen.queryByTestId("search-history")).toBeNull());
+    vi.unstubAllGlobals();
+  });
+
   it("点历史条目直接搜索，且不会污染成指令", async () => {
     const openSpy = vi.fn();
     vi.stubGlobal("open", openSpy);

@@ -342,6 +342,19 @@ pnpm start           # 启动生产服务器 → http://localhost:3000
 |---|---|
 | 增删改后刷新，Dock 先闪一下旧布局 | 持久化数据本身是对的，问题在 `ready` 翻转那一帧：`AnimatePresence` 会把被删掉的出厂项保留 160ms 播退出动画，同 id 换位的项会从默认位置做 layout 滑动 —— 胶囊同时在淡入，实测 13 项（3 个已删除项）一直显示到 opacity 0.83，再跳成 10 项。给 `AnimatePresence` 加 `key={ready ? "ready" : "pending"}`：两套列表分属不同子树，切到 ready 时整体重建，退出 / 布局动画都不发生，首个可见帧就是本地配置的最终顺序；入场只由胶囊浮入负责 |
 
+### 3.12 搜索框：输入文字居中与引擎菜单层级
+
+| 问题 | 修改 |
+|---|---|
+| 输入后文字贴左、光标不在中间 | `.search-input` 只在「空态且未聚焦」居中，点进输入框后基础规则是 `text-align:left`：占位与光标停在最左边，输入后又整块跳到中间。改为基础规则 `text-align:center`，三种状态（空态聚焦 / 输入中 / 失焦）全部居中，空态聚焦时插入点直接落在内容盒正中。居中光标会把占位「搜索」劈成「搜\|索」，所以空态聚焦期间隐去占位、且不做颜色过渡（250ms 残影仍会压到光标上）；失焦后占位恢复 |
+| 历史展开时引擎面板被挡 | 胶囊的 `backdrop-filter` 自成层叠上下文，内部菜单的 `z-30` 出不去；胶囊本身 `z-index:auto`，被后面同级的历史面板（`z-20`）整块盖住 —— 实测 `elementFromPoint` 在菜单中心返回 `search-history`，点百度不生效。菜单打开时给胶囊 `data-menu` + `z-index:40`，并让历史 / 建议在菜单展开时立即收起（同一时刻只留一层下拉）；菜单底色从 `glass-strong`（0.72 透明）换成接近不透明的 `--board-bg`，避免两层玻璃的字互相透出来 |
+
+### 3.13 键盘跳到主要内容时出现蓝色边框
+
+| 问题 | 修改 |
+|---|---|
+| 空屏按键盘后页面出现蓝框 | 根因是焦点样式，不是键盘事件处理：Tab 激活「跳到主要内容」后，`#main`（`tabIndex=-1`，纯程序化焦点锚点）命中全局 `:focus-visible`，被画上 2px 蓝色轮廓。它宽达整页，上/左/右贴着视口，只有底边露出一条横穿页面的蓝线。在 `utilities.css` 给 `main[tabindex="-1"]` 的 `:focus` / `:focus-visible` 清掉轮廓；跳转链接自身与其他真实控件（按钮、输入框、引擎菜单项等）的焦点提示全部保留 |
+
 ## 四、目录结构
 
 ```text
@@ -400,10 +413,10 @@ src/
     tokens.css     # 设计 token（间距/圆角/阴影/模糊/时长）+ 主题变量 + shadcn 语义映射
     base.css  panels.css  widgets.css  chrome.css
     layout.css  effects.css  responsive.css  utilities.css  shadcn-compat.css
-tests/             # Vitest 单元 / 组件测试（29 文件 279 项，有覆盖率门禁）
+tests/             # Vitest 单元 / 组件测试（29 文件 281 项，有覆盖率门禁）
 .github/workflows/ci.yml  # CI：typecheck → lint → 覆盖率 → build → e2e
 scripts/           # capture-shots.mjs：视觉验收截图；perf-probe.mjs：主线程/布局/样式重算量化探针
-e2e/               # Playwright 端到端测试（5 文件 61 项，含 axe 无障碍扫描）
+e2e/               # Playwright 端到端测试（5 文件 64 项，含 axe 无障碍扫描）
 ```
 
 ---
@@ -428,7 +441,7 @@ pnpm lint            # ESLint（next/core-web-vitals + next/typescript）
 
 期望：`typecheck` 无输出；`lint` 输出 `0 problems`。
 
-### 5.2 单元 / 组件测试（Vitest，279 项）
+### 5.2 单元 / 组件测试（Vitest，281 项）
 
 ```bash
 pnpm test              # 单次运行
@@ -470,7 +483,7 @@ pnpm exec vitest run tests/commands.test.ts   # 只跑某个文件
 | `tests/shortcut-grid.test.tsx` | 3 | 快捷方块：展平 13 项 + 添加方块、**无托板 / 无管理按钮**、`_blank` 跳转、添加方块深链回调、关闭图标抓取时每个方块都有首字母兜底 |
 | `tests/widget-boundary.test.tsx` | 3 | 模块抛错只降级自己、兄弟节点仍在、重试恢复、silent 模式不渲染占位 |
 
-### 5.3 端到端测试（Playwright，61 项）
+### 5.3 端到端测试（Playwright，64 项）
 
 ```bash
 pnpm test:e2e                            # 全量（自动 build + start，端口 3100）

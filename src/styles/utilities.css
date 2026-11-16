@@ -48,6 +48,18 @@
   transform: translateY(0);
 }
 
+/*
+ * #main 只是 skip-link 的跳转锚点（tabIndex=-1），不是可交互控件。
+ * 键盘激活跳过后，全局 :focus-visible 会给整块 main 画一圈 2px 蓝色轮廓：
+ * 上/左/右贴在视口边缘看不见，只有底边露出来 —— 空屏时就是一条横穿页面的
+ * 蓝线，看起来像渲染坏了。这里只清掉这个程序化焦点容器的轮廓，
+ * 链接、按钮、输入框等真实控件仍保留各自的焦点提示。
+ */
+main[tabindex="-1"]:focus,
+main[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 /* 设置搜索命中：只加一圈极淡的强调色轮廓，不改变尺寸 */
 [data-search-hit="true"] {
   border-radius: var(--radius-sm);

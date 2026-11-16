@@ -114,9 +114,14 @@ export function SearchBox() {
     return list.slice(0, 9);
   }, [commandHit, directUrl, cmdHints, remoteSuggestions]);
 
-  const openList = focused && suggestions.length > 0;
+  /*
+   * 同一时刻只允许一层下拉：引擎菜单展开时，历史 / 建议立即收起。
+   * 否则两层玻璃叠在同一个位置 —— 菜单虽然被抬到上层，底下的历史文字
+   * 仍会透过半透明菜单显出来，读起来像两层字糊在一起。
+   */
+  const openList = focused && !engineMenuOpen && suggestions.length > 0;
   // 输入为空且聚焦时才展示历史；一旦开始输入就交给建议列表
-  const historyOpen = focused && query.trim() === "" && history.length > 0;
+  const historyOpen = focused && !engineMenuOpen && query.trim() === "" && history.length > 0;
 
   useEffect(() => {
     setActiveIndex(-1);
@@ -268,6 +273,13 @@ export function SearchBox() {
           className="search-panel relative flex items-center"
           data-focused={focusedMode || engineMenuOpen ? "true" : "false"}
           data-empty={query.length === 0 ? "true" : "false"}
+          /*
+           * 菜单打开时把整个胶囊抬到历史/建议之上。
+           * 胶囊带 backdrop-filter，本身就是一个层叠上下文：内部菜单的 z-30
+           * 只在这个上下文里有效，挡不住后面同级的搜索历史（z-20）——
+           * 结果就是「点引擎图标，面板出现在历史下面，点不动」。
+           */
+          data-menu={engineMenuOpen ? "true" : "false"}
           data-testid="search-shell"
           onMouseDown={(event) => {
             /*

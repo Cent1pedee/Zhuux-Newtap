@@ -882,6 +882,60 @@ test.describe("搜索引擎框", () => {
     expect(Math.abs(sizes.glyph - sizes.submit)).toBeLessThanOrEqual(4);
   });
 
+  test("输入文字与插入点都在输入框内居中", async ({ page }) => {
+    await fresh(page);
+    const input = page.getByTestId("search-input");
+    const align = () => input.evaluate((el) => getComputedStyle(el).textAlign);
+    const placeholder = () => input.evaluate((el) => getComputedStyle(el, "::placeholder").color);
+
+    // 空态聚焦：插入点落在内容盒正中（旧规则是 left，光标贴在最左边）；
+    // 占位文字会被居中的光标劈成两半，聚焦期间隐去
+    await input.click();
+    // 对齐在所有状态下都是 center，必须等聚焦态真正落到 DOM 上再读占位色
+    await expect(page.getByTestId("search-shell")).toHaveAttribute("data-focused", "true");
+    await expect.poll(align).toBe("center");
+    await expect.poll(placeholder).toBe("rgba(0, 0, 0, 0)");
+
+    // 输入后整段文字保持居中
+    await input.fill("hello world");
+    await expect.poll(align).toBe("center");
+
+    // 清空、失焦都保持居中，文字不会跳回左边；占位恢复可见
+    await page.getByTestId("search-clear").click();
+    await expect.poll(align).toBe("center");
+    await page.mouse.click(8, 8);
+    await expect(page.getByTestId("search-shell")).toHaveAttribute("data-focused", "false");
+    await expect.poll(align).toBe("center");
+    await expect.poll(placeholder).not.toBe("rgba(0, 0, 0, 0)");
+  });
+
+  test("搜索历史展开时打开引擎菜单：菜单在上层可操作，选完历史恢复", async ({ page }) => {
+    await fresh(page);
+    await page.evaluate(() =>
+      localStorage.setItem("startpage.search-history.v1", JSON.stringify(["react hooks", "nextjs 教程"])),
+    );
+    await page.reload();
+    await page.getByTestId("search-input").click();
+    await expect(page.getByTestId("search-history")).toBeVisible();
+
+    await page.getByTestId("engine-button").click();
+    await expect(page.getByTestId("engine-menu")).toBeVisible();
+
+    // 命中测试：菜单中心点必须落在菜单内 —— 历史面板即使还在播退场动画，也不能盖住它
+    const onTop = await page.evaluate(() => {
+      const menu = document.querySelector('[data-testid="engine-menu"]') as HTMLElement;
+      const rect = menu.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return hit instanceof Element && hit.closest('[data-testid="engine-menu"]') !== null;
+    });
+    expect(onTop).toBe(true);
+
+    await page.getByTestId("engine-option-baidu").click();
+    await expect(page.getByTestId("engine-name")).toHaveText("百度");
+    // 选择后焦点回到输入框：空输入 + 有历史，历史应重新展开
+    await expect(page.getByTestId("search-history")).toBeVisible();
+  });
+
   test("点击引擎按钮弹出列表，选定后切换并收起", async ({ page }) => {
     await fresh(page);
     // 新交互：未聚焦时引擎图标隐身，先点输入框让它淡入
@@ -1490,6 +1544,36 @@ test.describe("无障碍与键盘", () => {
 
     await page.keyboard.press("Enter");
     await expect(page.locator("#main")).toBeFocused();
+  });
+
+  test("跳到主要内容不给整块 main 画蓝框，真实控件仍保留焦点提示", async ({ page }) => {
+    await fresh(page);
+    await page.keyboard.press("Tab");
+    // 跳过链接自己是真实控件，焦点提示必须保留
+    const skip = await page
+      .locator(".skip-link")
+      .evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(skip).not.toBe("none");
+
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#main")).toBeFocused();
+    // main 只是程序化焦点锚点，不该出现那圈横穿页面的蓝色轮廓
+    // outline-style:none 即可；浏览器仍会保留默认的 3px 宽度计算值，不能拿宽度断言
+    const mainStyle = await page.locator("#main").evaluate((el) => getComputedStyle(el).outlineStyle);
+    expect(mainStyle).toBe("none");
+
+    // 后续 Tab 仍能到可交互控件，且其中至少有一个仍保留焦点轮廓
+    const outlines: Array<{ focusVisible: boolean; outline: string }> = [];
+    for (let i = 0; i < 4; i += 1) {
+      outlines.push(
+        await page.evaluate(() => {
+          const el = document.activeElement as HTMLElement;
+          return { focusVisible: el.matches(":focus-visible"), outline: getComputedStyle(el).outlineStyle };
+        }),
+      );
+      await page.keyboard.press("Tab");
+    }
+    expect(outlines.some((o) => o.focusVisible && o.outline !== "none")).toBe(true);
   });
 
   test("设置弹窗焦点被困在内部，Esc 关闭后焦点回到触发按钮", async ({ page }) => {
