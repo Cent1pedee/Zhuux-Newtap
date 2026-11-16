@@ -415,7 +415,13 @@ test.describe("首屏与布局", () => {
     const closed = await read();
     expect(closed.state).toBe("unchecked");
     await sw.click();
-    // 等过渡真正结束再采样（CI 上 280ms 会落在位移中间）
+    /*
+     * 先等状态翻转，再等几何稳定。
+     * 只等「几何稳定」会踩坑：点击刚发出、React 还没重渲染时，连续两次读到的是
+     * **同一个旧值**，readSettled 立刻判定「稳定」并返回 —— 于是拿到未切换的快照，
+     * 后续 offsets 序列整体错位（CI 上报的 [2,16,2,16] ≠ 实际）。
+     */
+    await expect.poll(async () => (await read()).state, { timeout: 3_000 }).toBe("checked");
     const opened = await readSettled(read);
     expect(opened.state).toBe("checked");
 
@@ -448,8 +454,10 @@ test.describe("首屏与布局", () => {
 
     // 连续快速切换：每次落位都回到同样的两个相对坐标，不累积偏移
     const offsets: number[] = [];
+    const expectedStates = ["unchecked", "checked", "unchecked", "checked"] as const;
     for (let i = 0; i < 4; i++) {
       await sw.click();
+      await expect.poll(async () => (await read()).state, { timeout: 3_000 }).toBe(expectedStates[i]!);
       const s = await readSettled(read);
       expect(s.root[2]).toBe(closed.root[2]);
       expect(s.root[3]).toBe(closed.root[3]);
