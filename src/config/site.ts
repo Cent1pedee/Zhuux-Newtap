@@ -207,11 +207,11 @@ export const DEFAULT_WHITELIST = [
  * 目标就是用户自己填进 Dock 的那个站点，域名无法预先枚举（白名单也写不出来）。
  * 因此 favicon 走 <img> 直连、显式 `referrerPolicy="no-referrer"`：
  *   · 不发 Cookie、不带上一个页面的地址；
- *   · 拿不到就 onError 回退首字母，不会卡住布局；
- *   · 用的是站点自带的 /favicon.ico，不是第三方图标代理。
- * 想彻底禁掉这次请求，设置 → 隐私与数据里关掉「抓取站点 favicon」即可。
+ *   · 按 apple-touch-icon → favicon.ico → favicon.png → favicon.svg 的顺序探测，
+ *     全部失败再回退首字母，不会卡住布局（候选表见 lib/favicon.ts）；
+ *   · 用的是站点自带的图标文件，不是第三方图标代理。
+ * 想彻底禁掉这次请求，设置 → 快捷跳转 → 站点图标里关掉即可。
  */
-export const FAVICON_PATH = "/favicon.ico";
 
 export const SITE = {
   title: "起始页 · Startpage",

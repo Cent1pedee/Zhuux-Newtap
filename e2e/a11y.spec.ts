@@ -75,7 +75,7 @@ test.describe("无障碍扫描", () => {
 
   test("设置面板无 serious/critical 问题", async ({ page }) => {
     // 五个分类逐个跑一次 axe，并行执行时容易顶到全局 30s 上限（实测单跑约 20s，
-    // 并行时被 CPU 抢占会超时），这里单独放宽；隐私与关于改由二级菜单直达的
+    // 并行时被 CPU 抢占会超时），这里单独放宽；隐私与关于是页脚打开的独立弹窗，
     // 独立弹窗，单独打开再扫。
     test.setTimeout(120_000);
     await fresh(page);
@@ -92,7 +92,10 @@ test.describe("无障碍扫描", () => {
       await openSettingsDialog(page, dialog);
       await page.waitForTimeout(350);
       await scan(page, `settings-${dialog}`);
-      await page.keyboard.press("Escape");
+      // 显式点掉两层，保证下一次 openSettingsDialog 能点到齿轮
+      await page.getByTestId(`${dialog}-done`).click();
+      await page.getByTestId("settings-done").click();
+      await expect(page.getByTestId("settings-done")).toHaveCount(0);
     }
   });
 

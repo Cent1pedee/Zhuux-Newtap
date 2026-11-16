@@ -43,7 +43,6 @@ import { cn } from "@/lib/utils";
 const DIALOG_PANEL_CLASS =
   "glass-strong flex flex-col overflow-hidden rounded-[var(--radius-card)] border-0 bg-transparent p-0 shadow-none gap-0 outline-none " +
   "max-w-none focus-visible:ring-0";
-
 const DIALOG_OVERLAY_CLASS = "bg-black/45 backdrop-blur-[10px] border-0";
 
 type OverlayProps = React.ComponentProps<typeof DialogOverlay>;
@@ -62,6 +61,7 @@ export function Modal({
   fixedHeight = false,
   returnFocusTo,
   panelClassName,
+  overlayClassName,
   initialFocus = "first",
 }: {
   open: boolean;
@@ -79,6 +79,8 @@ export function Modal({
   returnFocusTo?: HTMLElement | null;
   /** 追加到弹窗面板上的类名（例如设置弹窗需要更实的底色） */
   panelClassName?: string;
+  /** 覆盖遮罩层样式（嵌套弹窗用更轻的一层，避免两次 45% 黑叠成黑屏） */
+  overlayClassName?: string;
   /**
    * 打开时焦点落在哪。
    * 默认交给 Radix 找第一个可聚焦元素；没有输入框的弹窗会落到右上角关闭按钮上，
@@ -138,7 +140,7 @@ export function Modal({
 
   const overlayProps = {
     "data-testid": "modal-overlay",
-    className: DIALOG_OVERLAY_CLASS,
+    className: overlayClassName ? `${DIALOG_OVERLAY_CLASS} ${overlayClassName}` : DIALOG_OVERLAY_CLASS,
     children: <span data-testid="modal-backdrop" className="absolute inset-0" aria-hidden="true" />,
   } as unknown as OverlayProps;
 
@@ -160,7 +162,7 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         data-reduce-motion={reduceMotion ? "true" : undefined}
-        className={cn(DIALOG_PANEL_CLASS, heightClass, widthClass, "w-full", panelClassName)}
+        className={cn(DIALOG_PANEL_CLASS, heightClass, widthClass, "w-[calc(100%-24px)]", panelClassName)}
       >
         <DialogHeader className="flex flex-row shrink-0 items-start justify-between gap-4 border-b border-[var(--glass-border)] px-5 py-4 text-left">
           <div>

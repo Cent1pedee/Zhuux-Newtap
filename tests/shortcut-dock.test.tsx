@@ -165,14 +165,15 @@ describe("快捷跳转管理（设置内）", () => {
     expect(readConfig().groups[0].items.length).toBe(before);
   });
 
-  it("前移 / 后移按钮改变顺序并写入 localStorage", async () => {
+  it("拖拽把手支持键盘排序（↑ / ↓），并写入 localStorage", async () => {
     renderWithProviders(<ShortcutManager />);
     await waitFor(() => expect(screen.getByTestId("shortcut-list")).toBeTruthy());
     const before = readConfig().groups[0].items.map((i: { id: string }) => i.id);
 
+    // 拖拽本身依赖 pointer 坐标，jsdom 里跑不了；这里守的是同一套 reorder 逻辑的键盘入口
     const second = document.querySelectorAll<HTMLElement>("[data-shortcut-id]")[1];
-    const back = within(second).getByLabelText(/前移/);
-    fireEvent.click(back);
+    const handle = within(second).getByLabelText(/拖拽排序/);
+    fireEvent.keyDown(handle, { key: "ArrowUp" });
 
     await waitFor(() => {
       const after = readConfig().groups[0].items.map((i: { id: string }) => i.id);
@@ -204,9 +205,9 @@ describe("快捷跳转管理（设置内）", () => {
     // 展平后两行都在
     expect(document.querySelectorAll("[data-shortcut-id]").length).toBe(2);
 
-    // 任意一次编辑都会触发写回
+    // 任意一次排序都会触发写回
     const first = document.querySelectorAll<HTMLElement>("[data-shortcut-id]")[0];
-    fireEvent.click(within(first).getByLabelText(/后移/));
+    fireEvent.keyDown(within(first).getByLabelText(/拖拽排序/), { key: "ArrowDown" });
 
     await waitFor(() => {
       const groups = readConfig().groups;

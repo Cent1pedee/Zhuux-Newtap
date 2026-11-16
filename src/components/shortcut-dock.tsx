@@ -16,11 +16,18 @@ import { ShortcutIcon } from "@/components/shortcut-icon";
  * 增删改与排序全部在「设置 → 快捷跳转」里完成。
  */
 export function ShortcutDock() {
-  const { config } = useConfig();
+  const { config, ready } = useConfig();
   const reduce = useReducedMotionPref();
   const { push } = useToast();
 
-  /** 分组结构保留在配置里（向后兼容），界面上始终展平成一条 */
+  /**
+   * 分组结构保留在配置里（向后兼容），界面上始终展平成一条。
+   *
+   * 首帧仍按出厂配置渲染（服务端要给出无 JS 也能点的链接），但整条胶囊在
+   * `data-ready="false"` 时是透明的（见 chrome.css）：JS 可用时用户看不到
+   * 「默认列表被本地列表替换」的那一帧，只看到胶囊带着正确顺序从下方浮入；
+   * JS 不可用时 data-js 不会被置位，胶囊恢复可见，默认链接照常可用。
+   */
   const items = useMemo(() => config.groups.flatMap((g) => g.items), [config.groups]);
 
   /**
@@ -114,6 +121,7 @@ export function ShortcutDock() {
     <motion.section
       aria-label="快捷跳转"
       data-entrance="grid"
+      data-ready={ready ? "true" : "false"}
       className="w-full"
       variants={staggerContainer(reduce, 0.03, ENTRANCE_DELAY.grid)}
       initial="hidden"
@@ -123,10 +131,22 @@ export function ShortcutDock() {
         ref={dockRef}
         className="shortcut-dock"
         data-testid="shortcut-dock"
+        data-ready={ready ? "true" : "false"}
         data-fade-start={fade.start ? "true" : "false"}
         data-fade-end={fade.end ? "true" : "false"}
       >
-        <AnimatePresence initial={false}>
+        {/*
+         * key 是「首帧不闪旧布局」的关键，不要删。
+         *
+         * 首帧（服务端/水合）渲染的是出厂列表；本地配置到达时，这一帧同时做两件事：
+         *   ready 置位（胶囊开始淡入）+ items 换成用户列表。
+         * 若沿用同一个 AnimatePresence，被删掉的出厂项会保留 160ms 播放退出动画、
+         * 同 id 但换了位置的项会从默认位置做 layout 滑动 —— 胶囊淡入到一半时，
+         * 用户看到的就是「旧布局 + 新布局」叠在一起（实测 13 项持续到 opacity 0.83）。
+         * 换 key 让两套列表彻底分属不同子树：切到 ready 时重建，退出/布局动画都不发生，
+         * 新列表从第一帧起就是最终顺序；入场只由胶囊自己的浮入负责。
+         */}
+        <AnimatePresence key={ready ? "ready" : "pending"} initial={false}>
           {items.map((item, index) => (
             <motion.div
               key={item.id}
@@ -188,7 +208,7 @@ export function ShortcutDock() {
         </AnimatePresence>
       </div>
 
-      {items.length === 0 ? (
+      {ready && items.length === 0 ? (
         <p className="shortcut-dock-empty mt-1" data-testid="shortcut-empty">
           还没有快捷项 —— 打开设置里的「快捷跳转」即可添加
         </p>

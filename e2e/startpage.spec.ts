@@ -144,21 +144,20 @@ test.describe("首屏与布局", () => {
     await expect(page.locator(".clock-trigger")).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("右上角设置：齿轮先出二级菜单，选分类才打开完整设置，Esc 只关弹窗", async ({ page }) => {
+  test("齿轮直接打开完整设置，Esc 只关弹窗", async ({ page }) => {
     await fresh(page);
     expect(await page.getByTestId("settings-trigger").count()).toBe(0);
 
     await page.getByTestId("clock").click();
     await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    // 回归：齿轮此前包在 dynamic 菜单里，chunk 未到时整块不渲染
+    await expect(page.getByTestId("settings-trigger")).toBeVisible();
     await page.getByTestId("settings-trigger").click();
 
-    // 二级菜单：先选「去哪一页」，不直接把整套设置拍出来
-    await expect(page.getByTestId("settings-menu")).toBeVisible();
-    await expect(page.getByTestId("settings-done")).toHaveCount(0);
-    await expect(page.getByTestId("settings-menu-search")).toContainText("搜索引擎");
-    await page.getByTestId("settings-menu-search").click();
+    // 直接出完整设置，不再有二级菜单这一层
     await expect(page.getByTestId("settings-done")).toBeVisible();
-    await expect(page.getByTestId("settings-tab-search")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("settings-menu")).toHaveCount(0);
+    await expect(page.getByTestId("settings-tab-appearance")).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("dialog")).toContainText("设置");
 
     // 第一下 Esc 只关弹窗，展开态（方块 / 模糊壁纸）保留
@@ -582,8 +581,10 @@ test.describe("首屏与布局", () => {
       expect(plate.ratio).toBeGreaterThan(0.26);
       expect(plate.ratio).toBeLessThan(0.3);
       expect(plate.tinted).toBe(true);
-      // 浅底本身提供对比度，不再给 favicon 硬叠白边滤镜
-      expect(plate.imgFilter).toBe("none");
+      // favicon 保留站点原色（上一轮整体去色，站点辨识度太差已回退）
+      expect(plate.imgFilter).not.toContain("grayscale");
+      // 不再给 favicon 硬叠白边滤镜
+      expect(plate.imgFilter).not.toContain("drop-shadow");
     }
 
     await page.getByTestId("clock").click();
@@ -593,46 +594,39 @@ test.describe("首屏与布局", () => {
     expect(new Set(grid.map((p) => p.ratio))).toEqual(new Set(dock.map((p) => p.ratio)));
   });
 
-  test("隐私与数据 / 关于 从二级菜单直达独立弹窗，主面板只剩五个分类", async ({ page }) => {
+  test("隐私与数据 / 关于 从设置页脚打开，主面板只剩五个分类且无二级菜单", async ({ page }) => {
     await fresh(page);
     await page.getByTestId("clock").click();
     await expect(page.getByTestId("shortcut-grid")).toBeVisible();
+    // 设置入口首帧即存在（回归：dynamic 菜单 chunk 未到时齿轮整块缺失）
+    await expect(page.getByTestId("settings-trigger")).toBeVisible();
     await page.getByTestId("settings-trigger").click();
-    await expect(page.getByTestId("settings-menu")).toBeVisible();
-
-    // 二级菜单分「设置分类 / 数据与信息」两组，标签与面板逐字一致
-    const labels = await page.evaluate(() => ({
-      groups: Array.from(document.querySelectorAll(".settings-menu-label")).map((el) => el.textContent?.trim()),
-      items: Array.from(document.querySelectorAll('[data-testid^="settings-menu-"]')).map((el) => el.textContent?.trim()),
-    }));
-    expect(labels.groups).toEqual(["设置分类", "数据与信息"]);
-    expect(labels.items).toEqual(["常规", "模块", "快捷跳转", "背景", "搜索引擎", "隐私与数据", "关于"]);
-
-    await page.getByTestId("settings-menu-appearance").click();
     await expect(page.getByTestId("settings-done")).toBeVisible();
+
     expect(await page.locator(".settings-tab").count()).toBe(5);
     await expect(page.getByTestId("settings-tab-privacy")).toHaveCount(0);
     await expect(page.getByTestId("settings-tab-about")).toHaveCount(0);
-    const groups = await page.locator(".settings-nav-label").allTextContents();
-    expect(groups).toEqual(["首页", "外观与服务"]);
+    expect(await page.locator(".settings-nav-label").allTextContents()).toEqual(["首页", "外观与服务"]);
+    await expect(page.getByTestId("settings-menu")).toHaveCount(0);
 
-    // 站点图标开关跟着站点列表走，不再埋在隐私页
-    await page.getByTestId("settings-tab-shortcuts").click();
-    await expect(page.getByTestId("icons-autofetch")).toBeVisible();
-
-    await page.keyboard.press("Escape");
-    await openSettingsDialog(page, "privacy");
-    await expect(page.getByRole("dialog")).toContainText("隐私与数据");
+    // 页脚入口：打开隐私子弹窗，关闭后回到主面板
+    await page.getByTestId("settings-open-privacy").click();
+    await expect(page.getByTestId("privacy-done")).toBeVisible();
     await expect(page.getByTestId("whitelist-input")).toBeVisible();
     await expect(page.getByTestId("export-config")).toBeVisible();
-    await expect(page.getByTestId("settings-tab-privacy")).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    await page.getByTestId("privacy-done").click();
+    await expect(page.getByTestId("settings-done")).toBeVisible();
 
-    await openSettingsDialog(page, "about");
-    await expect(page.getByRole("dialog")).toContainText("关于");
+    await page.getByTestId("settings-open-about").click();
+    await expect(page.getByTestId("about-done")).toBeVisible();
     await expect(page.getByTestId("about-copy-url")).toBeVisible();
     await expect(page.getByTestId("about-open-help")).toBeVisible();
-    await expect(page.getByTestId("settings-tab-about")).toHaveCount(0);
+    await page.getByTestId("about-done").click();
+    await expect(page.getByTestId("settings-done")).toBeVisible();
+
+    // 站点图标开关跟着站点列表走
+    await page.getByTestId("settings-tab-shortcuts").click();
+    await expect(page.getByTestId("icons-autofetch")).toBeVisible();
   });
 
   test("设置搜索：陈旧关键词不再留空白面板，无结果给出空状态", async ({ page }) => {
@@ -755,7 +749,7 @@ test.describe("首屏与布局", () => {
     // 第十一轮（m04901）后站点图标默认自动抓取，favicon 也不走白名单。
     // 于是把承诺拆成两条可验证的边界：
     //   ① 接口类请求（json 等）必须全部命中白名单；
-    //   ② 图片类请求只允许 /favicon.ico 这一种形态（想全关就去设置里关抓取）。
+    //   ② 图片类请求只允许站点自身的图标路径（想全关就去设置里关抓取）。
     const external: { url: string; type: string; from: string }[] = [];
     page.on("request", (req) => {
       const url = req.url();
@@ -783,8 +777,10 @@ test.describe("首屏与布局", () => {
       .filter((url) => !allowedHost(url));
     expect(apiOffenders, `白名单外接口请求：${apiOffenders.join(", ")}`).toEqual([]);
 
+    // 图标抓取会按候选顺序探测：apple-touch-icon → favicon.ico → png → svg
+    const ICON_TRACE = /\/(apple-touch-icon(-precomposed)?\.png|favicon\.(ico|png|svg))(\?|$)/;
     const isFaviconTrace = (r: { url: string; from: string }) =>
-      /\/favicon\.ico(\?|$)/.test(r.url) || /\/favicon\.ico(\?|$)/.test(r.from);
+      ICON_TRACE.test(r.url) || ICON_TRACE.test(r.from);
     const imageOffenders = external
       .filter((r) => allowedHost(r.url) ? false : !isFaviconTrace(r))
       .map((r) => r.url);
@@ -815,8 +811,28 @@ test.describe("搜索引擎框", () => {
     await expect(form).toHaveAttribute("action", /bing\.com/);
   });
 
+  test("左侧引擎图标与搜索键比例协调", async ({ page }) => {
+    await fresh(page);
+    await page.getByTestId("search-input").click();
+    await expect(page.getByTestId("engine-button")).toHaveCSS("opacity", "1");
+
+    const sizes = await page.evaluate(() => {
+      const badge = document.querySelector('[data-testid="engine-badge"]') as HTMLElement;
+      const glyph = badge.querySelector("svg")?.getBoundingClientRect().width ?? 0;
+      const submit = document.querySelector('[data-testid="search-submit"] svg')?.getBoundingClientRect().width ?? 0;
+      return { badge: badge.getBoundingClientRect().width, glyph, submit };
+    });
+    // 徽标 28px、图形 18px：与右侧 18px 的搜索键同一量级，不再缩成 11px 的小点
+    expect(sizes.badge).toBeGreaterThanOrEqual(27);
+    expect(sizes.glyph).toBeGreaterThanOrEqual(17);
+    expect(Math.abs(sizes.glyph - sizes.submit)).toBeLessThanOrEqual(4);
+  });
+
   test("点击引擎按钮弹出列表，选定后切换并收起", async ({ page }) => {
     await fresh(page);
+    // 新交互：未聚焦时引擎图标隐身，先点输入框让它淡入
+    await page.getByTestId("search-input").click();
+    await expect(page.getByTestId("engine-button")).toHaveCSS("opacity", "1");
     await page.getByTestId("engine-button").click();
     await expect(page.getByTestId("engine-menu")).toBeVisible();
     // 点开只是摊开列表，不会自动跳到下一个引擎
@@ -833,6 +849,57 @@ test.describe("搜索引擎框", () => {
     await expect(page.getByTestId("engine-option-baidu")).toHaveAttribute("aria-checked", "true");
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("engine-menu")).toBeHidden();
+  });
+
+  test("搜索栏三态：默认只留模糊胶囊，悬停加深，聚焦图标淡入并轻微放大", async ({ page }) => {
+    await fresh(page);
+    const shell = page.getByTestId("search-shell");
+    const input = page.getByTestId("search-input");
+
+    const read = () =>
+      page.evaluate(() => {
+        const shellEl = document.querySelector('[data-testid="search-shell"]') as HTMLElement;
+        const cs = getComputedStyle(shellEl);
+        return {
+          bg: cs.backgroundColor,
+          transform: cs.transform,
+          focused: shellEl.getAttribute("data-focused"),
+          engineOpacity: getComputedStyle(document.querySelector('[data-testid="engine-button"]') as HTMLElement).opacity,
+          submitOpacity: getComputedStyle(document.querySelector('[data-testid="search-submit"]') as HTMLElement).opacity,
+          inputPad: getComputedStyle(document.querySelector('[data-testid="search-input"]') as HTMLElement).paddingLeft,
+        };
+      });
+
+    const base = await read();
+    expect(base.focused).toBe("false");
+    // 未聚焦：两枚图标完全隐身，只剩一条模糊胶囊
+    expect(Number(base.engineOpacity)).toBe(0);
+    expect(Number(base.submitOpacity)).toBe(0);
+    expect(base.transform).toBe("none");
+    expect(base.inputPad).toBe("20px");
+
+    // 悬停：底色变深（解析成 rgb 后比亮度）
+    await shell.hover();
+    await page.waitForTimeout(320);
+    const hover = await read();
+    expect(hover.bg).not.toBe(base.bg);
+
+    // 聚焦：图标淡入、胶囊放大、输入框收内距
+    await input.click();
+    await page.waitForTimeout(340);
+    const focus = await read();
+    expect(focus.focused).toBe("true");
+    expect(Number(focus.engineOpacity)).toBeGreaterThan(0.9);
+    expect(Number(focus.submitOpacity)).toBeGreaterThan(0.9);
+    expect(focus.transform).not.toBe("none");
+    expect(focus.inputPad).toBe("4px");
+
+    // 失焦后回到隐身态
+    await page.mouse.click(1200, 240);
+    await page.waitForTimeout(420);
+    const blurred = await read();
+    expect(Number(blurred.engineOpacity)).toBe(0);
+    expect(blurred.transform).toBe("none");
   });
 
   test("快捷指令提示与 Esc 关闭", async ({ page }) => {
@@ -893,12 +960,15 @@ test.describe("搜索引擎框", () => {
     expect(page.url()).toBe(urlBefore);
 
     // ② 有内容 + 点搜索按钮 → 同样在新标签
+    // 新标签会抢走本页焦点，两端图标随之隐藏；先点回输入框再提交
+    await input.click();
     await page.getByTestId("search-submit").click();
     await expect.poll(readOpened).toHaveLength(2);
     expect((await readOpened())[1][0]).toContain("hello");
     expect((await readOpened())[1][1]).toBe("_blank");
 
     // ③ 清空后提交 → 直接打开当前引擎官网（不是拒绝）
+    await input.click();
     await input.fill("");
     await page.getByTestId("search-submit").click();
     await expect.poll(readOpened).toHaveLength(3);
@@ -1029,8 +1099,16 @@ test.describe("快捷跳转", () => {
         (i: { id: string }) => i.id,
       ),
     );
-    const second = page.getByTestId("shortcut-list").locator("[data-shortcut-id]").nth(1);
-    await second.getByLabel(/前移/).click();
+    const rows = page.getByTestId("shortcut-list").locator("[data-shortcut-id]");
+    const firstBox = await rows.nth(0).boundingBox();
+    const handle = await rows.nth(1).getByTestId(/^shortcut-drag-/).boundingBox();
+    expect(firstBox).not.toBeNull();
+    expect(handle).not.toBeNull();
+    // 真拖拽：按住把手把第二项拖到第一项上方
+    await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle!.x + handle!.width / 2, firstBox!.y + 2, { steps: 14 });
+    await page.mouse.up();
     await expect
       .poll(async () => {
         const ids = await page.evaluate(() =>
@@ -1049,6 +1127,121 @@ test.describe("快捷跳转", () => {
       ),
     );
     expect(after[0]).toBe(before[1]);
+  });
+
+  test("拖动排序时图标不退回字母或 favicon.ico（候选链断点续传）", async ({ page }) => {
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    // 每个站点都「没有 /favicon.ico、有 apple-touch-icon」：
+    // 正常状态下所有图标都应停在第二条候选上；一旦某次重挂载把候选链重置，
+    // 它会退回 favicon.ico（404）并短暂露成首字母 —— 正是用户看到的「错乱」。
+    await page.route("**/favicon.ico", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "" }));
+    await page.route("**/apple-touch-icon.png", (route) =>
+      route.fulfill({ status: 200, contentType: "image/png", body: png }),
+    );
+
+    await fresh(page);
+    await openShortcutSettings(page);
+
+    const read = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll('[data-testid="shortcut-list"] [data-shortcut-id]')).map((row) => {
+          const img = row.querySelector(".shortcut-icon-img");
+          return {
+            id: row.getAttribute("data-shortcut-id"),
+            src: img?.getAttribute("src") ?? null,
+            loaded: img?.getAttribute("data-loaded") ?? null,
+          };
+        }),
+      );
+
+    await expect
+      .poll(async () => {
+        const rows = await read();
+        return rows.length > 0 && rows.every((r) => r.src?.endsWith("/apple-touch-icon.png") && r.loaded === "true");
+      })
+      .toBe(true);
+
+    const rows = page.getByTestId("shortcut-list").locator("[data-shortcut-id]");
+    const handle = await rows.nth(0).getByTestId(/^shortcut-drag-/).boundingBox();
+    const target = await rows.nth(2).boundingBox();
+    expect(handle).not.toBeNull();
+    expect(target).not.toBeNull();
+
+    await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle!.x + handle!.width / 2, target!.y + target!.height - 4, { steps: 10 });
+    await page.waitForTimeout(220);
+
+    // 拖动过程中：拖起来的那一项也仍然显示原图标，而不是退回 .ico / 字母
+    const during = await read();
+    expect(during.length).toBe(13);
+    expect(during.every((r) => r.src?.endsWith("/apple-touch-icon.png"))).toBe(true);
+    expect(during.every((r) => r.loaded === "true")).toBe(true);
+
+    await page.mouse.up();
+  });
+
+  test("Dock 在本地配置就绪前不可见，就绪后从下方浮入", async ({ page, request }) => {
+    // 服务端首帧仍渲染出厂列表（无 JS 时可用），但胶囊是透明的，
+    // 用户不会看到「默认列表被本地列表替换」的那一帧。
+    const html = await (await request.get("/")).text();
+    expect(html).toContain('data-ready="false"');
+    expect(html).toContain("sc-zhuux");
+
+    await fresh(page);
+    await expect(page.locator(".dock-shell")).toHaveAttribute("data-ready", "true");
+    await expect
+      .poll(() => page.locator(".dock-pill").evaluate((el) => getComputedStyle(el).opacity), { timeout: 2000 })
+      .toBe("1");
+  });
+
+  test("本地配置与出厂列表不同时，首个可见帧就是最终布局（无旧列表残留）", async ({ page }) => {
+    /**
+     * 回归：本地配置到达的那一帧，AnimatePresence 会把被删掉的出厂项保留 160ms
+     * 播退出动画、同 id 换位的项会从默认位置做 layout 滑动；胶囊同时在淡入，
+     * 于是用户先看到「旧布局 + 新布局」叠在一起，再变回最终布局。
+     *
+     * 这里用 rAF 记录 data-ready=true 之后的每一帧：项数与顺序必须从第一帧起
+     * 就等于本地配置，不允许出现 13 项（出厂）或 23 项（出厂 + 新列表）的中间帧。
+     */
+    await page.addInitScript(() => {
+      const w = window as unknown as { __dockReady?: Array<{ n: number; ids: string }> };
+      w.__dockReady = [];
+      const tick = () => {
+        const shell = document.querySelector(".dock-shell");
+        if (shell?.getAttribute("data-ready") === "true") {
+          const dock = document.querySelector('[data-testid="shortcut-dock"]');
+          const ids = Array.from(dock?.querySelectorAll("[data-shortcut-id]") ?? []).map((n) =>
+            n.getAttribute("data-shortcut-id"),
+          );
+          w.__dockReady!.push({ n: ids.length, ids: ids.join(",") });
+        }
+        if ((w.__dockReady?.length ?? 0) < 80) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+
+    const items = Array.from({ length: 10 }, (_, i) => ({
+      id: `sc-custom-${i}`,
+      title: `站点 ${i}`,
+      url: `https://example.com/${i}`,
+      iconKind: "letter",
+      iconValue: "",
+      color: "#64748B",
+    }));
+    await fresh(page, { groups: [{ id: "grp-main", name: "快捷跳转", items }] });
+    await expect(page.getByTestId("shortcut-total")).toHaveText("10");
+    await page.waitForTimeout(400);
+
+    const frames = await page.evaluate(
+      () => (window as unknown as { __dockReady?: Array<{ n: number; ids: string }> }).__dockReady ?? [],
+    );
+    expect(frames.length).toBeGreaterThan(0);
+    const expected = items.map((i) => i.id).join(",");
+    expect(frames.every((f) => f.n === 10 && f.ids === expected)).toBe(true);
   });
 
   test("Ctrl+数字直达前九个快捷项", async ({ page }) => {
@@ -1198,6 +1391,8 @@ test.describe("设置与数据", () => {
     await expect(page.getByTestId("confirm-ok")).toBeVisible();
     await page.getByTestId("confirm-ok").click();
     await expect(page.getByTestId("toast")).toContainText("本地数据已清空");
+    // 先关隐私子弹窗，再关主面板
+    await page.getByTestId("privacy-done").click();
     await page.getByTestId("settings-done").click();
 
     await expect.poll(async () => (await readConfig(page))?.theme?.accent).toBe("#2F6FED");

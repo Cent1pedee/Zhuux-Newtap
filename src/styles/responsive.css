@@ -24,11 +24,24 @@ a,
    2) 刘海屏横向安全区
    竖屏 inset 为 0，不会改变现有留白；横屏时 iPhone 的刘海在左/右，
    顶栏与页脚必须让开，否则右上角动作组会被吃掉一角。
+
+   必须跟随断点给出与 main 相同的 gutter（16 / 24）：这条规则的选择器是
+   `.app-shell > header`（0,1,1），优先级高于 Tailwind 的 `sm:px-6`（0,1,0），
+   无条件写 16px 会把桌面端顶栏从 24px 压成 16px —— 顶栏图标与内容列左边界
+   差 8px，肉眼看得出来。
    ------------------------------------------------------------ */
 .app-shell > header,
 .app-shell > footer {
   padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
   padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 640px) {
+  .app-shell > header,
+  .app-shell > footer {
+    padding-left: max(24px, env(safe-area-inset-left, 0px));
+    padding-right: max(24px, env(safe-area-inset-right, 0px));
+  }
 }
 
 /* ------------------------------------------------------------
@@ -237,11 +250,17 @@ input[type="color"]::-moz-color-swatch {
 @media (max-width: 639px) {
   .dock-shell {
     /* 名称不再是浮出的气泡，不必为它预留 32px 空档 */
-    padding-top: 14px;
+    padding-top: 10px;
   }
 
   .dock-pill {
-    padding: 6px 8px;
+    padding: 4px 6px;
+  }
+
+  /* 小屏 Dock 是「图标 + 常显名称」两行，占位高度也要按这一档留足，
+     否则配置就绪时胶囊会突然长高一截，把上面的内容顶上去 */
+  .dock-shell[data-ready="false"] .shortcut-dock {
+    min-height: 58px;
   }
 
   .shortcut-dock {
@@ -264,11 +283,13 @@ input[type="color"]::-moz-color-swatch {
   .shortcut-item {
     flex: 0 0 auto;
     width: 58px;
-    min-height: 64px;
+    min-height: 58px;
     justify-content: flex-start;
-    gap: 4px;
-    padding: 6px 2px 5px;
+    gap: 2px;
+    padding: 2px;
     scroll-snap-align: center;
+    /* 图标 42 → 38：整条胶囊从 83px 收到 66px，仍高于 44px 触控下限 */
+    --tile-size: 38px;
   }
 
   /* 链接撑满整格：触控热区从「42×54」变成「54×54」，
@@ -289,10 +310,12 @@ input[type="color"]::-moz-color-swatch {
     backdrop-filter: none;
     opacity: 1;
     transform: none;
-    /* 常驻文字不能再用气泡那档极淡色：10px 的字压在玻璃上，
-       --fg-subtle（52%）在壁纸背景里读不出来，提到 muted */
+    /* 常驻文字不能再用气泡那档极淡色：11px 的字压在玻璃上，
+       --fg-subtle（52%）在壁纸背景里读不出来，提到 muted。
+       字号与同一屏内的 .shortcut-tile-label（网格入口）对齐，同为 11.5px ——
+       同一批站点在两个入口用两种字号，展开态下并排看很明显。 */
     color: var(--fg-muted);
-    font-size: 11px;
+    font-size: 11.5px;
     line-height: 1.2;
     text-align: center;
     white-space: nowrap;
@@ -334,5 +357,71 @@ input[type="color"]::-moz-color-swatch {
       #000 calc(100% - 22px),
       transparent 100%
     );
+  }
+}
+
+/* ------------------------------------------------------------
+   12) 移动端首页主列：点时间只向下展开，上方内容不再整体上移
+   原先 .home-center 用 margin-block:auto 居中，展开 366px 的方块后整列被
+   重新居中 —— 390 视口实测时钟从 y=276 跳到 93、搜索框跟着上移 183px，
+   看起来就是「点一下时间，搜索框弹出来」。移动端改成顶部锚定：
+   时钟与搜索的位置在展开前后完全一致，只有方块往下长。
+   ------------------------------------------------------------ */
+@media (max-width: 639px) {
+  /*
+   * 三段式：时钟/搜索锚顶、一言居中、Dock 贴底。
+   * main 从 flex:1 改成「可收缩、按内容高度」，多出来的空间交给一言的
+   * auto 外边距 —— 收起时一言落在中段，展开时被下方的方块推着下移，
+   * 时钟与搜索始终不动。
+   */
+  .home-main {
+    flex: 0 1 auto;
+    justify-content: flex-start;
+    padding-top: clamp(56px, 10vh, 88px);
+  }
+
+  .home-quote {
+    margin-block: auto;
+    padding-bottom: 16px;
+  }
+
+  .home-center {
+    margin-block: 0;
+    --home-gap: 22px;
+  }
+
+  /* 时间 / 问候语 / 日期：原来 12px 上边距 + 4px 行距，三行贴在一起；
+     拉开到 14 / 6，并给两行小字统一的 1.5 行高 */
+  .home-clock [data-testid="clock-meta"] {
+    margin-top: 14px;
+    gap: 6px;
+  }
+
+  .home-clock [data-testid="greeting"] {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .home-clock [data-testid="date-label"] {
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+}
+
+/* 短屏（≤700 高）展开快捷方块时收起一言：
+   568 高的机器上，四行方块本来就放不下，一言再占 72px 只会把第三行切在
+   一句话上方。收起后网格可以完整滚动，底部 Dock 不受影响。 */
+@media (max-width: 639px) and (max-height: 700px) {
+  [data-revealed="true"] .home-quote {
+    display: none;
+  }
+}
+
+/* 同一档短屏：主列到底时给一道 24px 渐隐，提示「下面还有一行」，
+   而不是把第三行的名称直接切一半。 */
+@media (max-width: 639px) and (max-height: 700px) {
+  [data-revealed="true"] .home-main {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
   }
 }

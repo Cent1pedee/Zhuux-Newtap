@@ -40,7 +40,7 @@ export function PrivacyTab({ s, onClear }: { s: SettingsController; onClear: () 
                 }}
                 aria-label={`移除白名单 ${host}`}
                 data-testid={`whitelist-remove-${host}`}
-                className="grid size-5 place-items-center rounded text-[var(--fg-subtle)] hover:bg-red-500/15 hover:text-red-400"
+                className="grid size-5 place-items-center rounded text-[var(--fg-subtle)] hover:bg-[color-mix(in_srgb,var(--tone-error)_15%,transparent)] hover:text-[var(--tone-error)]"
               >
                 ✕
               </button>

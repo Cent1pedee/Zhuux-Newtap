@@ -266,9 +266,20 @@ export function SearchBox() {
         */}
         <div
           className="search-panel relative flex items-center"
-          data-focused={focusedMode ? "true" : "false"}
+          data-focused={focusedMode || engineMenuOpen ? "true" : "false"}
           data-empty={query.length === 0 ? "true" : "false"}
           data-testid="search-shell"
+          onMouseDown={(event) => {
+            /*
+             * 未聚焦时左右两枚图标是隐藏的（opacity:0 + pointer-events:none），
+             * 胶囊两端会变成死区。点在空白处就直接把焦点交给输入框，
+             * 不需要用户精准点到中间那条文字。
+             */
+            if (event.target === event.currentTarget) {
+              event.preventDefault();
+              inputRef.current?.focus();
+            }
+          }}
         >
           {/*
             引擎按钮：点一下弹菜单，由用户自己选，不再「点一下换一个」。
@@ -308,7 +319,7 @@ export function SearchBox() {
               >
                 <EngineBadge
                   id={engine.id}
-                  size={20}
+                  size={28}
                   url={engine.homeUrl}
                   autoFetch={ready && config.icons.autoFetch}
                 />
@@ -351,7 +362,7 @@ export function SearchBox() {
                           active ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"
                         }`}
                       >
-                        <EngineBadge id={e.id} size={20} url={e.homeUrl} autoFetch={ready && config.icons.autoFetch} />
+                        <EngineBadge id={e.id} size={22} url={e.homeUrl} autoFetch={ready && config.icons.autoFetch} />
                         <span className="flex-1 truncate">{e.name}</span>
                         {active ? <CheckIcon /> : null}
                       </button>

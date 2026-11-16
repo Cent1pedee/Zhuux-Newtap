@@ -1,9 +1,9 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
-import { motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ACCENTS, LIMITS, type Shortcut } from "@/config/site";
+import { Reorder, useDragControls } from "motion/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LIMITS, type Shortcut } from "@/config/site";
 import { useConfig, useReducedMotionPref } from "@/lib/config-store";
 import {
   Button,
@@ -35,10 +35,10 @@ const ICON_KINDS = [
 ];
 
 /**
- * 图标底色候选：直接复用主题的 8 个预设强调色，外加一个近黑（GitHub / Vercel 这类
- * 品牌底）。早先这里手抄了一份色板，跟 `ACCENTS` 各改各的 —— 现在只有一处来源。
+ * 图标底色已统一成中性片，不再让用户逐站点挑色。
+ * 仍在数据里写一个中性值，是为了兼容旧配置与 schema（color 字段保留）。
  */
-const PALETTE = [...ACCENTS.map((a) => a.value), "#24292F"];
+const NEUTRAL_ICON_COLOR = "#64748B";
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -74,6 +74,18 @@ export function ShortcutManager() {
 
   const items = useMemo(() => config.groups.flatMap((g) => g.items), [config.groups]);
   const groupId = config.groups[0]?.id ?? "grp-main";
+  /*
+   * 拖拽用本地 order 承接中间态：Motion 的 onReorder 在拖动过程中会多次触发，
+   * 每次都写配置会不停重建数组、打断拖拽。落手时再统一 commit 一次。
+   */
+  const [order, setOrder] = useState<Shortcut[]>(items);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOrder(items);
+  }, [items]);
   // 撤销发生在若干秒之后，闭包里的 items 已经过期；这里始终指向最新一次渲染的列表
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -123,24 +135,36 @@ export function ShortcutManager() {
     });
   };
 
-  const move = (itemId: string, delta: number) => {
-    const index = items.findIndex((i) => i.id === itemId);
-    const next = index + delta;
-    if (index < 0 || next < 0 || next >= items.length) {
-      push("已到边界", "info");
-      return;
-    }
-    const list = [...items];
-    [list[index], list[next]] = [list[next], list[index]];
-    commitItems(list);
-    push("已调整顺序", "success");
-  };
+  const commitOrder = useCallback(
+    (next: Shortcut[], announce = true) => {
+      const before = itemsRef.current.map((i) => i.id).join("|");
+      const after = next.map((i) => i.id).join("|");
+      if (before === after) return;
+      commitItems(next);
+      if (announce) push("已调整顺序", "success");
+    },
+    // commitItems 依赖 config.groups，每次渲染都是新函数；用 itemsRef 判断是否真的有变化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [config.groups],
+  );
 
-  /**
-   * 书签文件先解析成预览，确认后才写配置。
-   * 不在选择文件时直接落库：浏览器导出动辄上百条，直接写会一次塞满 Dock，
-   * 用户连「跳过了哪些」都看不到。
-   */
+  /** 键盘兜底：拖拽把手上的 ↑ / ↓ 一次移动一格 */
+  const moveBy = useCallback(
+    (index: number, delta: number) => {
+      const next = index + delta;
+      const current = orderRef.current;
+      if (next < 0 || next >= current.length) {
+        push("已到边界", "info");
+        return;
+      }
+      const list = [...current];
+      [list[index], list[next]] = [list[next], list[index]];
+      setOrder(list);
+      commitOrder(list);
+    },
+    [commitOrder, push],
+  );
+
   const onBookmarkFile = async (file: File | undefined) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
@@ -210,64 +234,32 @@ export function ShortcutManager() {
           还没有快捷项，点右上角「添加」新建第一个
         </p>
       ) : (
-        <ul className="space-y-1" data-testid="shortcut-list">
-          {items.map((item, index) => (
-            <motion.li
+        <Reorder.Group
+          as="ul"
+          axis="y"
+          values={order}
+          onReorder={setOrder}
+          className="space-y-1"
+          data-testid="shortcut-list"
+        >
+          {order.map((item, index) => (
+            <ShortcutRow
               key={item.id}
-              layout={!reduce}
-              data-shortcut-id={item.id}
-              className="flex items-center gap-2 rounded-[var(--radius-sm)] px-1.5 py-1 transition-colors hover:bg-[var(--hover-bg)]"
-            >
-              <ShortcutIcon item={item} size={26} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] text-[var(--fg)]">{item.title}</span>
-                <span className="block truncate text-[11px] text-[var(--fg-subtle)]">{item.url}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => move(item.id, -1)}
-                  disabled={index === 0}
-                  aria-label={`将 ${item.title} 前移`}
-                  title="前移"
-                  className="grid size-6 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)] disabled:opacity-30"
-                >
-                  <ArrowIcon dir="up" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(item.id, 1)}
-                  disabled={index === items.length - 1}
-                  aria-label={`将 ${item.title} 后移`}
-                  title="后移"
-                  className="grid size-6 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)] disabled:opacity-30"
-                >
-                  <ArrowIcon dir="down" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditor({ open: true, item })}
-                  aria-label={`编辑 ${item.title}`}
-                  title={`编辑 ${item.title}`}
-                  data-testid={`shortcut-edit-${item.id}`}
-                  className="grid size-6 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)]"
-                >
-                  <PencilIcon size={11} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirm({ open: true, itemId: item.id })}
-                  aria-label={`删除 ${item.title}`}
-                  title={`删除 ${item.title}`}
-                  data-testid={`shortcut-delete-${item.id}`}
-                  className="grid size-6 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-muted)] hover:bg-red-500/15 hover:text-red-400"
-                >
-                  <TrashIcon size={11} />
-                </button>
-              </span>
-            </motion.li>
+              item={item}
+              index={index}
+              total={order.length}
+              dragging={draggingId === item.id}
+              onDragStart={() => setDraggingId(item.id)}
+              onDragEnd={() => {
+                setDraggingId(null);
+                commitOrder(orderRef.current);
+              }}
+              onMove={moveBy}
+              onEdit={() => setEditor({ open: true, item })}
+              onDelete={() => setConfirm({ open: true, itemId: item.id })}
+            />
           ))}
-        </ul>
+        </Reorder.Group>
       )}
 
       <ShortcutEditor
@@ -352,7 +344,6 @@ function ShortcutEditor({
   const [url, setUrl] = useState("");
   const [iconKind, setIconKind] = useState<Shortcut["iconKind"]>("letter");
   const [iconValue, setIconValue] = useState("");
-  const [color, setColor] = useState(PALETTE[0]);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -364,13 +355,11 @@ function ShortcutEditor({
       setUrl(item.url);
       setIconKind(item.iconKind);
       setIconValue(item.iconValue);
-      setColor(item.color ?? PALETTE[0]);
     } else {
       setTitle("");
       setUrl("");
       setIconKind("letter");
       setIconValue("");
-      setColor(PALETTE[Math.floor(Math.random() * PALETTE.length)]);
     }
   }, [open, item]);
 
@@ -383,7 +372,7 @@ function ShortcutEditor({
     url: url || "https://example.com",
     iconKind,
     iconValue: iconValue || title || "?",
-    color,
+    color: item?.color ?? NEUTRAL_ICON_COLOR,
   };
 
   const submit = async () => {
@@ -432,7 +421,7 @@ function ShortcutEditor({
       url: normalized,
       iconKind,
       iconValue: nextIconValue,
-      color,
+      color: item?.color ?? NEUTRAL_ICON_COLOR,
     });
   };
 
@@ -586,28 +575,9 @@ function ShortcutEditor({
         </FieldGroup>
       ) : null}
 
-      <FieldGroup label="图标底色" hint="首字母与 Emoji 会铺这块底色；站点图标自带白色托底">
-        <div className="flex flex-wrap gap-1.5">
-          {PALETTE.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setColor(c)}
-              aria-label={`选择颜色 ${c}`}
-              aria-pressed={color === c}
-              data-testid={`shortcut-color-${c.replace("#", "")}`}
-              className={`size-6 rounded-full transition-opacity hover:opacity-80 ${
-                color === c ? "ring-2 ring-white ring-offset-1 ring-offset-transparent" : ""
-              }`}
-              style={{ background: c }}
-            />
-          ))}
-        </div>
-      </FieldGroup>
-
       {error ? (
         <p
-          className="mt-1 rounded-lg bg-red-500/10 px-2 py-1.5 text-[12px] text-red-400"
+          className="mt-1 rounded-lg bg-[color-mix(in_srgb,var(--tone-error)_12%,transparent)] px-2 py-1.5 text-[12px] text-[var(--tone-error)]"
           role="alert"
           data-testid="shortcut-error"
         >
@@ -636,10 +606,117 @@ function TrashIcon({ size = 9 }: { size?: number }) {
   );
 }
 
-function ArrowIcon({ dir }: { dir: "up" | "down" }) {
+/**
+ * 单行快捷项。
+ *
+ * 排序从「上移 / 下移两个按钮」换成拖拽：
+ *   · 只有左侧把手能起拖（dragListener={false}），文字、编辑、删除按钮不受影响；
+ *   · 把手同时承担键盘兜底：聚焦后 ↑ / ↓ 移动一格，读屏可通过 aria-label 知道用法；
+ *   · 拖动中的行加一层浮起底色，避免和下面行的文字叠在一起。
+ */
+function ShortcutRow({
+  item,
+  index,
+  total,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onMove,
+  onEdit,
+  onDelete,
+}: {
+  item: Shortcut;
+  index: number;
+  total: number;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onMove: (index: number, delta: number) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const controls = useDragControls();
+  const reduce = useReducedMotionPref();
+
   return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
-      <path d={dir === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} strokeLinecap="round" strokeLinejoin="round" />
+    <Reorder.Item
+      as="li"
+      value={item}
+      dragListener={false}
+      dragControls={controls}
+      layout={reduce ? undefined : true}
+      dragElastic={0.08}
+      dragMomentum={false}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      data-shortcut-id={item.id}
+      data-dragging={dragging ? "true" : "false"}
+      className="shortcut-row flex items-center gap-2 rounded-[var(--radius-sm)] px-1.5 py-1"
+    >
+      <button
+        type="button"
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          controls.start(event);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            onMove(index, -1);
+          } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            onMove(index, 1);
+          }
+        }}
+        aria-label={`拖拽排序 ${item.title}，或按上下方向键移动；当前第 ${index + 1} / ${total} 位`}
+        title="拖拽排序（或聚焦后按 ↑ ↓）"
+        data-testid={`shortcut-drag-${item.id}`}
+        className="shortcut-drag-handle grid size-6 shrink-0 cursor-grab place-items-center rounded-[var(--radius-xs)] text-[var(--fg-subtle)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)] active:cursor-grabbing"
+      >
+        <GripIcon />
+      </button>
+
+      <ShortcutIcon item={item} size={26} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] text-[var(--fg)]">{item.title}</span>
+        <span className="block truncate text-[11px] text-[var(--fg-subtle)]">{item.url}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`编辑 ${item.title}`}
+          title={`编辑 ${item.title}`}
+          data-testid={`shortcut-edit-${item.id}`}
+          className="grid size-6 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--fg)]"
+        >
+          <PencilIcon size={11} />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`删除 ${item.title}`}
+          title={`删除 ${item.title}`}
+          data-testid={`shortcut-delete-${item.id}`}
+          className="grid size-6 place-items-center rounded-[var(--radius-xs)] text-[var(--fg-muted)] hover:bg-[color-mix(in_srgb,var(--tone-error)_15%,transparent)] hover:text-[var(--tone-error)]"
+        >
+          <TrashIcon size={11} />
+        </button>
+      </span>
+    </Reorder.Item>
+  );
+}
+
+function GripIcon() {
+  return (
+    <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
+      <circle cx="3" cy="3" r="1.1" />
+      <circle cx="7" cy="3" r="1.1" />
+      <circle cx="3" cy="7" r="1.1" />
+      <circle cx="7" cy="7" r="1.1" />
+      <circle cx="3" cy="11" r="1.1" />
+      <circle cx="7" cy="11" r="1.1" />
     </svg>
   );
 }
+

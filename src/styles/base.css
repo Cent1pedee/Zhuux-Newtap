@@ -93,8 +93,7 @@ body {
 .card-panel,
 .settings-modal,
 .settings-nav,
-.settings-section,
-.settings-menu {
+.settings-section {
   transition-property: background-color, border-color, color, box-shadow;
   transition-duration: var(--dur-theme);
   transition-timing-function: var(--ease-out-cubic);

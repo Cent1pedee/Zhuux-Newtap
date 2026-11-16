@@ -10,8 +10,11 @@
   --accent: #2f6fed;
   --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 34%, transparent);
-  /* 提示语气色：只用在 toast 图标与小色块上，亮暗各自保证对比度 */
+  /* 提示语气色：只用在 toast 图标、状态角标与错误文案上。
+     亮暗各一套，取值以「白底 / 深底上的小字都过 4.5:1」为准：
+     #34d399 在白底只有 1.97:1、#fbbf24 只有 1.67:1，直接拿深色主题的值给亮色用会读不清。 */
   --tone-success: #34d399;
+  --tone-warning: #fbbf24;
   --tone-error: #f87171;
 
   /* —— 前景 / 背景 —— */
@@ -75,11 +78,16 @@
   --radius-lg: 14px;
   --radius-xl: 18px;
   --radius-2xl: 24px;
-  --radius-pill: 10px;
+  /*
+   * 胶囊 / 正圆专用。**不要**把它改成 10px：
+   * 它被 .home-settings（38×38 的圆钮）、.bar-dock（顶栏胶囊）、
+   * .home-reveal-trigger 与 .shortcut-item-label 消费，语义就是「半径足够大、
+   * 由元素自身尺寸决定成胶囊或正圆」。改成固定 10px 后，圆钮会变成圆角方块，
+   * 与同一行里 999px 的 .search-panel / .dock-pill / .bar-action 不是一套形状语言。
+   */
+  --radius-pill: 999px;
 
   /* 兼容旧命名（组件里已大量使用） */
-  --radius-icon: var(--radius-md);
-  --radius-search: var(--radius-lg);
   --radius-card: var(--radius-xl);
 
   /* —— 阴影层级 —— */
@@ -114,7 +122,8 @@
   --fg: #101828;
   --fg-muted: rgba(16, 24, 40, 0.78);
   --fg-subtle: rgba(16, 24, 40, 0.62);
-  --tone-success: #059669;
+  --tone-success: #047857;
+  --tone-warning: #b45309;
   --tone-error: #dc2626;
 
   --glass-bg: rgba(255, 255, 255, 0.55);

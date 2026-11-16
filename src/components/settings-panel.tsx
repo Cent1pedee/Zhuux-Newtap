@@ -19,17 +19,17 @@ import { IconGrid, IconImage, IconLayers, IconPalette, IconSearch } from "@/comp
  *
  * 三种视图共用一个 controller（草稿不丢）、一个弹窗体系：
  *   · settings —— 五个分类的主面板，左侧导航按「首页 / 外观与服务」分组；
- *   · privacy  —— 二级菜单直达的「隐私与数据」独立弹窗；
- *   · about    —— 二级菜单直达的「关于」独立弹窗。
+ *   · privacy  —— 「隐私与数据」独立弹窗（命令面板直达 / 页脚入口）；
+ *   · about    —— 「关于」独立弹窗（命令面板直达 / 页脚入口）。
  *
- * 隐私与关于此前既是主面板的页签、又是二级菜单的入口，导航重复了一遍；
- * 两页里还各写了一段几乎相同的「数据只存本机」说明。现在这两类内容只从
- * 二级菜单进入，主面板不再出现，重复的说明合并到隐私弹窗一份。
+ * 齿轮不再先弹二级菜单：主面板本身就是完整的分类导航，再列一层菜单纯属重复。
+ * 隐私与关于低频、且不占页签，收进页脚的两个文字入口；从页脚打开时叠在主面板
+ * 之上，关闭回到原页签。
  */
 
 /** 主面板的五个页签 */
 export type SettingsTab = "appearance" | "modules" | "shortcuts" | "background" | "search";
-/** 二级菜单可选的目标：五个页签 + 两个独立弹窗 */
+/** 设置入口可选的目标：五个页签 + 两个独立弹窗 */
 export type SettingsTarget = SettingsTab | "privacy" | "about";
 /** 弹窗视图 */
 export type SettingsView = "settings" | "privacy" | "about";
@@ -82,7 +82,7 @@ export function SettingsPanel({
 }: {
   open: boolean;
   onClose: () => void;
-  /** 二级菜单选中「隐私与数据 / 关于」时直接进对应弹窗，不再经过主面板 */
+  /** 「隐私与数据 / 关于」直接进对应弹窗，不经过主面板 */
   view?: SettingsView;
   /** 从命令面板等入口指定要打开的页签；不传则保持上一次停留的页签 */
   initialTab?: SettingsTab;
@@ -99,6 +99,14 @@ export function SettingsPanel({
   const [tab, setTab] = useState<SettingsTab>("appearance");
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  /*
+   * 隐私 / 关于不再是二级菜单的入口，但也不适合再占一个页签：
+   * 它们低频、且内容与五分类不同。改成设置页脚的两个文字入口，
+   * 点开后在主面板之上叠一层更轻的弹窗，关闭即回到原页签。
+   */
+  const [subView, setSubView] = useState<"privacy" | "about" | null>(null);
+  const privacyBtnRef = useRef<HTMLButtonElement | null>(null);
+  const aboutBtnRef = useRef<HTMLButtonElement | null>(null);
   const [query, setQuery] = useState("");
   const [matchCount, setMatchCount] = useState(0);
   /*
@@ -234,57 +242,77 @@ export function SettingsPanel({
     </>
   );
 
-  /* ---------------------------- 隐私与数据：二级菜单直达 ---------------------------- */
+  /* ---------------------------- 隐私与数据（独立视图或页脚子视图） ---------------------------- */
+  const privacyOpen = view === "privacy" ? open : subView === "privacy";
+  const privacyModal = (
+    <Modal
+      open={privacyOpen}
+      onClose={view === "privacy" ? onClose : () => setSubView(null)}
+      title="隐私与数据"
+      description="请求白名单、配置备份与本地数据清理。"
+      size="md"
+      reduceMotion={reduce}
+      panelClassName="settings-modal settings-modal--compact"
+      bodyClassName="thin-scroll settings-compact-body flex-1 overflow-y-auto px-5 py-4"
+      overlayClassName="bg-black/25 backdrop-blur-[2px]"
+      returnFocusTo={view === "privacy" ? returnFocusTo : privacyBtnRef.current}
+      initialFocus="panel"
+      footer={
+        <Button
+          onClick={view === "privacy" ? onClose : () => setSubView(null)}
+          variant="primary"
+          testId="privacy-done"
+        >
+          完成
+        </Button>
+      }
+    >
+      <PrivacyTab s={s} onClear={() => setConfirmClear(true)} />
+    </Modal>
+  );
+
+  /* ---------------------------- 关于（独立视图或页脚子视图） ---------------------------- */
+  const aboutOpen = view === "about" ? open : subView === "about";
+  const aboutModal = (
+    <Modal
+      open={aboutOpen}
+      onClose={view === "about" ? onClose : () => setSubView(null)}
+      title="关于"
+      description="站点信息、技术栈与快捷入口。"
+      size="md"
+      reduceMotion={reduce}
+      panelClassName="settings-modal settings-modal--compact"
+      bodyClassName="thin-scroll settings-compact-body flex-1 overflow-y-auto px-5 py-4"
+      overlayClassName="bg-black/25 backdrop-blur-[2px]"
+      returnFocusTo={view === "about" ? returnFocusTo : aboutBtnRef.current}
+      initialFocus="panel"
+      footer={
+        <Button
+          onClick={view === "about" ? onClose : () => setSubView(null)}
+          variant="primary"
+          testId="about-done"
+        >
+          完成
+        </Button>
+      }
+    >
+      <AboutTab s={s} onOpenHelp={onOpenHelp} onClose={onClose} />
+    </Modal>
+  );
+
   if (view === "privacy") {
     return (
       <>
-        <Modal
-          open={open}
-          onClose={onClose}
-          title="隐私与数据"
-          description="请求白名单、配置备份与本地数据清理。"
-          size="md"
-          reduceMotion={reduce}
-          panelClassName="settings-modal settings-modal--compact"
-          bodyClassName="thin-scroll settings-compact-body flex-1 overflow-y-auto px-5 py-4"
-          returnFocusTo={returnFocusTo}
-          initialFocus="panel"
-          footer={
-            <Button onClick={onClose} variant="primary" testId="settings-done">
-              完成
-            </Button>
-          }
-        >
-          <PrivacyTab s={s} onClear={() => setConfirmClear(true)} />
-        </Modal>
+        {privacyModal}
         {clearDialogs}
       </>
     );
   }
 
-  /* ---------------------------- 关于：二级菜单直达 ---------------------------- */
   if (view === "about") {
     return (
       <>
-        <Modal
-          open={open}
-          onClose={onClose}
-          title="关于"
-          description="站点信息、技术栈与快捷入口。"
-          size="md"
-          reduceMotion={reduce}
-          panelClassName="settings-modal settings-modal--compact"
-          bodyClassName="thin-scroll settings-compact-body flex-1 overflow-y-auto px-5 py-4"
-          returnFocusTo={returnFocusTo}
-          initialFocus="panel"
-          footer={
-            <Button onClick={onClose} variant="primary" testId="settings-done">
-              完成
-            </Button>
-          }
-        >
-          <AboutTab s={s} onOpenHelp={onOpenHelp} onClose={onClose} />
-        </Modal>
+        {aboutModal}
         {clearDialogs}
       </>
     );
@@ -297,7 +325,7 @@ export function SettingsPanel({
         open={open}
         onClose={onClose}
         title="设置"
-        description="配置只存在本机；隐私、备份与站点信息在右上角菜单里。"
+        description="配置只存在本机；备份、隐私边界与站点信息在页脚。"
         size="lg"
         reduceMotion={reduce}
         fixedHeight
@@ -306,6 +334,29 @@ export function SettingsPanel({
         bodyClassName="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5"
         footer={
           <>
+            <div className="mr-auto flex items-center gap-1">
+              <button
+                ref={privacyBtnRef}
+                type="button"
+                onClick={() => setSubView("privacy")}
+                data-testid="settings-open-privacy"
+                className="settings-footer-link"
+              >
+                隐私与数据
+              </button>
+              <span aria-hidden="true" className="text-[var(--fg-subtle)] opacity-50">
+                ·
+              </span>
+              <button
+                ref={aboutBtnRef}
+                type="button"
+                onClick={() => setSubView("about")}
+                data-testid="settings-open-about"
+                className="settings-footer-link"
+              >
+                关于
+              </button>
+            </div>
             <Button onClick={() => setConfirmReset(true)} variant="ghost" testId="settings-reset">
               恢复出厂
             </Button>
@@ -404,7 +455,7 @@ export function SettingsPanel({
                 <p className="settings-search-empty-title">没有找到「{query.trim()}」</p>
                 <p className="settings-search-empty-note">
                   试试「壁纸」「模糊」「书签」这类关键词，或清空搜索查看全部分类。
-                  隐私与数据、关于在右上角齿轮菜单里。
+                  隐私与数据、关于在设置页脚。
                 </p>
                 <Button onClick={() => setQuery("")} size="sm" testId="settings-search-clear">
                   清空搜索
@@ -415,6 +466,8 @@ export function SettingsPanel({
         </div>
       </Modal>
 
+      {privacyModal}
+      {aboutModal}
       {clearDialogs}
     </>
   );

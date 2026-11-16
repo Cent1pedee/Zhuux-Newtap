@@ -61,6 +61,7 @@ if(typeof accent!=="string"||!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(accent))accen
 var reduce=cfg&&cfg.a11y?cfg.a11y.reducedMotion:null;
 var dark=mode==="dark"||(mode==="system"&&!window.matchMedia("(prefers-color-scheme: light)").matches);
 var el=document.documentElement;
+el.dataset.js="1";
 el.dataset.theme=dark?"dark":"light";
 el.style.colorScheme=dark?"dark":"light";
 el.style.setProperty("--accent",accent);

@@ -71,6 +71,21 @@ describe("设置面板：基础", () => {
     expect(labels).toEqual(["首页", "外观与服务"]);
   });
 
+  it("隐私与关于从页脚打开子弹窗，不占导航页签", () => {
+    renderWithProviders(<SettingsPanel open onClose={() => {}} />);
+    expect(screen.queryByTestId("settings-tab-privacy")).toBeNull();
+    expect(screen.queryByTestId("settings-tab-about")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("settings-open-privacy"));
+    expect(screen.getByTestId("whitelist-input")).toBeTruthy();
+    expect(screen.getByTestId("privacy-done")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("privacy-done"));
+
+    fireEvent.click(screen.getByTestId("settings-open-about"));
+    expect(screen.getByTestId("about-copy-url")).toBeTruthy();
+    expect(screen.getByTestId("about-done")).toBeTruthy();
+  });
+
   it("站点图标开关归到「快捷跳转」，不再埋在隐私页", async () => {
     renderWithProviders(<SettingsPanel open onClose={() => {}} />);
     await openTab("shortcuts");
@@ -385,7 +400,7 @@ describe("设置面板：快捷跳转", () => {
   });
 });
 
-describe("二级菜单直达：关于", () => {
+describe("独立视图：关于", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
@@ -399,7 +414,7 @@ describe("二级菜单直达：关于", () => {
   });
 });
 
-describe("二级菜单直达：隐私与数据", () => {
+describe("独立视图：隐私与数据", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });

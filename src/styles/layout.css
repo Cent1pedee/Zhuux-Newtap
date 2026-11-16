@@ -230,8 +230,10 @@
 /* 右上角唯一入口：一枚悬浮的玻璃圆钮，不与内容抢层级 */
 .home-settings {
   position: absolute;
-  top: clamp(12px, 2.2vh, 22px);
-  right: clamp(14px, 2.4vw, 28px);
+  /* 让开刘海：横屏时 iPhone 的 inset 在左右，这颗钮贴在右上角，
+     不 max() 一下会被圆角/刘海吃掉一角（竖屏 inset 为 0，取值不变） */
+  top: max(clamp(12px, 2.2vh, 22px), env(safe-area-inset-top, 0px));
+  right: max(clamp(14px, 2.4vw, 28px), env(safe-area-inset-right, 0px));
   z-index: 30;
   display: grid;
   width: 38px;
@@ -249,6 +251,25 @@
   transition:
     background-color var(--dur-base) var(--ease-out-cubic),
     color var(--dur-base) var(--ease-out-cubic);
+}
+
+/*
+ * 亮色主题跟随同一屏里的「快捷网站」按钮（.home-reveal-trigger）：
+ * 那颗按钮在亮色下翻成白底深字，这颗却保持黑底白字 —— 同一屏两块悬浮控件
+ * 一个深一个浅，看着像其中一颗忘了切主题。
+ */
+[data-theme="light"] .home-settings {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.16),
+    0 10px 24px -16px rgba(15, 23, 42, 0.45);
+  color: #0f172a;
+}
+
+[data-theme="light"] .home-settings:hover,
+[data-theme="light"] .home-settings:focus-visible {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
 }
 
 .home-settings:hover,
@@ -595,17 +616,17 @@
 }
 
 /*
- * 图标片：Dock 与快捷网格共用同一枚「浅色 squircle」。
+ * 图标片：Dock 与快捷网格共用同一枚「中性浅色 squircle」。
  *
- * 旧版是暗色中性片 + 品牌色小字，favicon 抓到的站点却是彩色 logo ——
- * 13 个格子读起来像两套图标，黑色 logo 还会直接消失在深色片里。
- * 现在所有来源（自定义图片 / emoji / favicon / 首字母）都躺在同一材质上：
- *   · 28% 相对圆角，两档尺寸视觉比例一致；
- *   · 顶部高光 + 很轻的品牌色渐变 + 一圈内描边，做出「一枚片」的厚度；
- *   · 浅底同时解决了深色 logo 的对比度，不再需要给图片叠白边滤镜。
+ * 旧版按站点品牌色给片底和字形染色（`--tile` 掺 8%~30%），一排图标读成
+ * 彩色贴纸，和 Dock 的深色玻璃、搜索栏的白玻璃都不是一套材质。
+ * 现在所有片共用同一种中性色：白色渐变 + 中性墨色字形 + 一圈内描边。
+ *   · 28% 相对圆角，Dock(42px) 与网格(52px) 视觉比例一致；
+ *   · 顶部高光 + 很轻的冷灰渐变，做出「一枚片」的厚度；
+ *   · 浅底保证 favicon 里深色标识的对比度，不再需要 drop-shadow 描白边；
+ *   · 品牌色只留在 favicon 自身，字母 / Emoji 一律同一档墨色。
  */
 .shortcut-plate {
-  --tile: var(--accent);
   position: relative;
   display: grid;
   flex-shrink: 0;
@@ -613,15 +634,11 @@
   overflow: hidden;
   border-radius: 28%;
   background:
-    radial-gradient(128% 118% at 20% 8%, rgba(255, 255, 255, 0.92), transparent 62%),
-    linear-gradient(
-      158deg,
-      color-mix(in srgb, var(--tile) 8%, #ffffff) 0%,
-      color-mix(in srgb, var(--tile) 22%, #e7ecf5) 100%
-    );
+    radial-gradient(128% 118% at 20% 8%, rgba(255, 255, 255, 0.94), transparent 62%),
+    linear-gradient(158deg, #ffffff 0%, #e9eef6 100%);
   box-shadow:
-    0 4px 12px -5px color-mix(in srgb, var(--tile) 42%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 12px -5px rgba(15, 23, 42, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
     inset 0 0 0 1px rgba(15, 23, 42, 0.07);
   transition:
     transform 240ms var(--ease-out-cubic),
@@ -632,21 +649,18 @@
 [data-theme="dark"] .shortcut-plate {
   /* 暗色主题只把片调冷一档，仍保持浅底 —— 深色片会让黑色站点标识消失 */
   background:
-    radial-gradient(128% 118% at 20% 8%, rgba(255, 255, 255, 0.62), transparent 62%),
-    linear-gradient(
-      158deg,
-      color-mix(in srgb, var(--tile) 12%, #e9eef7) 0%,
-      color-mix(in srgb, var(--tile) 30%, #c6d1e2) 100%
-    );
+    radial-gradient(128% 118% at 20% 8%, rgba(255, 255, 255, 0.66), transparent 62%),
+    linear-gradient(158deg, #f3f7fd 0%, #d9e1ee 100%);
   box-shadow:
-    0 5px 14px -5px rgba(0, 0, 0, 0.52),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 5px 14px -5px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
     inset 0 0 0 1px rgba(15, 23, 42, 0.1);
 }
 
 .shortcut-plate-glyph {
   display: grid;
   place-items: center;
+  color: #2a3444;
   font-weight: 650;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -670,7 +684,7 @@
 .shortcut-tile:focus-visible .shortcut-tile-icon {
   transform: translateY(-2px) scale(1.045);
   box-shadow:
-    0 12px 24px -10px color-mix(in srgb, var(--tile) 65%, transparent),
+    0 12px 24px -10px rgba(15, 23, 42, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
     inset 0 0 0 1px rgba(15, 23, 42, 0.09);
 }
@@ -684,25 +698,30 @@
 [data-theme="dark"] .shortcut-tile:focus-visible .shortcut-tile-icon {
   box-shadow:
     0 14px 26px -10px rgba(0, 0, 0, 0.62),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
     inset 0 0 0 1px rgba(15, 23, 42, 0.12);
 }
 
 /*
  * favicon 落在同一枚浅片上：黑色 / 深色标识本身就有对比度，
  * 不再用 drop-shadow 硬描一圈白边（那会让彩色 logo 发虚）。
+ *
+ * 保留站点自己的颜色（2026-11）：上一轮为了「材质统一」把 favicon 整体去色，
+ * 结果一排图标只剩灰阶形状，站点辨识度明显下降，用户明确要求恢复彩色。
+ * 片底仍是中性浅色渐变 —— 它负责托住图标，颜色交给站点自己的品牌标识。
+ *
+ * 绝对定位而不是网格里的第二个子项：加载期间字母占位与 <img> 同时存在，
+ * 若两者各占一行，圆片会被挤成上下两截（图片被 overflow 裁掉一半）——
+ * 排序/重新挂载时最容易看到这类「图标错乱」。现在两者永远叠在同一格里。
  */
 .shortcut-icon-img {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   width: 60%;
   height: 60%;
   object-fit: contain;
   transition: opacity var(--dur-fast) var(--ease-out-cubic);
-}
-
-.shortcut-tile-icon .shortcut-icon-img {
-  position: absolute;
-  inset: 0;
-  margin: auto;
 }
 
 .shortcut-icon-img[data-loaded="false"] {

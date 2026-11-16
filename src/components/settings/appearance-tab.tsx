@@ -67,7 +67,9 @@ export function AppearanceTab({ s }: { s: SettingsController }) {
           />
           <span className="font-mono text-[11px] text-[var(--fg-subtle)]">{customAccent}</span>
           <span
-            className={`text-[11px] ${acceptable ? "text-emerald-400" : "text-amber-400"}`}
+            /* 用语气 token 而不是 text-emerald-400 / text-amber-400：
+               后者是固定色值，亮色主题下 1.97:1 / 1.67:1，小字读不出来 */
+            className={`text-[11px] ${acceptable ? "text-[var(--tone-success)]" : "text-[var(--tone-warning)]"}`}
             data-testid="accent-contrast"
           >
             对比度 {contrast.toFixed(1)}:1 {acceptable ? "（通过 AA）" : "（低于 3:1，未应用）"}

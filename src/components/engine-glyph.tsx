@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { faviconUrl } from "@/lib/favicon";
+import { useFaviconChain } from "@/lib/use-favicon";
 
 /**
  * 搜索引擎图标。
@@ -72,6 +71,10 @@ export function EngineGlyph({ id, size = 18 }: { id: string; size?: number }) {
  * 菜单刚展开那一瞬它还没回来，只渲染 <img> 的话会留一个空格子，
  * 看起来像「这个引擎没有图标」。垫一层内置 SVG 之后，
  * 无论网络快慢、断网还是站点改版，三行永远是三枚完整图标。
+ *
+ * 尺寸比例：字形与 favicon 都占徽标的 66%，两者视觉大小一致。
+ * 早期字形只有 56%、favicon 又被 padding 再缩一圈，搜索框左侧那颗
+ * 实际只有 11px，夹在 13px 文字和 18px 搜索键之间明显偏小。
  */
 export function EngineBadge({
   id,
@@ -84,36 +87,29 @@ export function EngineBadge({
   url?: string;
   autoFetch?: boolean;
 }) {
-  const remote = autoFetch && url ? faviconUrl(url, Math.max(32, Math.round(size * 2))) : "";
-  const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const favicon = useFaviconChain(url ?? "", autoFetch);
 
-  useEffect(() => {
-    setFailed(false);
-    setLoaded(false);
-  }, [remote]);
-
-  const glyph = Math.round(size * 0.56);
+  const glyph = Math.round(size * 0.66);
   return (
     <span
       className="engine-badge"
       style={{ width: size, height: size }}
       data-testid="engine-badge"
       data-engine={id}
-      data-icon={remote && !failed ? (loaded ? "favicon" : "glyph") : "glyph"}
+      data-icon={favicon.src ? (favicon.loaded ? "favicon" : "glyph") : "glyph"}
     >
       <EngineGlyph id={id} size={glyph} />
-      {remote && !failed ? (
+      {favicon.src ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
-          src={remote}
+          src={favicon.src}
           alt=""
           width={size}
           height={size}
-          className="engine-badge-img absolute inset-0 size-full object-contain p-[22%]"
-          data-loaded={loaded ? "true" : "false"}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
+          className="engine-badge-img absolute inset-0 size-full object-contain p-[17%]"
+          data-loaded={favicon.loaded ? "true" : "false"}
+          onLoad={favicon.onLoad}
+          onError={favicon.onError}
           referrerPolicy="no-referrer"
           loading="eager"
         />

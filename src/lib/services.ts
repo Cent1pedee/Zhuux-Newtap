@@ -6,7 +6,7 @@
  *  3. 不发送 Cookie（credentials: "omit"），不附带任何本地配置。
  *
  * 两个刻意保留的例外，都在下面各自函数里写清了理由：
- *  · favicon —— `<img>` 直连（见 config/site.ts 的 FAVICON_PATH 注释），不进本文件；
+ *  · favicon —— `<img>` 直连（候选路径见 lib/favicon.ts），不进本文件；
  *  · 自定义壁纸 —— `fetchUserImage`，域名由用户输入，无法枚举，但保留同样的隐私姿势。
  */
 

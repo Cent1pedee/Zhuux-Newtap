@@ -19,10 +19,13 @@ import { ShortcutIcon } from "@/components/shortcut-icon";
  * 最后一块是「添加」，点开就是设置里的快捷跳转页。
  */
 export function ShortcutGrid({ onManage }: { onManage: () => void }) {
-  const { config } = useConfig();
+  const { config, ready } = useConfig();
   const reduce = useReducedMotionPref();
-  /** 分组结构保留在配置里（向后兼容），界面上始终展平成一个网格 */
-  const items = useMemo(() => config.groups.flatMap((g) => g.items), [config.groups]);
+  /**
+   * 分组结构保留在配置里（向后兼容），界面上始终展平成一个网格。
+   * 与 Dock 同一套「ready 后再挂载」策略：本地配置没读出来之前不渲染出厂列表。
+   */
+  const items = useMemo(() => (ready ? config.groups.flatMap((g) => g.items) : []), [config.groups, ready]);
 
   return (
     <motion.nav

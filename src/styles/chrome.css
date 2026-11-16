@@ -116,9 +116,11 @@
   box-shadow: 0 0 10px var(--search-tint);
   -webkit-backdrop-filter: blur(10px) saturate(1.5);
   backdrop-filter: blur(10px) saturate(1.5);
+  transform-origin: 50% 50%;
   transition:
     background-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
     -webkit-backdrop-filter 250ms cubic-bezier(0.4, 0, 0.2, 1),
     backdrop-filter 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -133,13 +135,16 @@
   /* 聚焦后不再饱和整个背景：实心白上再叠一层彩色会发脏 */
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.18);
+  /* 1.5% 放大足够读成「醒过来」，又不会让文字发虚或推动周围布局 */
+  transform: scale(1.015);
 }
 
 /* 暗色主题：参考站是一块 45 灰的半透明底，聚焦后压到 95% */
 [data-theme="dark"] .search-panel {
   --search-bg: rgba(45, 45, 45, 0.4);
-  --search-bg-hover: rgba(45, 45, 45, 0.6);
+  /* 悬停「加深」：比静止态更沉、更接近 Dock 的深玻璃 */
+  --search-bg-hover: rgba(30, 30, 30, 0.64);
   --search-bg-focus: rgba(45, 45, 45, 0.95);
   --search-text: rgba(255, 255, 255, 0.86);
   --search-text-hover: rgba(255, 255, 255, 0.92);
@@ -166,7 +171,8 @@
  */
 [data-theme="light"] .search-panel {
   --search-bg: rgba(255, 255, 255, 0.55);
-  --search-bg-hover: rgba(255, 255, 255, 0.78);
+  /* 亮色主题的「加深」加一点冷灰，而不是继续往白里走 */
+  --search-bg-hover: rgba(226, 232, 241, 0.8);
   --search-bg-focus: rgba(255, 255, 255, 0.95);
   --search-text: rgba(15, 23, 42, 0.72);
   --search-text-hover: #475569;
@@ -179,7 +185,7 @@
 }
 
 [data-theme="light"] .search-panel:hover {
-  --search-tint: rgba(15, 23, 42, 0.2);
+  --search-tint: rgba(15, 23, 42, 0.22);
 }
 
 [data-theme="light"] .search-panel[data-focused="true"] {
@@ -189,7 +195,8 @@
 /* 输入区：文字色跟着胶囊走，空态居中、开始输入后回到左对齐 */
 .search-input {
   height: 44px;
-  padding: 0 4px;
+  /* 图标隐藏时文字不要贴边；聚焦后图标出现，padding 收回到 4px */
+  padding: 0 20px;
   background: transparent;
   border: 0;
   outline: none;
@@ -198,7 +205,13 @@
   line-height: 44px;
   color: var(--search-text);
   text-align: left;
-  transition: color 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    color 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.search-panel[data-focused="true"] .search-input {
+  padding: 0 4px;
 }
 
 .search-panel:hover .search-input {
@@ -209,7 +222,8 @@
   color: var(--search-text-focus);
 }
 
-.search-panel[data-empty="true"] .search-input {
+/* 空态且未聚焦：占位文字在整条胶囊里居中（两侧图标是隐藏的） */
+.search-panel[data-empty="true"]:not([data-focused="true"]) .search-input {
   text-align: center;
 }
 
@@ -246,6 +260,45 @@
    primitives.tsx 的 Button 只做语义映射和圆角对齐，这里不再有第二套按钮 CSS。
    ------------------------------------------------------------ */
 
+/* 减少动效：不放大、不滑入，只保留颜色变化 */
+[data-motion="reduce"] .search-panel,
+[data-motion="reduce"] .search-panel .engine-btn,
+[data-motion="reduce"] .search-panel .search-submit,
+[data-motion="reduce"] .search-input {
+  transition: none;
+}
+
+[data-motion="reduce"] .search-panel[data-focused="true"] {
+  transform: none;
+}
+
+[data-motion="reduce"] .search-panel .engine-btn,
+[data-motion="reduce"] .search-panel .search-submit {
+  transform: none;
+}
+
+/* 快捷项拖拽行：默认透明，拖动中浮起一层实底，避免和下面行的文字叠在一起 */
+.shortcut-row {
+  transition: background-color 160ms var(--ease-out-cubic);
+}
+
+.shortcut-row:hover {
+  background: var(--hover-bg);
+}
+
+.shortcut-row[data-dragging="true"] {
+  position: relative;
+  z-index: 5;
+  background: var(--glass-bg-strong);
+  box-shadow:
+    0 18px 40px -18px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px var(--glass-border);
+}
+
+.shortcut-drag-handle {
+  touch-action: none;
+}
+
 /* ------------------------------------------------------------
    设置面板：分类导航 + 内容分组
    这是上一版的样式：左侧窄导航 + 滑动胶囊底 + 卡片式分组。
@@ -263,7 +316,7 @@
   }
 }
 
-/* 隐私与数据 / 关于从二级菜单直达，内容比五分类面板短，
+/* 隐私与数据 / 关于是独立弹窗，内容比五分类面板短，
    固定 712px 会在卡片下方留一大块空白；按内容收高、只在真的超高时滚动。 */
 .settings-modal.settings-modal--compact {
   height: auto;
@@ -484,113 +537,33 @@
 }
 
 /* ------------------------------------------------------------
-   右上角设置的二级菜单：齿轮 → 分类菜单 → 完整设置
-   视觉参考图：一整块圆角玻璃、图标 + 文案的行、主次两组之间一条细线。
+   设置页脚的「隐私与数据 / 关于」文字入口
+   低频、非分类级设置：做成页脚的低调文字链，不再占一个页签，
+   也不再单独维护一套菜单面板。
    ------------------------------------------------------------ */
 
-.settings-menu {
-  z-index: 70;
-  min-width: 214px;
-  padding: 6px;
-  border-radius: 16px;
-  background: rgba(12, 15, 21, 0.92);
-  box-shadow:
-    0 26px 64px -24px rgba(0, 0, 0, 0.85),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  color: var(--fg);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
-  backdrop-filter: blur(24px) saturate(1.3);
-  transform-origin: top right;
-  animation: settings-menu-in 160ms var(--ease-out-cubic);
-}
-
-[data-theme="light"] .settings-menu {
-  background: rgba(250, 251, 253, 0.96);
-  box-shadow:
-    0 24px 56px -26px rgba(15, 23, 42, 0.4),
-    inset 0 0 0 1px rgba(15, 23, 42, 0.08);
-}
-
-@keyframes settings-menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(-5px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* 二级菜单的组名：与菜单项同一材质，只降一档字重与亮度 */
-.settings-menu-label {
-  padding: 6px 10px 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+.settings-footer-link {
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--fg-subtle);
-  user-select: none;
-}
-
-.settings-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 36px;
-  padding: 0 10px;
-  border-radius: 10px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
-  color: var(--fg-muted);
-  cursor: pointer;
-  user-select: none;
-  outline: none;
   transition:
-    background-color var(--dur-fast) var(--ease-out-cubic),
-    color var(--dur-fast) var(--ease-out-cubic);
+    color var(--dur-fast) var(--ease-out-cubic),
+    background-color var(--dur-fast) var(--ease-out-cubic);
 }
 
-.settings-menu-item[data-highlighted],
-.settings-menu-item:hover {
+.settings-footer-link:hover {
   background: var(--hover-bg);
   color: var(--fg);
 }
 
-.settings-menu-icon {
-  display: grid;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  place-items: center;
-  opacity: 0.8;
-}
-
-.settings-menu-item[data-highlighted] .settings-menu-icon {
-  color: var(--accent);
-  opacity: 1;
-}
-
-.settings-menu-sep {
-  height: 1px;
-  margin: 5px 8px;
-  background: color-mix(in srgb, var(--fg) 10%, transparent);
-}
-
-.settings-menu-arrow {
-  width: 11px;
-  height: 5px;
-  fill: rgba(12, 15, 21, 0.92);
-  stroke: rgba(255, 255, 255, 0.12);
-  stroke-width: 1px;
-}
-
-[data-theme="light"] .settings-menu-arrow {
-  fill: rgba(250, 251, 253, 0.96);
-  stroke: rgba(15, 23, 42, 0.08);
-}
-
-[data-motion="reduce"] .settings-menu {
-  animation: none;
+.settings-footer-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 1px;
 }
 
 /* ------------------------------------------------------------
@@ -611,9 +584,52 @@
   background: transparent;
   color: var(--search-icon);
   transition:
-    opacity 150ms ease,
-    color 150ms ease;
+    opacity 180ms var(--ease-out-cubic),
+    transform 260ms var(--ease-out-cubic),
+    color 150ms ease,
+    visibility 0s linear 0s;
 }
+
+/*
+ * 只有 JS 就绪时才隐藏两端图标。
+ * 无 JS 降级时表单必须能原生提交 —— 搜索键若被藏掉，用户只剩回车一条路，
+ * 触屏上等于没有提交入口。
+ * visibility 而不是只用 opacity：隐藏时同时移出 Tab 顺序，避免出现「看不见的焦点」。
+ */
+html[data-js="1"] .engine-btn,
+html[data-js="1"] .search-submit {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+html[data-js="1"] .engine-btn {
+  transform: translateX(-6px) scale(0.88);
+}
+
+html[data-js="1"] .search-submit {
+  transform: translateX(6px) scale(0.88);
+}
+
+html[data-js="1"] .engine-btn,
+html[data-js="1"] .search-submit {
+  transition:
+    opacity 180ms var(--ease-out-cubic),
+    transform 260ms var(--ease-out-cubic),
+    color 150ms ease,
+    visibility 0s linear 260ms;
+}
+
+html[data-js="1"] .search-panel[data-focused="true"] .engine-btn,
+html[data-js="1"] .search-panel[data-focused="true"] .search-submit {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0) translateY(0) scale(1);
+  transition-delay: 0s;
+}
+
+
 
 .engine-btn:hover,
 .search-submit:hover {
@@ -709,9 +725,48 @@
 /* 悬停时胶囊自身轻轻上浮一点，像 Dock 被指针「吸」起来 */
 .dock-pill {
   transition:
+    opacity 420ms var(--ease-out-cubic),
     background-color var(--dur-theme) var(--ease-out-cubic),
     box-shadow var(--dur-base) var(--ease-out-cubic),
-    transform var(--dur-base) var(--ease-spring);
+    transform 520ms var(--ease-spring);
+}
+
+/*
+ * Dock 首帧（本地配置尚未读出）：
+ *
+ * ConfigProvider 在服务端与首次水合时只有出厂配置，若直接可见，用户会先看到
+ * 一排「默认站点」再被本地顺序替换 —— 这就是刷新时闪一下错误列表的来源。
+ * 首帧仍渲染出厂列表（无 JS 也要能点），但整条胶囊在 ready 之前不可见；
+ * 本地配置读完后从下方 16px 浮入。占位高度与最终一致，页面内容不会被顶动。
+ */
+.dock-shell[data-ready="false"] .dock-pill {
+  opacity: 0;
+  transform: translateY(16px);
+  pointer-events: none;
+}
+
+/* ready 之前先把一行图标的高度占住，避免胶囊「长高」把时钟/搜索顶上去 */
+.dock-shell[data-ready="false"] .shortcut-dock {
+  min-height: 46px;
+}
+
+/*
+ * 无 JS 降级：没有「等本地配置」这回事，服务端渲染的出厂列表就是最终内容，
+ * 直接按普通 Dock 显示（引导脚本会置 data-js=1，所以这条只在禁用 JS 时生效）。
+ */
+html:not([data-js="1"]) .dock-shell[data-ready="false"] .dock-pill {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+[data-motion="reduce"] .dock-shell[data-ready="false"] .dock-pill {
+  transform: none;
+}
+
+/* 减少动效：浮入不做位移，淡入也压到一帧内完成 */
+[data-motion="reduce"] .dock-pill {
+  transition-duration: 1ms;
 }
 
 .dock-pill:hover {

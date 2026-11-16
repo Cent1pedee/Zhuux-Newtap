@@ -143,7 +143,7 @@
   min-height: 0;
 }
 [data-sonner-toaster][data-sonner-toaster] {
-  /* 高于设置弹窗（z-50）与二级菜单（z-70）：在弹窗里操作也要看得见反馈 */
+  /* 高于设置弹窗（z-50）：在弹窗里操作也要看得见反馈 */
   z-index: 80;
   --width: min(92vw, 380px) !important;
   max-width: 92vw;
@@ -193,15 +193,14 @@
 }
 
 /* 主搜索沿用 .search-input 排印 */
+/* 只复位官方 Input 的边框/圆角/字号；内距与过渡交给 chrome.css 的
+   .search-input —— 那里要按「未聚焦 20px / 聚焦 4px」做平滑收放。 */
 [data-slot="input"].search-input {
-  padding: 0;
   border-width: 0;
   border-radius: 0;
   font-size: 15px;
   line-height: 22.5px;
   box-shadow: none;
-  transition-property: all;
-  transition-duration: 0s;
 }
 
 /* 命令面板输入自动聚焦，连 focus-visible ring 一起清掉 */

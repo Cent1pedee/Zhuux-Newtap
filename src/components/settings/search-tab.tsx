@@ -103,7 +103,7 @@ export function SearchTab({ s }: { s: SettingsController }) {
                 }}
                 aria-label={`删除指令 ${c.key}`}
                 data-testid={`cmd-delete-${c.id}`}
-                className="grid size-6 place-items-center rounded text-[var(--fg-subtle)] hover:bg-red-500/15 hover:text-red-400"
+                className="grid size-6 place-items-center rounded text-[var(--fg-subtle)] hover:bg-[color-mix(in_srgb,var(--tone-error)_15%,transparent)] hover:text-[var(--tone-error)]"
               >
                 ✕
               </button>
